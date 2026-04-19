@@ -24,9 +24,21 @@ export interface StepRecord {
   data: Record<string, unknown>;
 }
 
-export interface WorkflowState {
-  accountName: string;
+export type AccountStatus = "active" | "archived";
+
+export interface Account {
+  id: string;
+  name: string;
+  status: AccountStatus;
+  createdAt: string;
+  updatedAt: string;
   steps: Record<StepKind, StepRecord>;
+}
+
+export interface AppState {
+  accounts: Account[];
+  activeAccountId: string | null;
+  sidebarCollapsed: boolean;
 }
 
 export interface AccountResearchData {

@@ -2,13 +2,13 @@
 
 import { useEffect, useState } from "react";
 import type {
+  Account,
   AccountResearchData,
   StepRecord,
-  WorkflowState,
 } from "@/lib/types";
 
 interface Props {
-  state: WorkflowState;
+  account: Account;
   record: StepRecord;
   onChange: (partial: Partial<StepRecord>) => void;
 }
@@ -39,7 +39,7 @@ function isEmbeddable(url: string): boolean {
   }
 }
 
-export function AccountResearch({ state, record, onChange }: Props) {
+export function AccountResearch({ account, record, onChange }: Props) {
   const data = readData(record);
   const [local, setLocal] = useState<AccountResearchData>(data);
 
@@ -63,7 +63,7 @@ export function AccountResearch({ state, record, onChange }: Props) {
     });
   }
 
-  const account = state.accountName.trim() || "this account";
+  const accountLabel = account.name.trim() || "this account";
 
   return (
     <div className="space-y-8">
@@ -79,7 +79,7 @@ export function AccountResearch({ state, record, onChange }: Props) {
             <p className="mt-2 text-sm text-ink-400 max-w-xl">
               Paste your Claude Project URL below. The Project should be primed
               with Toptal ICP + research prompts. Run the research for{" "}
-              <span className="text-ink-300 font-medium">{account}</span>, then
+              <span className="text-ink-300 font-medium">{accountLabel}</span>, then
               capture the structured output in the fields below.
             </p>
           </div>

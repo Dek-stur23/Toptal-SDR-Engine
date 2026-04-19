@@ -2,20 +2,20 @@
 
 import { useEffect, useState } from "react";
 import type {
+  Account,
   AccountResearchData,
   StepDefinition,
   StepRecord,
-  WorkflowState,
 } from "@/lib/types";
 
 interface Props {
   step: StepDefinition;
-  state: WorkflowState;
+  account: Account;
   record: StepRecord;
   onChange: (partial: Partial<StepRecord>) => void;
 }
 
-export function GenericStep({ step, state, record, onChange }: Props) {
+export function GenericStep({ step, account, record, onChange }: Props) {
   const initial = (record.data?.notes as string) ?? "";
   const [notes, setNotes] = useState(initial);
 
@@ -23,7 +23,7 @@ export function GenericStep({ step, state, record, onChange }: Props) {
     setNotes((record.data?.notes as string) ?? "");
   }, [record.updatedAt, record.data]);
 
-  const research = state.steps.account_research
+  const research = account.steps.account_research
     .data as Partial<AccountResearchData>;
   const hasResearch = Boolean(
     research.companyOverview || research.toptalFitHypothesis,

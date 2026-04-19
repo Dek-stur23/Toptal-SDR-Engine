@@ -1,22 +1,22 @@
 "use client";
 
 import type {
+  Account,
   StepDefinition,
   StepKind,
   StepRecord,
-  WorkflowState,
 } from "@/lib/types";
 import { AccountResearch } from "./steps/AccountResearch";
 import { GenericStep } from "./steps/GenericStep";
 
 interface Props {
   step: StepDefinition;
-  state: WorkflowState;
+  account: Account;
   record: StepRecord;
   onChange: (id: StepKind, partial: Partial<StepRecord>) => void;
 }
 
-export function StepPanel({ step, state, record, onChange }: Props) {
+export function StepPanel({ step, account, record, onChange }: Props) {
   return (
     <section className="rounded-xl border border-ink-800 bg-ink-900/60">
       <div className="px-6 py-5 border-b border-ink-800">
@@ -37,14 +37,14 @@ export function StepPanel({ step, state, record, onChange }: Props) {
       <div className="p-6">
         {step.id === "account_research" ? (
           <AccountResearch
-            state={state}
+            account={account}
             record={record}
             onChange={(partial) => onChange(step.id, partial)}
           />
         ) : (
           <GenericStep
             step={step}
-            state={state}
+            account={account}
             record={record}
             onChange={(partial) => onChange(step.id, partial)}
           />

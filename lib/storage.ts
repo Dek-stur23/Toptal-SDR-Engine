@@ -1,29 +1,16 @@
 "use client";
 
-import type {
-  Account,
-  AppState,
-  StepKind,
-  StepRecord,
-} from "./types";
-import { WORKFLOW } from "./workflow";
+import type { Account, AccountData, AppState } from "./types";
+import {
+  DEFAULT_ACCOUNT_INTELLIGENCE_GEM,
+  DEFAULT_ARCHITECT_GEM,
+  DEFAULT_INITIATIVE_GEM,
+  DEFAULT_PROCUREMENT_CADENCE_GEM,
+  DEFAULT_PROCUREMENT_STRATEGY_GEM,
+  DEFAULT_RECENT_NEWS_GEM,
+} from "./gems";
 
 const ROOT_KEY = "toptal-sdr-engine::app";
-const LEGACY_KEY = "toptal-sdr-engine::workflow";
-
-function emptyStepRecord(): StepRecord {
-  return { status: "not_started", updatedAt: null, data: {} };
-}
-
-function emptySteps(): Record<StepKind, StepRecord> {
-  return WORKFLOW.reduce(
-    (acc, step) => {
-      acc[step.id] = emptyStepRecord();
-      return acc;
-    },
-    {} as Record<StepKind, StepRecord>,
-  );
-}
 
 function newId(): string {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
@@ -32,67 +19,76 @@ function newId(): string {
   return `acct_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
-export function createAccount(name: string = ""): Account {
-  const now = new Date().toISOString();
+export function emptyAccountData(): AccountData {
+  return {
+    accountStatus: "",
+    companyName: "",
+    accountContextNotes: "",
+    procurementContacts: "",
+    procurementStrategy: null,
+    procurementCadence: null,
+    messagingLiText: "",
+    messagingLiImage: null,
+    messagingContext: "",
+    messagingContactName: "",
+    generatedMessaging: "",
+    messagingLogs: [],
+    previousContacts: [],
+    teamLinks: [],
+    cadences: [],
+    eseMeetings: [],
+    activityLogs: [],
+    recentNewsResult: null,
+    recentNewsInstructions: DEFAULT_RECENT_NEWS_GEM,
+    icpIntelResult: null,
+    gemInstructions: DEFAULT_ACCOUNT_INTELLIGENCE_GEM,
+    aiResearch: null,
+    step2GemInstructions: DEFAULT_INITIATIVE_GEM,
+    initiativeResearch: null,
+    step3GemInstructions: DEFAULT_ARCHITECT_GEM,
+    step5GemInstructions: DEFAULT_PROCUREMENT_STRATEGY_GEM,
+    step5CadenceInstructions: DEFAULT_PROCUREMENT_CADENCE_GEM,
+    architectResults: {},
+  };
+}
+
+export function createAccount(): Account {
   return {
     id: newId(),
-    name: name.trim(),
-    status: "active",
-    createdAt: now,
-    updatedAt: now,
-    steps: emptySteps(),
+    createdAt: Date.now(),
+    name: "New Account",
+    isArchived: false,
+    activeStep: 1,
+    activeTool: null,
+    completedSteps: [],
+    accountData: emptyAccountData(),
   };
 }
 
 function emptyApp(): AppState {
-  return { accounts: [], activeAccountId: null, sidebarCollapsed: false };
-}
-
-function migrateLegacy(raw: string): AppState | null {
-  try {
-    const parsed = JSON.parse(raw) as {
-      accountName?: string;
-      steps?: Record<string, StepRecord>;
-    };
-    const hasContent =
-      (parsed.accountName && parsed.accountName.trim().length > 0) ||
-      Object.values(parsed.steps ?? {}).some(
-        (s) => s && s.status !== "not_started",
-      );
-    if (!hasContent) return null;
-    const acct = createAccount(parsed.accountName ?? "");
-    acct.steps = { ...acct.steps, ...(parsed.steps ?? {}) };
-    return {
-      accounts: [acct],
-      activeAccountId: acct.id,
-      sidebarCollapsed: false,
-    };
-  } catch {
-    return null;
-  }
+  return {
+    accounts: [],
+    currentAccountId: null,
+    isSidebarOpen: true,
+    isArchivedSectionOpen: false,
+  };
 }
 
 export function loadAppState(): AppState {
   if (typeof window === "undefined") return emptyApp();
   try {
     const raw = window.localStorage.getItem(ROOT_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw) as Partial<AppState>;
-      return {
-        accounts: (parsed.accounts ?? []).map((a) => ({
-          ...a,
-          steps: { ...emptySteps(), ...(a.steps ?? {}) },
-        })),
-        activeAccountId: parsed.activeAccountId ?? null,
-        sidebarCollapsed: Boolean(parsed.sidebarCollapsed),
-      };
-    }
-    const legacy = window.localStorage.getItem(LEGACY_KEY);
-    if (legacy) {
-      const migrated = migrateLegacy(legacy);
-      if (migrated) return migrated;
-    }
-    return emptyApp();
+    if (!raw) return emptyApp();
+    const parsed = JSON.parse(raw) as Partial<AppState>;
+    return {
+      accounts: (parsed.accounts ?? []).map((a) => ({
+        ...a,
+        accountData: { ...emptyAccountData(), ...(a.accountData ?? {}) },
+      })),
+      currentAccountId: parsed.currentAccountId ?? null,
+      isSidebarOpen: parsed.isSidebarOpen ?? true,
+      isArchivedSectionOpen: parsed.isArchivedSectionOpen ?? false,
+    };
   } catch {
     return emptyApp();
   }
@@ -100,22 +96,9 @@ export function loadAppState(): AppState {
 
 export function saveAppState(state: AppState): void {
   if (typeof window === "undefined") return;
-  window.localStorage.setItem(ROOT_KEY, JSON.stringify(state));
-}
-
-export function resetAppState(): void {
-  if (typeof window === "undefined") return;
-  window.localStorage.removeItem(ROOT_KEY);
-  window.localStorage.removeItem(LEGACY_KEY);
-}
-
-export function accountProgress(account: Account): {
-  complete: number;
-  total: number;
-} {
-  const total = WORKFLOW.length;
-  const complete = WORKFLOW.filter(
-    (s) => account.steps[s.id]?.status === "complete",
-  ).length;
-  return { complete, total };
+  try {
+    window.localStorage.setItem(ROOT_KEY, JSON.stringify(state));
+  } catch (err) {
+    console.error("Failed to save app state:", err);
+  }
 }

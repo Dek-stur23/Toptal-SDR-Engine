@@ -1,52 +1,257 @@
-export type StepStatus = "not_started" | "in_progress" | "complete";
+export type AccountStatus =
+  | "Signed Account - Active"
+  | "Signed Account - Dormant"
+  | "Unsigned Account"
+  | "";
 
-export type StepKind =
-  | "account_research"
-  | "stakeholder_mapping"
-  | "pain_value_mapping"
-  | "outreach_strategy"
-  | "message_crafting"
-  | "launch_track";
+export interface KeyBuyer {
+  department: string;
+  roles: string[];
+}
 
-export interface StepDefinition {
-  id: StepKind;
-  order: number;
-  title: string;
-  subtitle: string;
+export interface SwotAnalysis {
+  strengths: string[];
+  weaknesses: string[];
+  opportunities: string[];
+  threats: string[];
+}
+
+export interface AiResearch {
+  corporateStructure: string;
+  recentNews: string;
+  keyBuyers: KeyBuyer[];
+  prioritiesAndChallenges: string;
+  roadmap: string;
+  pursuitStrategies: string;
+  swotAnalysis: SwotAnalysis;
+  otherInfo: string;
+}
+
+export interface InitiativeOrChallenge {
+  name: string;
+  primarySource: string;
+  supportingEvidence: string;
+  analysis: string;
+  toptalHook: string;
+}
+
+export interface InitiativeResearch {
+  metadata: string;
+  initiatives: InitiativeOrChallenge[];
+  challenges: InitiativeOrChallenge[];
+}
+
+export interface ProjectAnatomy {
+  pillar: string;
   description: string;
-  estMinutes: number;
-  storageKey: string;
 }
 
-export interface StepRecord {
-  status: StepStatus;
-  updatedAt: string | null;
-  data: Record<string, unknown>;
+export interface TalentMapEntry {
+  category: string;
+  roles: string[];
 }
 
-export type AccountStatus = "active" | "archived";
+export interface ArchitectResult {
+  simpleEnglish: string;
+  projectAnatomy: ProjectAnatomy[];
+  talentMap: TalentMapEntry[];
+  salesEdgeQuestions: string[];
+  redFlags: string[];
+}
+
+export interface ProcurementTarget {
+  name: string;
+  title: string;
+  personaBucket: string;
+  reason: string;
+}
+
+export interface FLetter {
+  trigger: string;
+  connection: string;
+  cta: string;
+}
+
+export interface ProcurementStrategy {
+  orgStructureInsights: string;
+  techStackPrediction: string;
+  entryStrategy: string;
+  topTargets: ProcurementTarget[];
+  theHook: string;
+  draftFLetter: FLetter;
+}
+
+export interface CadenceEmail {
+  subject: string;
+  body: string;
+}
+
+export interface ProcurementCadence {
+  email1: CadenceEmail;
+  email2: CadenceEmail;
+  email3: CadenceEmail;
+}
+
+export interface PreviousContact {
+  id: number;
+  name: string;
+  title: string;
+  salesforceLink: string;
+  notes: string;
+  dateAdded: string;
+  contacted: boolean;
+}
+
+export interface TeamLink {
+  id: number;
+  name: string;
+  personType: string;
+  connection: string;
+  notes: string;
+  date: string;
+  contacted: boolean;
+}
+
+export interface CadenceTask {
+  id: string;
+  label: string;
+  completed: boolean;
+}
+
+export interface Cadence {
+  id: number;
+  name: string;
+  type: string;
+  details: string;
+  links: string;
+  dateLaunched: string;
+  completed: boolean;
+  resultsBriefing: string;
+  tasks: CadenceTask[];
+}
+
+export interface ActivityLog {
+  id: number;
+  type: string;
+  firstName: string;
+  lastName: string;
+  title: string;
+  company: string;
+  linkedinUrl: string;
+  notes: string;
+  date: string;
+}
+
+export interface MessagingLog {
+  id: number;
+  contactName: string;
+  date: string;
+  linkedin: boolean;
+  email: boolean;
+  preview: string;
+}
+
+export interface EseMeeting {
+  id: number;
+  date: string;
+  account: string;
+  notes: string;
+  loggedAt: string;
+}
+
+export interface KeyEvent {
+  headline: string;
+  details: string;
+  source: string;
+}
+
+export interface RecentNewsData {
+  executiveSummary: string;
+  keyEvents: KeyEvent[];
+  toptalOpportunity: string;
+}
+
+export interface RecentNewsResult {
+  company: string;
+  date: string;
+  data: RecentNewsData;
+}
+
+export interface IcpEvidence {
+  confirmedProject: string;
+  verifiedSource: string;
+}
+
+export interface IcpInference {
+  inferredPriority: string;
+  reasoning: string;
+}
+
+export interface IcpIntelData {
+  executiveSummary: { primaryFocus: string; likelyKPIs: string };
+  evidenceBackedInvolvement: IcpEvidence[];
+  logicalInferences: IcpInference[];
+  strategicPriorities: string[];
+  recommendedTalkingPoints: string[];
+}
+
+export interface IcpIntelResult {
+  firstName: string;
+  lastName: string;
+  title: string;
+  company: string;
+  liText: string;
+  result: IcpIntelData;
+  date: string;
+}
+
+export type ToolId = "news" | "icpIntel" | "messaging" | "log" | "eseMeeting";
+
+export interface AccountData {
+  accountStatus: AccountStatus;
+  companyName: string;
+  accountContextNotes: string;
+  procurementContacts: string;
+  procurementStrategy: ProcurementStrategy | null;
+  procurementCadence: ProcurementCadence | null;
+  messagingLiText: string;
+  messagingLiImage: string | null;
+  messagingContext: string;
+  messagingContactName: string;
+  generatedMessaging: string;
+  messagingLogs: MessagingLog[];
+  previousContacts: PreviousContact[];
+  teamLinks: TeamLink[];
+  cadences: Cadence[];
+  eseMeetings: EseMeeting[];
+  activityLogs: ActivityLog[];
+  recentNewsResult: RecentNewsResult | null;
+  recentNewsInstructions: string;
+  icpIntelResult: IcpIntelResult | null;
+  gemInstructions: string;
+  aiResearch: AiResearch | null;
+  step2GemInstructions: string;
+  initiativeResearch: InitiativeResearch | null;
+  step3GemInstructions: string;
+  step5GemInstructions: string;
+  step5CadenceInstructions: string;
+  architectResults: Record<number, ArchitectResult>;
+}
 
 export interface Account {
   id: string;
+  createdAt: number;
   name: string;
-  status: AccountStatus;
-  createdAt: string;
-  updatedAt: string;
-  steps: Record<StepKind, StepRecord>;
+  isArchived: boolean;
+  activeStep: number | null;
+  activeTool: ToolId | null;
+  completedSteps: number[];
+  accountData: AccountData;
 }
 
 export interface AppState {
   accounts: Account[];
-  activeAccountId: string | null;
-  sidebarCollapsed: boolean;
-}
-
-export interface AccountResearchData {
-  projectUrl: string;
-  companyOverview: string;
-  industryContext: string;
-  recentSignals: string;
-  techStack: string;
-  toptalFitHypothesis: string;
-  rawNotes: string;
+  currentAccountId: string | null;
+  isSidebarOpen: boolean;
+  isArchivedSectionOpen: boolean;
 }

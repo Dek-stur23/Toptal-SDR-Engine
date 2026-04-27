@@ -1,309 +1,239 @@
 "use client";
 
 import { useState } from "react";
+import {
+  Archive,
+  ArchiveRestore,
+  Building2,
+  ChevronDown,
+  ChevronRight,
+  Edit2,
+  MoreVertical,
+  Plus,
+  Trash2,
+  X,
+} from "lucide-react";
 import type { Account } from "@/lib/types";
-import { accountProgress } from "@/lib/storage";
 
 interface Props {
   accounts: Account[];
-  activeAccountId: string | null;
-  collapsed: boolean;
-  onToggleCollapsed: () => void;
-  onCreateAccount: () => void;
+  currentAccountId: string | null;
+  isSidebarOpen: boolean;
+  isArchivedSectionOpen: boolean;
+  onClose: () => void;
+  onAddAccount: () => void;
   onSelectAccount: (id: string) => void;
+  onRenameAccount: (id: string, name: string) => void;
   onArchiveAccount: (id: string) => void;
-  onRestoreAccount: (id: string) => void;
   onDeleteAccount: (id: string) => void;
+  onToggleArchivedSection: () => void;
 }
 
-export function Sidebar(props: Props) {
-  const {
-    accounts,
-    activeAccountId,
-    collapsed,
-    onToggleCollapsed,
-    onCreateAccount,
-    onSelectAccount,
-    onArchiveAccount,
-    onRestoreAccount,
-    onDeleteAccount,
-  } = props;
+export function Sidebar({
+  accounts,
+  currentAccountId,
+  isSidebarOpen,
+  isArchivedSectionOpen,
+  onClose,
+  onAddAccount,
+  onSelectAccount,
+  onRenameAccount,
+  onArchiveAccount,
+  onDeleteAccount,
+  onToggleArchivedSection,
+}: Props) {
+  const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState("");
 
-  const active = accounts.filter((a) => a.status === "active");
-  const archived = accounts.filter((a) => a.status === "archived");
-  const [archivedOpen, setArchivedOpen] = useState(false);
+  const activeAccounts = accounts.filter((a) => !a.isArchived);
+  const archivedAccounts = accounts.filter((a) => a.isArchived);
 
-  if (collapsed) {
+  const startRename = (e: React.MouseEvent, acc: Account) => {
+    e.stopPropagation();
+    setEditingId(acc.id);
+    setEditingName(acc.name);
+    setMenuOpenId(null);
+  };
+
+  const submitRename = (id: string) => {
+    if (editingName.trim()) {
+      onRenameAccount(id, editingName.trim());
+    }
+    setEditingId(null);
+  };
+
+  const renderItem = (acc: Account, archived: boolean) => {
+    const isActive = currentAccountId === acc.id;
+    const isEditing = editingId === acc.id;
+
     return (
-      <aside className="fixed left-0 top-0 bottom-0 z-30 w-12 bg-ink-900 border-r border-ink-800 flex flex-col items-center py-4 gap-3">
-        <button
-          onClick={onToggleCollapsed}
-          title="Expand sidebar"
-          className="h-8 w-8 rounded-md hover:bg-ink-800 text-ink-400 hover:text-white flex items-center justify-center"
+      <div
+        key={acc.id}
+        onClick={() => onSelectAccount(acc.id)}
+        className={`group flex items-center justify-between p-3 rounded-lg cursor-pointer transition-all relative ${
+          isActive
+            ? "bg-slate-800 text-white shadow-inner border border-slate-700/50"
+            : archived
+              ? "text-slate-500 hover:bg-slate-800/60 hover:text-slate-300 border border-transparent"
+              : "text-slate-400 hover:bg-slate-800/60 hover:text-slate-200 border border-transparent"
+        }`}
+      >
+        <div
+          className={`flex items-center gap-3 overflow-hidden flex-1 ${archived ? "opacity-70" : ""}`}
         >
-          »
-        </button>
-        <button
-          onClick={onCreateAccount}
-          title="New account"
-          className="h-8 w-8 rounded-md bg-brand-600 hover:bg-brand-500 text-white flex items-center justify-center text-lg font-bold"
-        >
-          +
-        </button>
-        <div className="mt-1 flex flex-col gap-1.5 items-center overflow-y-auto scroll-soft flex-1 w-full px-1">
-          {active.map((a) => (
-            <button
-              key={a.id}
-              onClick={() => onSelectAccount(a.id)}
-              title={a.name || "Untitled account"}
-              className={[
-                "h-8 w-8 rounded-md flex items-center justify-center text-xs font-semibold border",
-                a.id === activeAccountId
-                  ? "border-brand-500 bg-brand-600/20 text-white"
-                  : "border-ink-700 bg-ink-800 text-ink-300 hover:border-ink-600",
-              ].join(" ")}
-            >
-              {initials(a.name)}
-            </button>
-          ))}
+          <div
+            className={`p-1.5 rounded-md ${
+              isActive
+                ? archived
+                  ? "bg-slate-700 text-slate-300"
+                  : "bg-blue-500/20 text-blue-400"
+                : archived
+                  ? "bg-slate-800/50 text-slate-600"
+                  : "bg-slate-800 text-slate-500"
+            }`}
+          >
+            <Building2 className="w-4 h-4 shrink-0" />
+          </div>
+          {isEditing ? (
+            <input
+              autoFocus
+              type="text"
+              value={editingName}
+              onChange={(e) => setEditingName(e.target.value)}
+              onBlur={() => submitRename(acc.id)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") submitRename(acc.id);
+                if (e.key === "Escape") setEditingId(null);
+              }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-slate-700 text-white text-sm px-2 py-1 rounded w-full outline-none focus:ring-1 focus:ring-blue-500"
+            />
+          ) : (
+            <span className="text-sm font-medium truncate">{acc.name}</span>
+          )}
         </div>
-      </aside>
-    );
-  }
 
-  return (
-    <aside className="fixed left-0 top-0 bottom-0 z-30 w-72 bg-ink-900 border-r border-ink-800 flex flex-col">
-      <div className="px-4 py-4 border-b border-ink-800 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div className="h-7 w-7 rounded-md bg-brand-600 flex items-center justify-center text-white font-bold text-sm">
-            T
-          </div>
-          <div className="leading-tight">
-            <div className="text-[11px] text-ink-500">Toptal</div>
-            <div className="text-sm font-semibold text-white">SDR Engine</div>
-          </div>
-        </div>
-        <button
-          onClick={onToggleCollapsed}
-          title="Collapse sidebar"
-          className="h-7 w-7 rounded-md hover:bg-ink-800 text-ink-400 hover:text-white flex items-center justify-center"
-        >
-          «
-        </button>
-      </div>
-
-      <div className="p-3">
-        <button
-          onClick={onCreateAccount}
-          className="w-full rounded-md bg-brand-600 hover:bg-brand-500 transition px-3 py-2 text-sm font-medium text-white flex items-center justify-center gap-2"
-        >
-          <span className="text-base leading-none">+</span>
-          New Account
-        </button>
-      </div>
-
-      <div className="flex-1 overflow-y-auto scroll-soft px-2 pb-3">
-        <SectionHeading label="Active" count={active.length} />
-        {active.length === 0 ? (
-          <div className="px-2 py-6 text-xs text-ink-500">
-            No active accounts yet. Click{" "}
-            <span className="text-ink-300">New Account</span> to start one.
-          </div>
-        ) : (
-          <ul className="space-y-1">
-            {active.map((a) => (
-              <AccountRow
-                key={a.id}
-                account={a}
-                isActive={a.id === activeAccountId}
-                onSelect={() => onSelectAccount(a.id)}
-                onArchive={() => onArchiveAccount(a.id)}
-                onDelete={() => onDeleteAccount(a.id)}
-              />
-            ))}
-          </ul>
-        )}
-
-        {archived.length > 0 && (
-          <div className="mt-5">
+        {!isEditing && (
+          <div className="relative">
             <button
-              onClick={() => setArchivedOpen((v) => !v)}
-              className="w-full flex items-center justify-between px-2 py-1.5 text-xs uppercase tracking-wide text-ink-500 hover:text-ink-300"
+              onClick={(e) => {
+                e.stopPropagation();
+                setMenuOpenId(menuOpenId === acc.id ? null : acc.id);
+              }}
+              className="opacity-0 group-hover:opacity-100 text-slate-500 hover:text-slate-300 transition-opacity p-1.5 hover:bg-slate-700 rounded-md"
             >
-              <span>
-                Archived{" "}
-                <span className="text-ink-600">({archived.length})</span>
-              </span>
-              <span>{archivedOpen ? "−" : "+"}</span>
+              <MoreVertical className="w-4 h-4" />
             </button>
-            {archivedOpen && (
-              <ul className="space-y-1 mt-1">
-                {archived.map((a) => (
-                  <AccountRow
-                    key={a.id}
-                    account={a}
-                    isActive={a.id === activeAccountId}
-                    archived
-                    onSelect={() => onSelectAccount(a.id)}
-                    onRestore={() => onRestoreAccount(a.id)}
-                    onDelete={() => onDeleteAccount(a.id)}
-                  />
-                ))}
-              </ul>
+
+            {menuOpenId === acc.id && (
+              <>
+                <div
+                  className="fixed inset-0 z-30"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setMenuOpenId(null);
+                  }}
+                />
+                <div className="absolute right-0 mt-1 w-36 bg-slate-800 border border-slate-700 rounded-lg shadow-xl z-40 py-1 overflow-hidden animate-in fade-in zoom-in-95">
+                  {!archived && (
+                    <button
+                      onClick={(e) => startRename(e, acc)}
+                      className="w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-2 transition-colors"
+                    >
+                      <Edit2 className="w-3.5 h-3.5" /> Rename
+                    </button>
+                  )}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onArchiveAccount(acc.id);
+                      setMenuOpenId(null);
+                    }}
+                    className="w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-2 transition-colors"
+                  >
+                    {archived ? (
+                      <>
+                        <ArchiveRestore className="w-3.5 h-3.5" /> Unarchive
+                      </>
+                    ) : (
+                      <>
+                        <Archive className="w-3.5 h-3.5" /> Archive
+                      </>
+                    )}
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDeleteAccount(acc.id);
+                      setMenuOpenId(null);
+                    }}
+                    className="w-full text-left px-4 py-2 text-sm text-red-400 hover:bg-slate-700 hover:text-red-300 flex items-center gap-2 transition-colors border-t border-slate-700/50 mt-1 pt-1"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" /> Delete
+                  </button>
+                </div>
+              </>
             )}
           </div>
         )}
       </div>
-    </aside>
-  );
-}
+    );
+  };
 
-function SectionHeading({ label, count }: { label: string; count: number }) {
   return (
-    <div className="px-2 pt-2 pb-1 flex items-center justify-between text-xs uppercase tracking-wide text-ink-500">
-      <span>{label}</span>
-      <span className="text-ink-600">{count}</span>
+    <div
+      className={`${isSidebarOpen ? "w-72" : "w-0"} transition-all duration-300 ease-in-out bg-slate-900 flex flex-col shrink-0 overflow-hidden shadow-xl z-20 relative`}
+    >
+      <div className="p-5 border-b border-slate-800 flex justify-between items-center whitespace-nowrap">
+        <h2 className="text-slate-200 font-semibold text-sm tracking-wide uppercase">
+          Your Accounts
+        </h2>
+        <button
+          onClick={onClose}
+          className="text-slate-400 hover:text-white p-1 rounded-md hover:bg-slate-800 transition-colors"
+        >
+          <X className="w-5 h-5" />
+        </button>
+      </div>
+
+      <div className="p-4">
+        <button
+          onClick={onAddAccount}
+          className="w-full bg-blue-600 hover:bg-blue-500 text-white py-2.5 px-4 rounded-lg flex items-center justify-center gap-2 text-sm font-medium transition-colors shadow-sm"
+        >
+          <Plus className="w-4 h-4" /> New Account
+        </button>
+      </div>
+
+      <div className="flex-1 overflow-y-auto px-3 pb-4 space-y-1 custom-scrollbar">
+        {activeAccounts.map((acc) => renderItem(acc, false))}
+
+        {archivedAccounts.length > 0 && (
+          <div className="mt-6">
+            <button
+              onClick={onToggleArchivedSection}
+              className="w-full flex items-center justify-between text-xs font-semibold text-slate-500 uppercase tracking-wider px-2 hover:text-slate-300 transition-colors"
+            >
+              <div className="flex items-center gap-2">
+                <Archive className="w-3.5 h-3.5" />
+                Archived ({archivedAccounts.length})
+              </div>
+              {isArchivedSectionOpen ? (
+                <ChevronDown className="w-3.5 h-3.5" />
+              ) : (
+                <ChevronRight className="w-3.5 h-3.5" />
+              )}
+            </button>
+
+            {isArchivedSectionOpen && (
+              <div className="mt-2 space-y-1">
+                {archivedAccounts.map((acc) => renderItem(acc, true))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
-}
-
-interface RowProps {
-  account: Account;
-  isActive: boolean;
-  archived?: boolean;
-  onSelect: () => void;
-  onArchive?: () => void;
-  onRestore?: () => void;
-  onDelete: () => void;
-}
-
-function AccountRow({
-  account,
-  isActive,
-  archived,
-  onSelect,
-  onArchive,
-  onRestore,
-  onDelete,
-}: RowProps) {
-  const { complete, total } = accountProgress(account);
-  return (
-    <li>
-      <div
-        className={[
-          "group relative rounded-md border px-2.5 py-2 transition cursor-pointer",
-          isActive
-            ? "border-brand-500/60 bg-ink-800"
-            : "border-transparent hover:bg-ink-800/60 hover:border-ink-800",
-          archived ? "opacity-70" : "",
-        ].join(" ")}
-        onClick={onSelect}
-      >
-        <div className="flex items-center gap-2.5 min-w-0">
-          <div
-            className={[
-              "h-7 w-7 shrink-0 rounded-md flex items-center justify-center text-xs font-semibold",
-              isActive
-                ? "bg-brand-600 text-white"
-                : "bg-ink-800 text-ink-300 border border-ink-700",
-            ].join(" ")}
-          >
-            {initials(account.name)}
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="text-sm text-white truncate">
-              {account.name || "Untitled account"}
-            </div>
-            <div className="text-[11px] text-ink-500">
-              {complete}/{total} steps · updated {shortDate(account.updatedAt)}
-            </div>
-          </div>
-        </div>
-
-        <div className="absolute right-1.5 top-1.5 hidden group-hover:flex items-center gap-1">
-          {archived && onRestore ? (
-            <IconBtn
-              title="Restore"
-              onClick={(e) => {
-                e.stopPropagation();
-                onRestore();
-              }}
-            >
-              ↩
-            </IconBtn>
-          ) : null}
-          {!archived && onArchive ? (
-            <IconBtn
-              title="Archive"
-              onClick={(e) => {
-                e.stopPropagation();
-                onArchive();
-              }}
-            >
-              ▾
-            </IconBtn>
-          ) : null}
-          <IconBtn
-            title="Delete"
-            danger
-            onClick={(e) => {
-              e.stopPropagation();
-              if (
-                confirm(
-                  `Delete "${account.name || "Untitled account"}"? This cannot be undone.`,
-                )
-              ) {
-                onDelete();
-              }
-            }}
-          >
-            ×
-          </IconBtn>
-        </div>
-      </div>
-    </li>
-  );
-}
-
-function IconBtn({
-  title,
-  onClick,
-  children,
-  danger,
-}: {
-  title: string;
-  onClick: (e: React.MouseEvent) => void;
-  children: React.ReactNode;
-  danger?: boolean;
-}) {
-  return (
-    <button
-      title={title}
-      onClick={onClick}
-      className={[
-        "h-6 w-6 rounded-md text-xs flex items-center justify-center border",
-        danger
-          ? "border-ink-700 bg-ink-900 text-ink-400 hover:text-red-300 hover:border-red-500/60"
-          : "border-ink-700 bg-ink-900 text-ink-300 hover:text-white hover:border-ink-600",
-      ].join(" ")}
-    >
-      {children}
-    </button>
-  );
-}
-
-function initials(name: string): string {
-  const trimmed = name.trim();
-  if (!trimmed) return "–";
-  const parts = trimmed.split(/\s+/).slice(0, 2);
-  return parts.map((p) => p[0]?.toUpperCase() ?? "").join("") || "–";
-}
-
-function shortDate(iso: string): string {
-  try {
-    const d = new Date(iso);
-    return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
-  } catch {
-    return "";
-  }
 }

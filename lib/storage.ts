@@ -113,10 +113,25 @@ export function loadAppState(): AppState {
     if (!raw) return emptyApp();
     const parsed = JSON.parse(raw) as Partial<AppState>;
     return {
-      accounts: (parsed.accounts ?? []).map((a) => ({
-        ...a,
-        accountData: { ...emptyAccountData(), ...(a.accountData ?? {}) },
-      })),
+      accounts: (parsed.accounts ?? []).map((a) => {
+        const skeleton = createAccount();
+        const accountData = {
+          ...emptyAccountData(),
+          ...(a?.accountData ?? {}),
+          softwareEngine: {
+            ...emptySoftwareEngine(),
+            ...(a?.accountData?.softwareEngine ?? {}),
+          },
+        };
+        return {
+          ...skeleton,
+          ...(a ?? {}),
+          completedSteps: Array.isArray(a?.completedSteps)
+            ? a.completedSteps
+            : [],
+          accountData,
+        };
+      }),
       currentAccountId: parsed.currentAccountId ?? null,
       isSidebarOpen: parsed.isSidebarOpen ?? true,
       isArchivedSectionOpen: parsed.isArchivedSectionOpen ?? false,

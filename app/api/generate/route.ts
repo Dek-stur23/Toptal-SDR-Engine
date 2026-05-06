@@ -69,7 +69,9 @@ export async function POST(req: NextRequest) {
   }
 
   const { prompt, system, schema, image } = body;
-  if (!prompt || !system) {
+  const trimmedPrompt = typeof prompt === "string" ? prompt.trim() : "";
+  const trimmedSystem = typeof system === "string" ? system.trim() : "";
+  if (!trimmedPrompt || !trimmedSystem) {
     return NextResponse.json(
       { error: "Missing prompt or system." },
       { status: 400 },
@@ -95,7 +97,7 @@ export async function POST(req: NextRequest) {
       });
     }
   }
-  userContent.push({ type: "text", text: prompt });
+  userContent.push({ type: "text", text: trimmedPrompt });
 
   const params: Anthropic.MessageCreateParamsNonStreaming = {
     model: MODEL,
@@ -103,7 +105,7 @@ export async function POST(req: NextRequest) {
     system: [
       {
         type: "text",
-        text: system,
+        text: trimmedSystem,
         cache_control: { type: "ephemeral" },
       },
     ],

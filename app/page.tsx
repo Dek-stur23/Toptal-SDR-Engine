@@ -5,17 +5,22 @@ import {
   Activity,
   BookOpen,
   Briefcase,
+  Code2,
+  Cpu,
   Download,
   FileText,
+  Hash,
   History,
   Layers,
   Loader2,
+  MessageSquare,
   Network,
   Newspaper,
   Rocket,
   Search,
   Send,
   Target,
+  Upload,
   User,
   Users,
   Wand2,
@@ -40,6 +45,11 @@ import { IcpIntel } from "@/components/tools/IcpIntel";
 import { PersonalizedMessaging } from "@/components/tools/PersonalizedMessaging";
 import { LogConversation } from "@/components/tools/LogConversation";
 import { EseMeeting } from "@/components/tools/EseMeeting";
+import { StackMapper } from "@/components/engines/software/StackMapper";
+import { FeatureMapper } from "@/components/engines/software/FeatureMapper";
+import { KeywordGenerator } from "@/components/engines/software/KeywordGenerator";
+import { UploadContact } from "@/components/engines/software/UploadContact";
+import { MessageCrafter } from "@/components/engines/software/MessageCrafter";
 import { exportAccountToPdf } from "@/lib/pdf";
 import { createAccount, loadAppState, saveAppState } from "@/lib/storage";
 import type { Account, AccountData, AppState, ToolId } from "@/lib/types";
@@ -69,6 +79,14 @@ const steps: StepDef[] = [
   { id: 7, title: "Previous Contacts", icon: History, Component: PreviousContacts },
   { id: 8, title: "Team Link Search", icon: Network, Component: TeamLinkSearch },
   { id: 9, title: "Cadence Builder", icon: Send, Component: CadenceBuilder },
+];
+
+const softwareEngineSteps: StepDef[] = [
+  { id: 1, title: "StackMapper", icon: Layers, Component: StackMapper },
+  { id: 2, title: "FeatureMapper", icon: Code2, Component: FeatureMapper },
+  { id: 3, title: "Keyword Generator", icon: Hash, Component: KeywordGenerator },
+  { id: 4, title: "Upload Contact", icon: Upload, Component: UploadContact },
+  { id: 5, title: "MessageCrafter", icon: MessageSquare, Component: MessageCrafter },
 ];
 
 const actionTools: ToolDef[] = [
@@ -163,6 +181,39 @@ export default function App() {
     if (currentAccount.activeStep === stepId && stepId < steps.length) {
       setActiveStep(stepId + 1);
     }
+  };
+
+  const setSoftwareEngineActiveStep = (stepId: number | null) => {
+    updateAccount(currentAccount.id, (acc) => ({
+      ...acc,
+      accountData: {
+        ...acc.accountData,
+        softwareEngine: {
+          ...acc.accountData.softwareEngine,
+          activeStep: stepId,
+        },
+      },
+    }));
+  };
+
+  const handleSoftwareEngineStepComplete = (stepId: number) => {
+    updateAccount(currentAccount.id, (acc) => {
+      const engine = acc.accountData.softwareEngine;
+      const completedSteps = engine.completedSteps.includes(stepId)
+        ? engine.completedSteps
+        : [...engine.completedSteps, stepId];
+      const activeStep =
+        engine.activeStep === stepId && stepId < softwareEngineSteps.length
+          ? stepId + 1
+          : engine.activeStep;
+      return {
+        ...acc,
+        accountData: {
+          ...acc.accountData,
+          softwareEngine: { ...engine, completedSteps, activeStep },
+        },
+      };
+    });
   };
 
   const handleToolToggle = (toolId: ToolId) => {
@@ -359,6 +410,71 @@ export default function App() {
                       </StepCard>
                     );
                   })}
+                </div>
+              </div>
+            </section>
+
+            <section>
+              <div className="flex items-center gap-4 mb-8 pl-1">
+                <div className="bg-slate-900 text-white p-2.5 rounded-xl shadow-md border border-slate-700">
+                  <Cpu className="w-6 h-6" />
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-0.5">
+                    Outreach Engines
+                  </p>
+                  <h2 className="text-2xl font-bold text-slate-900 tracking-tight">
+                    Outreach Engines
+                  </h2>
+                </div>
+              </div>
+
+              <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-6 space-y-6">
+                <div className="flex items-center gap-3 border-b border-gray-100 pb-4">
+                  <div className="bg-blue-600 text-white p-2 rounded-lg">
+                    <Code2 className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-bold text-blue-700 uppercase tracking-widest">
+                      Engine
+                    </p>
+                    <h3 className="text-lg font-semibold text-slate-900">
+                      Software Engine
+                    </h3>
+                  </div>
+                </div>
+
+                <div className="relative">
+                  <div className="absolute left-[23px] top-4 bottom-8 w-[2px] bg-gray-200 rounded-full" />
+                  <div className="space-y-6">
+                    {softwareEngineSteps.map((step) => {
+                      const engine = currentAccount.accountData.softwareEngine;
+                      const isCompleted = engine.completedSteps.includes(step.id);
+                      const isActive = engine.activeStep === step.id;
+                      return (
+                        <StepCard
+                          key={step.id}
+                          stepNumber={step.id}
+                          title={step.title}
+                          Icon={step.icon}
+                          isCompleted={isCompleted}
+                          isActive={isActive}
+                          isLocked={false}
+                          onToggle={() =>
+                            setSoftwareEngineActiveStep(isActive ? null : step.id)
+                          }
+                        >
+                          <step.Component
+                            accountData={currentAccount.accountData}
+                            setAccountData={setAccountData}
+                            onComplete={() =>
+                              handleSoftwareEngineStepComplete(step.id)
+                            }
+                          />
+                        </StepCard>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
             </section>

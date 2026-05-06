@@ -4,11 +4,17 @@ import type { Account, AccountData, AppState } from "./types";
 import {
   DEFAULT_ACCOUNT_INTELLIGENCE_GEM,
   DEFAULT_ARCHITECT_GEM,
+  DEFAULT_FEATURE_MAPPER_GEM,
   DEFAULT_INITIATIVE_GEM,
+  DEFAULT_KEYWORD_GENERATOR_GEM,
+  DEFAULT_MESSAGE_CRAFTER_GEM,
   DEFAULT_PROCUREMENT_CADENCE_GEM,
   DEFAULT_PROCUREMENT_STRATEGY_GEM,
   DEFAULT_RECENT_NEWS_GEM,
+  DEFAULT_SOFTWARE_CONTACT_EXTRACT_GEM,
+  DEFAULT_STACK_MAPPER_GEM,
 } from "./gems";
+import type { SoftwareEngineState } from "./types";
 
 const ROOT_KEY = "toptal-sdr-engine::app";
 
@@ -17,6 +23,31 @@ function newId(): string {
     return crypto.randomUUID();
   }
   return `acct_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+export function emptySoftwareEngine(): SoftwareEngineState {
+  return {
+    activeStep: null,
+    completedSteps: [],
+    stackMap: "",
+    productInput: "",
+    featureMap: "",
+    keywords: "",
+    contact: {
+      firstName: "",
+      lastName: "",
+      title: "",
+      company: "",
+      liText: "",
+      liImage: null,
+    },
+    craftedMessage: "",
+    stackMapperGem: DEFAULT_STACK_MAPPER_GEM,
+    featureMapperGem: DEFAULT_FEATURE_MAPPER_GEM,
+    keywordGeneratorGem: DEFAULT_KEYWORD_GENERATOR_GEM,
+    contactExtractGem: DEFAULT_SOFTWARE_CONTACT_EXTRACT_GEM,
+    messageCrafterGem: DEFAULT_MESSAGE_CRAFTER_GEM,
+  };
 }
 
 export function emptyAccountData(): AccountData {
@@ -49,6 +80,7 @@ export function emptyAccountData(): AccountData {
     step5GemInstructions: DEFAULT_PROCUREMENT_STRATEGY_GEM,
     step5CadenceInstructions: DEFAULT_PROCUREMENT_CADENCE_GEM,
     architectResults: {},
+    softwareEngine: emptySoftwareEngine(),
   };
 }
 

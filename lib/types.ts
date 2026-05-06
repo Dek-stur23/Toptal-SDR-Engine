@@ -207,6 +207,31 @@ export interface IcpIntelResult {
 
 export type ToolId = "news" | "icpIntel" | "messaging" | "log" | "eseMeeting";
 
+export interface SoftwareEngineContact {
+  firstName: string;
+  lastName: string;
+  title: string;
+  company: string;
+  liText: string;
+  liImage: string | null;
+}
+
+export interface SoftwareEngineState {
+  activeStep: number | null;
+  completedSteps: number[];
+  stackMap: string;
+  productInput: string;
+  featureMap: string;
+  keywords: string;
+  contact: SoftwareEngineContact;
+  craftedMessage: string;
+  stackMapperGem: string;
+  featureMapperGem: string;
+  keywordGeneratorGem: string;
+  contactExtractGem: string;
+  messageCrafterGem: string;
+}
+
 export interface AccountData {
   accountStatus: AccountStatus;
   companyName: string;
@@ -236,6 +261,7 @@ export interface AccountData {
   step5GemInstructions: string;
   step5CadenceInstructions: string;
   architectResults: Record<number, ArchitectResult>;
+  softwareEngine: SoftwareEngineState;
 }
 
 export interface Account {

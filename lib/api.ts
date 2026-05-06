@@ -5,6 +5,8 @@ interface GenerateOptions {
   system: string;
   schema?: unknown;
   image?: string | null;
+  webSearch?: boolean;
+  maxWebSearches?: number;
 }
 
 export async function generateWithClaude<T>(opts: GenerateOptions): Promise<T> {

@@ -100,6 +100,7 @@ export function AccountIntelligence({
         prompt,
         system: gemInstructions,
         schema,
+        webSearch: true,
       });
       setAccountData((prev) => ({
         ...prev,

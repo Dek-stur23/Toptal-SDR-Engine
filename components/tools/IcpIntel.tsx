@@ -161,6 +161,7 @@ export function IcpIntel({
         system: DEFAULT_ICP_INTEL_GEM,
         schema,
         image: liImage,
+        webSearch: true,
       });
 
       const confirmedStr =

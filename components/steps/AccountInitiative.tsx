@@ -76,6 +76,7 @@ export function AccountInitiative({
         prompt,
         system: systemPrompt,
         schema,
+        webSearch: true,
       });
       setAccountData((prev) => ({
         ...prev,

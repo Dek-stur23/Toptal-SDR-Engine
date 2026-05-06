@@ -51,6 +51,8 @@ interface GenerateRequest {
   system: string;
   schema?: GeminiSchema;
   image?: string | null;
+  webSearch?: boolean;
+  maxWebSearches?: number;
 }
 
 export async function POST(req: NextRequest) {
@@ -68,7 +70,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
   }
 
-  const { prompt, system, schema, image } = body;
+  const { prompt, system, schema, image, webSearch, maxWebSearches } = body;
   const trimmedPrompt = typeof prompt === "string" ? prompt.trim() : "";
   const trimmedSystem = typeof system === "string" ? system.trim() : "";
   if (!trimmedPrompt || !trimmedSystem) {
@@ -112,25 +114,42 @@ export async function POST(req: NextRequest) {
     messages: [{ role: "user", content: userContent }],
   };
 
+  const tools: NonNullable<Anthropic.MessageCreateParamsNonStreaming["tools"]> =
+    [];
+
+  if (webSearch) {
+    tools.push({
+      type: "web_search_20250305",
+      name: "web_search",
+      max_uses:
+        typeof maxWebSearches === "number" && maxWebSearches > 0
+          ? Math.min(maxWebSearches, 10)
+          : 5,
+    } as unknown as Anthropic.Tool);
+  }
+
   if (schema) {
     const jsonSchema = convertSchema(schema);
     if (jsonSchema.type !== "object") jsonSchema.type = "object";
-    params.tools = [
-      {
-        name: "submit_result",
-        description: "Submit the structured result for the user.",
-        input_schema: jsonSchema as Anthropic.Tool.InputSchema,
-      },
-    ];
-    params.tool_choice = { type: "tool", name: "submit_result" };
+    tools.push({
+      name: "submit_result",
+      description: "Submit the structured result for the user.",
+      input_schema: jsonSchema as Anthropic.Tool.InputSchema,
+    });
+    params.tool_choice = webSearch
+      ? { type: "any" }
+      : { type: "tool", name: "submit_result" };
   }
+
+  if (tools.length > 0) params.tools = tools;
 
   try {
     const response = await client.messages.create(params);
 
     if (schema) {
       const toolUse = response.content.find(
-        (c): c is Anthropic.ToolUseBlock => c.type === "tool_use",
+        (c): c is Anthropic.ToolUseBlock =>
+          c.type === "tool_use" && c.name === "submit_result",
       );
       if (!toolUse) {
         return NextResponse.json(
@@ -141,10 +160,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ result: toolUse.input });
     }
 
-    const text = response.content.find(
+    const textBlocks = response.content.filter(
       (c): c is Anthropic.TextBlock => c.type === "text",
     );
-    return NextResponse.json({ result: text?.text ?? "" });
+    const text = textBlocks.map((b) => b.text).join("\n\n");
+    return NextResponse.json({ result: text });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
     console.error("Generate error:", err);

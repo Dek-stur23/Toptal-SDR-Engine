@@ -31,6 +31,7 @@ export function StackMapper({
       const result = await generateWithClaude<string>({
         prompt,
         system: gemInstructions,
+        webSearch: true,
       });
       setAccountData((prev) => ({
         ...prev,

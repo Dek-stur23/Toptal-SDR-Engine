@@ -138,6 +138,7 @@ export function ProcurementBureaucracy({
         prompt,
         system: gemInstructions,
         schema,
+        webSearch: true,
       });
       setAccountData((prev) => ({
         ...prev,

@@ -79,6 +79,7 @@ export function RecentNews({ accountData, setAccountData }: ToolProps) {
         prompt,
         system: gemInstructions,
         schema,
+        webSearch: true,
       });
       setAccountData((prev) => ({
         ...prev,

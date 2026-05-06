@@ -5,7 +5,6 @@ import {
   ChevronRight,
   Image as ImageIcon,
   Loader2,
-  Settings,
   Wand2,
 } from "lucide-react";
 import type { StepProps } from "@/components/types";
@@ -36,10 +35,6 @@ export function UploadContact({
   const [liImage, setLiImage] = useState<string | null>(contact.liImage);
   const [extracting, setExtracting] = useState(false);
   const [error, setError] = useState("");
-  const [showGemConfig, setShowGemConfig] = useState(false);
-  const [gemInstructions, setGemInstructions] = useState(
-    engine.contactExtractGem || DEFAULT_SOFTWARE_CONTACT_EXTRACT_GEM,
-  );
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -72,7 +67,7 @@ export function UploadContact({
       };
       const result = await generateWithClaude<ExtractedFields>({
         prompt,
-        system: gemInstructions,
+        system: DEFAULT_SOFTWARE_CONTACT_EXTRACT_GEM,
         schema,
         image: liImage,
       });
@@ -104,7 +99,6 @@ export function UploadContact({
           liText,
           liImage,
         },
-        contactExtractGem: gemInstructions,
       },
     }));
     onComplete();
@@ -112,32 +106,10 @@ export function UploadContact({
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-between items-end">
-        <p className="text-sm text-gray-600">
-          Upload a LinkedIn screenshot or paste profile text. Autofill name,
-          title, and company.
-        </p>
-        <button
-          onClick={() => setShowGemConfig(!showGemConfig)}
-          className="text-xs text-gray-500 hover:text-blue-600 flex items-center gap-1 transition-colors"
-        >
-          <Settings className="w-3 h-3" />
-          {showGemConfig ? "Hide Gem" : "Configure Gem"}
-        </button>
-      </div>
-
-      {showGemConfig && (
-        <div className="p-4 bg-slate-50 border border-slate-200 rounded-lg">
-          <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-2">
-            Contact Extraction System Instructions
-          </label>
-          <textarea
-            className="w-full h-32 p-3 text-sm text-gray-800 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 outline-none resize-none custom-scrollbar"
-            value={gemInstructions}
-            onChange={(e) => setGemInstructions(e.target.value)}
-          />
-        </div>
-      )}
+      <p className="text-sm text-gray-600">
+        Upload a LinkedIn screenshot or paste profile text. Autofill name,
+        title, and company.
+      </p>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="space-y-3">

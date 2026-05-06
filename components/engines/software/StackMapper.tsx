@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronRight, Loader2, Settings, Sparkles } from "lucide-react";
+import { ChevronRight, Loader2, Sparkles } from "lucide-react";
 import type { StepProps } from "@/components/types";
 import { generateWithClaude } from "@/lib/api";
 import { DEFAULT_STACK_MAPPER_GEM } from "@/lib/gems";
@@ -14,10 +14,6 @@ export function StackMapper({
   const engine = accountData.softwareEngine;
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [showGemConfig, setShowGemConfig] = useState(false);
-  const [gemInstructions, setGemInstructions] = useState(
-    engine.stackMapperGem || DEFAULT_STACK_MAPPER_GEM,
-  );
 
   const run = async () => {
     if (!accountData.companyName.trim()) {
@@ -30,7 +26,7 @@ export function StackMapper({
       const prompt = `Build a comprehensive tech stack map for ${accountData.companyName}.`;
       const result = await generateWithClaude<string>({
         prompt,
-        system: gemInstructions,
+        system: DEFAULT_STACK_MAPPER_GEM,
         webSearch: true,
       });
       setAccountData((prev) => ({
@@ -38,7 +34,6 @@ export function StackMapper({
         softwareEngine: {
           ...prev.softwareEngine,
           stackMap: typeof result === "string" ? result : String(result ?? ""),
-          stackMapperGem: gemInstructions,
         },
       }));
     } catch {
@@ -50,32 +45,10 @@ export function StackMapper({
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-between items-end">
-        <p className="text-sm text-gray-600">
-          Research <strong>{accountData.companyName || "the company"}</strong>{" "}
-          and build a comprehensive map of its likely technology stack.
-        </p>
-        <button
-          onClick={() => setShowGemConfig(!showGemConfig)}
-          className="text-xs text-gray-500 hover:text-blue-600 flex items-center gap-1 transition-colors"
-        >
-          <Settings className="w-3 h-3" />
-          {showGemConfig ? "Hide Gem" : "Configure Gem"}
-        </button>
-      </div>
-
-      {showGemConfig && (
-        <div className="p-4 bg-slate-50 border border-slate-200 rounded-lg">
-          <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-2">
-            StackMapper System Instructions
-          </label>
-          <textarea
-            className="w-full h-40 p-3 text-sm text-gray-800 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 outline-none resize-none custom-scrollbar"
-            value={gemInstructions}
-            onChange={(e) => setGemInstructions(e.target.value)}
-          />
-        </div>
-      )}
+      <p className="text-sm text-gray-600">
+        Research <strong>{accountData.companyName || "the company"}</strong>{" "}
+        and build a comprehensive map of its likely technology stack.
+      </p>
 
       <button
         onClick={run}

@@ -8,7 +8,6 @@ import {
   Loader2,
   Newspaper,
   Search,
-  Settings,
   Target,
   Upload,
   Zap,
@@ -22,10 +21,6 @@ export function RecentNews({ accountData, setAccountData }: ToolProps) {
   const [company, setCompany] = useState(accountData.companyName || "");
   const [reportText, setReportText] = useState("");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [showGemConfig, setShowGemConfig] = useState(false);
-  const [gemInstructions, setGemInstructions] = useState(
-    accountData.recentNewsInstructions || DEFAULT_RECENT_NEWS_GEM,
-  );
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -77,13 +72,12 @@ export function RecentNews({ accountData, setAccountData }: ToolProps) {
     try {
       const result = await generateWithClaude<RecentNewsData>({
         prompt,
-        system: gemInstructions,
+        system: DEFAULT_RECENT_NEWS_GEM,
         schema,
         webSearch: true,
       });
       setAccountData((prev) => ({
         ...prev,
-        recentNewsInstructions: gemInstructions,
         recentNewsResult: {
           company: company.trim(),
           date: new Date().toLocaleString([], {
@@ -106,32 +100,10 @@ export function RecentNews({ accountData, setAccountData }: ToolProps) {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-end mb-2">
-        <p className="text-sm text-gray-600">
-          Search public sources for the latest news, or upload a recent quarterly
-          report to identify immediate talent triggers.
-        </p>
-        <button
-          onClick={() => setShowGemConfig(!showGemConfig)}
-          className="text-xs text-gray-500 hover:text-sky-600 flex items-center gap-1 transition-colors"
-        >
-          <Settings className="w-3 h-3" />
-          {showGemConfig ? "Hide Gem Config" : "Configure Gem"}
-        </button>
-      </div>
-
-      {showGemConfig && (
-        <div className="mb-4 p-4 bg-slate-50 border border-slate-200 rounded-lg animate-in fade-in slide-in-from-top-2">
-          <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-2">
-            News Analyst Gem Instructions
-          </label>
-          <textarea
-            className="w-full h-40 p-3 text-sm text-gray-800 border border-gray-300 rounded-md focus:ring-2 focus:ring-sky-500 outline-none resize-none custom-scrollbar"
-            value={gemInstructions}
-            onChange={(e) => setGemInstructions(e.target.value)}
-          />
-        </div>
-      )}
+      <p className="text-sm text-gray-600 mb-2">
+        Search public sources for the latest news, or upload a recent quarterly
+        report to identify immediate talent triggers.
+      </p>
 
       <div className="w-full p-5 bg-sky-50/30 border border-sky-100 rounded-xl">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-5">

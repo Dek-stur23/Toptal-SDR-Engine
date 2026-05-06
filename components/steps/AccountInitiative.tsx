@@ -1,13 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import {
-  ChevronRight,
-  Loader2,
-  Settings,
-  Sparkles,
-  Target,
-} from "lucide-react";
+import { ChevronRight, Loader2, Sparkles, Target } from "lucide-react";
 import type { StepProps } from "@/components/types";
 import type { InitiativeResearch } from "@/lib/types";
 import { generateWithClaude, getStatusContext } from "@/lib/api";
@@ -20,10 +14,6 @@ export function AccountInitiative({
 }: StepProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [showGemConfig, setShowGemConfig] = useState(false);
-  const [gemInstructions, setGemInstructions] = useState(
-    accountData.step2GemInstructions || DEFAULT_INITIATIVE_GEM,
-  );
 
   if (!accountData.aiResearch) {
     return (
@@ -38,7 +28,7 @@ export function AccountInitiative({
     setError("");
 
     const prompt = `Based on the company ${accountData.companyName}, identify strategic business initiatives and critical challenges following your system instructions.${getStatusContext(accountData.accountStatus)}`;
-    const systemPrompt = gemInstructions.replace(
+    const systemPrompt = DEFAULT_INITIATIVE_GEM.replace(
       "{{Current_Date}}",
       new Date().toLocaleDateString(),
     );
@@ -80,7 +70,6 @@ export function AccountInitiative({
       });
       setAccountData((prev) => ({
         ...prev,
-        step2GemInstructions: gemInstructions,
         initiativeResearch: result,
       }));
     } catch {
@@ -95,33 +84,11 @@ export function AccountInitiative({
   return (
     <div className="space-y-6">
       <div>
-        <div className="flex justify-between items-end mb-2">
-          <p className="text-sm text-gray-600">
-            Identify what <strong>{accountData.companyName}</strong> is actively
-            trying to build, and the technical debt/challenges standing in their
-            way.
-          </p>
-          <button
-            onClick={() => setShowGemConfig(!showGemConfig)}
-            className="text-xs text-gray-500 hover:text-indigo-600 flex items-center gap-1 transition-colors"
-          >
-            <Settings className="w-3 h-3" />
-            {showGemConfig ? "Hide Gem Config" : "Configure Gem"}
-          </button>
-        </div>
-
-        {showGemConfig && (
-          <div className="mb-4 p-4 bg-slate-50 border border-slate-200 rounded-lg animate-in fade-in slide-in-from-top-2">
-            <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-2">
-              Custom Gem System Instructions
-            </label>
-            <textarea
-              className="w-full h-48 p-3 text-sm text-gray-800 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 outline-none resize-none custom-scrollbar"
-              value={gemInstructions}
-              onChange={(e) => setGemInstructions(e.target.value)}
-            />
-          </div>
-        )}
+        <p className="text-sm text-gray-600 mb-2">
+          Identify what <strong>{accountData.companyName}</strong> is actively
+          trying to build, and the technical debt/challenges standing in their
+          way.
+        </p>
 
         <div className="flex mt-4">
           <button

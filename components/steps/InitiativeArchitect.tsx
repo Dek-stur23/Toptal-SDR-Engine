@@ -10,7 +10,6 @@ import {
   Layers,
   Lightbulb,
   Loader2,
-  Settings,
   Sparkles,
   Users,
 } from "lucide-react";
@@ -27,11 +26,7 @@ export function InitiativeArchitect({
   onComplete,
 }: StepProps) {
   const [loadingId, setLoadingId] = useState<number | null>(null);
-  const [showGemConfig, setShowGemConfig] = useState(false);
   const [expandedItems, setExpandedItems] = useState<Record<number, boolean>>({});
-  const [gemInstructions, setGemInstructions] = useState(
-    accountData.step3GemInstructions || DEFAULT_ARCHITECT_GEM,
-  );
 
   if (
     !accountData.initiativeResearch ||
@@ -118,12 +113,11 @@ export function InitiativeArchitect({
     try {
       const result = await generateWithClaude<ArchitectResult>({
         prompt,
-        system: gemInstructions,
+        system: DEFAULT_ARCHITECT_GEM,
         schema,
       });
       setAccountData((prev) => ({
         ...prev,
-        step3GemInstructions: gemInstructions,
         architectResults: { ...(prev.architectResults || {}), [index]: result },
       }));
     } catch (err) {
@@ -136,32 +130,10 @@ export function InitiativeArchitect({
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-end mb-2">
-        <p className="text-sm text-gray-600">
-          Architect specific talent solutions and messaging hooks for each
-          identified initiative.
-        </p>
-        <button
-          onClick={() => setShowGemConfig(!showGemConfig)}
-          className="text-xs text-gray-500 hover:text-amber-600 flex items-center gap-1 transition-colors"
-        >
-          <Settings className="w-3 h-3" />
-          {showGemConfig ? "Hide Gem Config" : "Configure Gem"}
-        </button>
-      </div>
-
-      {showGemConfig && (
-        <div className="mb-4 p-5 bg-slate-50 border border-slate-200 rounded-lg animate-in fade-in slide-in-from-top-2">
-          <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-2">
-            Architect Gem Instructions
-          </label>
-          <textarea
-            className="w-full h-32 p-3 text-sm text-gray-800 border border-gray-300 rounded-md focus:ring-2 focus:ring-amber-500 outline-none resize-none custom-scrollbar"
-            value={gemInstructions}
-            onChange={(e) => setGemInstructions(e.target.value)}
-          />
-        </div>
-      )}
+      <p className="text-sm text-gray-600 mb-2">
+        Architect specific talent solutions and messaging hooks for each
+        identified initiative.
+      </p>
 
       <div className="space-y-4">
         {strategicItems.map((item, idx) => {

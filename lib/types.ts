@@ -225,11 +225,6 @@ export interface SoftwareEngineState {
   keywords: string;
   contact: SoftwareEngineContact;
   craftedMessage: string;
-  stackMapperGem: string;
-  featureMapperGem: string;
-  keywordGeneratorGem: string;
-  contactExtractGem: string;
-  messageCrafterGem: string;
 }
 
 export interface AccountData {
@@ -251,15 +246,9 @@ export interface AccountData {
   eseMeetings: EseMeeting[];
   activityLogs: ActivityLog[];
   recentNewsResult: RecentNewsResult | null;
-  recentNewsInstructions: string;
   icpIntelResult: IcpIntelResult | null;
-  gemInstructions: string;
   aiResearch: AiResearch | null;
-  step2GemInstructions: string;
   initiativeResearch: InitiativeResearch | null;
-  step3GemInstructions: string;
-  step5GemInstructions: string;
-  step5CadenceInstructions: string;
   architectResults: Record<number, ArchitectResult>;
   softwareEngine: SoftwareEngineState;
 }

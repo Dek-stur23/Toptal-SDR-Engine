@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronRight, Copy, Loader2, Settings, Sparkles } from "lucide-react";
+import { ChevronRight, Copy, Loader2, Sparkles } from "lucide-react";
 import type { StepProps } from "@/components/types";
 import { generateWithClaude } from "@/lib/api";
 import { DEFAULT_KEYWORD_GENERATOR_GEM } from "@/lib/gems";
@@ -14,10 +14,6 @@ export function KeywordGenerator({
   const engine = accountData.softwareEngine;
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [showGemConfig, setShowGemConfig] = useState(false);
-  const [gemInstructions, setGemInstructions] = useState(
-    engine.keywordGeneratorGem || DEFAULT_KEYWORD_GENERATOR_GEM,
-  );
 
   if (!engine.stackMap || !engine.featureMap) {
     return (
@@ -34,14 +30,13 @@ export function KeywordGenerator({
       const prompt = `Stack Map:\n${engine.stackMap}\n\nFeature Map:\n${engine.featureMap}\n\nProduct / Initiative / Feature:\n${engine.productInput}\n\nProduce a boolean search string to identify individuals at ${accountData.companyName} likely working on it.`;
       const result = await generateWithClaude<string>({
         prompt,
-        system: gemInstructions,
+        system: DEFAULT_KEYWORD_GENERATOR_GEM,
       });
       setAccountData((prev) => ({
         ...prev,
         softwareEngine: {
           ...prev.softwareEngine,
           keywords: typeof result === "string" ? result : String(result ?? ""),
-          keywordGeneratorGem: gemInstructions,
         },
       }));
     } catch {
@@ -59,31 +54,9 @@ export function KeywordGenerator({
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-between items-end">
-        <p className="text-sm text-gray-600">
-          Combine the stack and feature analyses into a boolean search string.
-        </p>
-        <button
-          onClick={() => setShowGemConfig(!showGemConfig)}
-          className="text-xs text-gray-500 hover:text-blue-600 flex items-center gap-1 transition-colors"
-        >
-          <Settings className="w-3 h-3" />
-          {showGemConfig ? "Hide Gem" : "Configure Gem"}
-        </button>
-      </div>
-
-      {showGemConfig && (
-        <div className="p-4 bg-slate-50 border border-slate-200 rounded-lg">
-          <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-2">
-            Keyword Generator System Instructions
-          </label>
-          <textarea
-            className="w-full h-40 p-3 text-sm text-gray-800 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 outline-none resize-none custom-scrollbar"
-            value={gemInstructions}
-            onChange={(e) => setGemInstructions(e.target.value)}
-          />
-        </div>
-      )}
+      <p className="text-sm text-gray-600">
+        Combine the stack and feature analyses into a boolean search string.
+      </p>
 
       <button
         onClick={run}

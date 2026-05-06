@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronRight, Loader2, Settings, Sparkles } from "lucide-react";
+import { ChevronRight, Loader2, Sparkles } from "lucide-react";
 import type { StepProps } from "@/components/types";
 import { generateWithClaude } from "@/lib/api";
 import { DEFAULT_FEATURE_MAPPER_GEM } from "@/lib/gems";
@@ -15,10 +15,6 @@ export function FeatureMapper({
   const [productInput, setProductInput] = useState(engine.productInput);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [showGemConfig, setShowGemConfig] = useState(false);
-  const [gemInstructions, setGemInstructions] = useState(
-    engine.featureMapperGem || DEFAULT_FEATURE_MAPPER_GEM,
-  );
 
   if (!engine.stackMap) {
     return (
@@ -39,7 +35,7 @@ export function FeatureMapper({
       const prompt = `Stack Map:\n${engine.stackMap}\n\nProduct / Initiative / Feature:\n${productInput}\n\nIdentify the relevant stack components and how each is involved.`;
       const result = await generateWithClaude<string>({
         prompt,
-        system: gemInstructions,
+        system: DEFAULT_FEATURE_MAPPER_GEM,
       });
       setAccountData((prev) => ({
         ...prev,
@@ -47,7 +43,6 @@ export function FeatureMapper({
           ...prev.softwareEngine,
           productInput,
           featureMap: typeof result === "string" ? result : String(result ?? ""),
-          featureMapperGem: gemInstructions,
         },
       }));
     } catch {
@@ -59,19 +54,10 @@ export function FeatureMapper({
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-between items-end">
-        <p className="text-sm text-gray-600">
-          Match the stack components to a specific product, initiative, or
-          feature.
-        </p>
-        <button
-          onClick={() => setShowGemConfig(!showGemConfig)}
-          className="text-xs text-gray-500 hover:text-blue-600 flex items-center gap-1 transition-colors"
-        >
-          <Settings className="w-3 h-3" />
-          {showGemConfig ? "Hide Gem" : "Configure Gem"}
-        </button>
-      </div>
+      <p className="text-sm text-gray-600">
+        Match the stack components to a specific product, initiative, or
+        feature.
+      </p>
 
       <div>
         <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-2">
@@ -84,19 +70,6 @@ export function FeatureMapper({
           onChange={(e) => setProductInput(e.target.value)}
         />
       </div>
-
-      {showGemConfig && (
-        <div className="p-4 bg-slate-50 border border-slate-200 rounded-lg">
-          <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-2">
-            FeatureMapper System Instructions
-          </label>
-          <textarea
-            className="w-full h-40 p-3 text-sm text-gray-800 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 outline-none resize-none custom-scrollbar"
-            value={gemInstructions}
-            onChange={(e) => setGemInstructions(e.target.value)}
-          />
-        </div>
-      )}
 
       <button
         onClick={run}

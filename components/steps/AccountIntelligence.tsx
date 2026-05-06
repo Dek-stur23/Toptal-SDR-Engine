@@ -11,7 +11,6 @@ import {
   Lightbulb,
   Loader2,
   Rocket,
-  Settings,
   Sparkles,
   Target,
   Users,
@@ -29,10 +28,6 @@ export function AccountIntelligence({
   const [companyName, setCompanyName] = useState(accountData.companyName || "");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [showGemConfig, setShowGemConfig] = useState(false);
-  const [gemInstructions, setGemInstructions] = useState(
-    accountData.gemInstructions || DEFAULT_ACCOUNT_INTELLIGENCE_GEM,
-  );
 
   if (!accountData.accountStatus) {
     return (
@@ -98,14 +93,13 @@ export function AccountIntelligence({
     try {
       const result = await generateWithClaude<AiResearch>({
         prompt,
-        system: gemInstructions,
+        system: DEFAULT_ACCOUNT_INTELLIGENCE_GEM,
         schema,
         webSearch: true,
       });
       setAccountData((prev) => ({
         ...prev,
         companyName,
-        gemInstructions,
         aiResearch: result,
       }));
     } catch {
@@ -120,35 +114,9 @@ export function AccountIntelligence({
   return (
     <div className="space-y-6">
       <div>
-        <div className="flex justify-between items-end mb-2">
-          <label className="block text-sm font-medium text-gray-700">
-            Target Account / Company Name
-          </label>
-          <button
-            onClick={() => setShowGemConfig(!showGemConfig)}
-            className="text-xs text-gray-500 hover:text-blue-600 flex items-center gap-1 transition-colors"
-          >
-            <Settings className="w-3 h-3" />
-            {showGemConfig ? "Hide Gem Config" : "Configure Gem"}
-          </button>
-        </div>
-
-        {showGemConfig && (
-          <div className="mb-4 p-4 bg-slate-50 border border-slate-200 rounded-lg animate-in fade-in slide-in-from-top-2">
-            <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-2">
-              Custom Gem System Instructions
-            </label>
-            <textarea
-              className="w-full h-24 p-3 text-sm text-gray-800 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 outline-none resize-none"
-              value={gemInstructions}
-              onChange={(e) => setGemInstructions(e.target.value)}
-            />
-            <p className="text-xs text-slate-500 mt-2">
-              These instructions act as the brain of your Gem, dictating its
-              personality and knowledge.
-            </p>
-          </div>
-        )}
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          Target Account / Company Name
+        </label>
 
         <div className="flex gap-3">
           <input

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { CheckCircle2, Copy, Loader2, Settings, Sparkles } from "lucide-react";
+import { CheckCircle2, Copy, Loader2, Sparkles } from "lucide-react";
 import type { StepProps } from "@/components/types";
 import { generateWithClaude } from "@/lib/api";
 import { DEFAULT_MESSAGE_CRAFTER_GEM } from "@/lib/gems";
@@ -15,10 +15,6 @@ export function MessageCrafter({
   const contact = engine.contact;
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [showGemConfig, setShowGemConfig] = useState(false);
-  const [gemInstructions, setGemInstructions] = useState(
-    engine.messageCrafterGem || DEFAULT_MESSAGE_CRAFTER_GEM,
-  );
 
   const hasContact =
     !!contact.firstName && !!contact.lastName && !!contact.title;
@@ -38,7 +34,7 @@ export function MessageCrafter({
       const prompt = `Contact:\n${contact.firstName} ${contact.lastName} - ${contact.title} @ ${contact.company}\n\nLinkedIn Context:\n${contact.liText || "(see attached image, if any)"}\n\nProduct / Initiative / Feature:\n${engine.productInput}\n\nRelevant Stack Components (FeatureMapper output):\n${engine.featureMap}\n\nCraft a personalized outreach message for this contact.`;
       const result = await generateWithClaude<string>({
         prompt,
-        system: gemInstructions,
+        system: DEFAULT_MESSAGE_CRAFTER_GEM,
         image: contact.liImage,
       });
       setAccountData((prev) => ({
@@ -47,7 +43,6 @@ export function MessageCrafter({
           ...prev.softwareEngine,
           craftedMessage:
             typeof result === "string" ? result : String(result ?? ""),
-          messageCrafterGem: gemInstructions,
         },
       }));
     } catch {
@@ -65,35 +60,13 @@ export function MessageCrafter({
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-between items-end">
-        <p className="text-sm text-gray-600">
-          Generate messaging tailored to{" "}
-          <strong>
-            {contact.firstName} {contact.lastName}
-          </strong>
-          , the product/initiative, and the relevant stack components.
-        </p>
-        <button
-          onClick={() => setShowGemConfig(!showGemConfig)}
-          className="text-xs text-gray-500 hover:text-blue-600 flex items-center gap-1 transition-colors"
-        >
-          <Settings className="w-3 h-3" />
-          {showGemConfig ? "Hide Gem" : "Configure Gem"}
-        </button>
-      </div>
-
-      {showGemConfig && (
-        <div className="p-4 bg-slate-50 border border-slate-200 rounded-lg">
-          <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-2">
-            MessageCrafter System Instructions
-          </label>
-          <textarea
-            className="w-full h-40 p-3 text-sm text-gray-800 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 outline-none resize-none custom-scrollbar"
-            value={gemInstructions}
-            onChange={(e) => setGemInstructions(e.target.value)}
-          />
-        </div>
-      )}
+      <p className="text-sm text-gray-600">
+        Generate messaging tailored to{" "}
+        <strong>
+          {contact.firstName} {contact.lastName}
+        </strong>
+        , the product/initiative, and the relevant stack components.
+      </p>
 
       <button
         onClick={run}

@@ -10,7 +10,6 @@ import {
   Loader2,
   Mail,
   Send,
-  Settings,
   Target,
   Upload,
 } from "lucide-react";
@@ -33,16 +32,8 @@ export function ProcurementBureaucracy({
   const [rawContacts, setRawContacts] = useState(
     accountData.procurementContacts || "",
   );
-  const [showGemConfig, setShowGemConfig] = useState(false);
   const [loadingStrategy, setLoadingStrategy] = useState(false);
   const [loadingCadence, setLoadingCadence] = useState(false);
-
-  const [gemInstructions, setGemInstructions] = useState(
-    accountData.step5GemInstructions || DEFAULT_PROCUREMENT_STRATEGY_GEM,
-  );
-  const [cadenceInstructions, setCadenceInstructions] = useState(
-    accountData.step5CadenceInstructions || DEFAULT_PROCUREMENT_CADENCE_GEM,
-  );
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -136,13 +127,12 @@ export function ProcurementBureaucracy({
     try {
       const result = await generateWithClaude<ProcurementStrategy>({
         prompt,
-        system: gemInstructions,
+        system: DEFAULT_PROCUREMENT_STRATEGY_GEM,
         schema,
         webSearch: true,
       });
       setAccountData((prev) => ({
         ...prev,
-        step5GemInstructions: gemInstructions,
         procurementStrategy: result,
       }));
     } catch (err) {
@@ -199,12 +189,11 @@ export function ProcurementBureaucracy({
     try {
       const result = await generateWithClaude<ProcurementCadence>({
         prompt,
-        system: cadenceInstructions,
+        system: DEFAULT_PROCUREMENT_CADENCE_GEM,
         schema,
       });
       setAccountData((prev) => ({
         ...prev,
-        step5CadenceInstructions: cadenceInstructions,
         procurementCadence: result,
       }));
     } catch (err) {
@@ -220,46 +209,12 @@ export function ProcurementBureaucracy({
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-end mb-2">
-        <p className="text-sm text-gray-600">
-          Navigate the procurement process for{" "}
-          <strong>{accountData.companyName || "this account"}</strong> by
-          identifying key vendor management contacts and preparing your approval
-          strategy.
-        </p>
-        <button
-          onClick={() => setShowGemConfig(!showGemConfig)}
-          className="text-xs text-gray-500 hover:text-emerald-600 flex items-center gap-1 transition-colors"
-        >
-          <Settings className="w-3 h-3" />
-          {showGemConfig ? "Hide Gem Config" : "Configure Gem"}
-        </button>
-      </div>
-
-      {showGemConfig && (
-        <div className="mb-4 p-5 bg-slate-50 border border-slate-200 rounded-lg animate-in fade-in slide-in-from-top-2 space-y-6">
-          <div>
-            <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-2">
-              Sales Strategist Gem Instructions (Part 3)
-            </label>
-            <textarea
-              className="w-full h-32 p-3 text-sm text-gray-800 border border-gray-300 rounded-md focus:ring-2 focus:ring-emerald-500 outline-none resize-none custom-scrollbar"
-              value={gemInstructions}
-              onChange={(e) => setGemInstructions(e.target.value)}
-            />
-          </div>
-          <div className="pt-4 border-t border-slate-200">
-            <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-2">
-              Cadence Copywriter Gem Instructions (Part 4)
-            </label>
-            <textarea
-              className="w-full h-32 p-3 text-sm text-gray-800 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 outline-none resize-none custom-scrollbar"
-              value={cadenceInstructions}
-              onChange={(e) => setCadenceInstructions(e.target.value)}
-            />
-          </div>
-        </div>
-      )}
+      <p className="text-sm text-gray-600 mb-2">
+        Navigate the procurement process for{" "}
+        <strong>{accountData.companyName || "this account"}</strong> by
+        identifying key vendor management contacts and preparing your approval
+        strategy.
+      </p>
 
       <div className="space-y-5">
         {/* Part 1 */}

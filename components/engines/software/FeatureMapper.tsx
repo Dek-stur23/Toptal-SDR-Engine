@@ -5,6 +5,7 @@ import { ChevronRight, Loader2, Sparkles } from "lucide-react";
 import type { StepProps } from "@/components/types";
 import { generateWithClaude } from "@/lib/api";
 import { DEFAULT_FEATURE_MAPPER_GEM } from "@/lib/gems";
+import { stackHasAny, stackToText } from "@/lib/stack";
 
 export function FeatureMapper({
   accountData,
@@ -16,10 +17,10 @@ export function FeatureMapper({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  if (!engine.stackMap) {
+  if (!stackHasAny(engine.stack)) {
     return (
       <div className="text-gray-500 italic text-sm p-4 bg-gray-50 rounded-lg">
-        Run StackMapper first to produce a stack map.
+        Fill in at least one StackMapper section first.
       </div>
     );
   }
@@ -32,7 +33,7 @@ export function FeatureMapper({
     setLoading(true);
     setError("");
     try {
-      const prompt = `Stack Map:\n${engine.stackMap}\n\nProduct / Initiative / Feature:\n${productInput}\n\nIdentify the relevant stack components and how each is involved.`;
+      const prompt = `Stack Map:\n${stackToText(engine.stack)}\n\nProduct / Initiative / Feature:\n${productInput}\n\nIdentify the relevant stack components and how each is involved.`;
       const result = await generateWithClaude<string>({
         prompt,
         system: DEFAULT_FEATURE_MAPPER_GEM,

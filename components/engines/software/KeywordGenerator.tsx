@@ -5,6 +5,7 @@ import { ChevronRight, Copy, Loader2, Sparkles } from "lucide-react";
 import type { StepProps } from "@/components/types";
 import { generateWithClaude } from "@/lib/api";
 import { DEFAULT_KEYWORD_GENERATOR_GEM } from "@/lib/gems";
+import { stackHasAny, stackToText } from "@/lib/stack";
 
 export function KeywordGenerator({
   accountData,
@@ -15,10 +16,10 @@ export function KeywordGenerator({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  if (!engine.stackMap || !engine.featureMap) {
+  if (!stackHasAny(engine.stack) || !engine.featureMap) {
     return (
       <div className="text-gray-500 italic text-sm p-4 bg-gray-50 rounded-lg">
-        Run StackMapper and FeatureMapper first.
+        Fill in StackMapper and run FeatureMapper first.
       </div>
     );
   }
@@ -27,7 +28,7 @@ export function KeywordGenerator({
     setLoading(true);
     setError("");
     try {
-      const prompt = `Stack Map:\n${engine.stackMap}\n\nFeature Map:\n${engine.featureMap}\n\nProduct / Initiative / Feature:\n${engine.productInput}\n\nProduce a boolean search string to identify individuals at ${accountData.companyName} likely working on it.`;
+      const prompt = `Stack Map:\n${stackToText(engine.stack)}\n\nFeature Map:\n${engine.featureMap}\n\nProduct / Initiative / Feature:\n${engine.productInput}\n\nProduce a boolean search string to identify individuals at ${accountData.companyName} likely working on it.`;
       const result = await generateWithClaude<string>({
         prompt,
         system: DEFAULT_KEYWORD_GENERATOR_GEM,

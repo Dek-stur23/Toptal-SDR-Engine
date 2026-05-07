@@ -9,6 +9,7 @@ import {
   DEFAULT_TECHNICAL_AUDITOR_GEM,
   DEFAULT_TECHNOGRAPHIC_PITCH_GEM,
 } from "@/lib/gems";
+import { stackToText } from "@/lib/stack";
 
 type ActionKey = "technographic" | "personalized" | "auditor";
 
@@ -62,7 +63,7 @@ export function MessageCrafter({
       contactLine,
       liText: contact.liText,
       productInput: engine.productInput,
-      stackMap: engine.stackMap,
+      stackMap: stackToText(engine.stack),
       featureMap: engine.featureMap,
       keywords: engine.keywords,
       companyName: accountData.companyName,

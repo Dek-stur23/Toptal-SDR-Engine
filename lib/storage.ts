@@ -16,7 +16,13 @@ export function emptySoftwareEngine(): SoftwareEngineState {
   return {
     activeStep: null,
     completedSteps: [],
-    stackMap: "",
+    stack: {
+      backend: "",
+      frontend: "",
+      data: "",
+      devops: "",
+      ai: "",
+    },
     productInput: "",
     featureMap: "",
     keywords: "",
@@ -93,12 +99,19 @@ export function loadAppState(): AppState {
     return {
       accounts: (parsed.accounts ?? []).map((a) => {
         const skeleton = createAccount();
+        const baseEngine = emptySoftwareEngine();
+        const loadedEngine = a?.accountData?.softwareEngine ?? {};
         const accountData = {
           ...emptyAccountData(),
           ...(a?.accountData ?? {}),
           softwareEngine: {
-            ...emptySoftwareEngine(),
-            ...(a?.accountData?.softwareEngine ?? {}),
+            ...baseEngine,
+            ...loadedEngine,
+            stack: {
+              ...baseEngine.stack,
+              ...((loadedEngine as { stack?: Partial<typeof baseEngine.stack> })
+                .stack ?? {}),
+            },
           },
         };
         return {

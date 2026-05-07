@@ -216,10 +216,18 @@ export interface SoftwareEngineContact {
   liImage: string | null;
 }
 
+export interface StackBuckets {
+  backend: string;
+  frontend: string;
+  data: string;
+  devops: string;
+  ai: string;
+}
+
 export interface SoftwareEngineState {
   activeStep: number | null;
   completedSteps: number[];
-  stackMap: string;
+  stack: StackBuckets;
   productInput: string;
   featureMap: string;
   keywords: string;

@@ -294,13 +294,16 @@ Output is rendered as Markdown. Use bold for tech names. List multiple specific 
 ## Analysis Notes
 Two to four sentences synthesizing the architecture story. Call out modernization shifts (e.g., "monolith → distributed serverless"), languages chosen for performance-critical services (Go/Rust for latency, Python for ML), and any notable infrastructure choices that suggest scaling pressure. Tie observations back to the kind of engineering talent the company is hiring.
 
-## Citation Rules (CRITICAL)
+## Citation Rules (CRITICAL — STRICTLY ENFORCED)
 
-- Do NOT write \`[Source]\`, \`[Title](URL)\`, raw URLs, or any other citation markup yourself. The runtime injects verified web-search citation URLs at the end of each text block. Hallucinated or paraphrased URLs are stripped before display.
-- For every claim, ground it in something you actually found via web_search. If no real source exists, write "Undetermined" with no link.
+The post-processor strips EVERY markdown link and EVERY bare URL from your output before display, then it appends links built from the actual web_search citation metadata (only URLs that the search tool truly returned, and only ones that pass a live HTTP check). So:
+
+- Do NOT write \`[Source]\`, \`[Title](URL)\`, \`[AWS Case Study](url)\`, \`(see https://...)\`, raw URLs, or any other link/URL markup. They will all be deleted. Writing them is wasted effort.
+- Just write claims as plain prose / list items. The link injection happens automatically.
+- For every claim, ground it in something you actually found via web_search. If no real source exists, write "Undetermined" — do NOT improvise.
 - Prefer recent job descriptions (posted within the last 6 months) for language/frameworks — they represent the current hiring state.
 - Prefer engineering blogs and vendor case studies for architecture and infrastructure decisions.
-- Quote a short distinctive phrase next to a component when it strengthens the claim ("3+ years of Go", "running EKS clusters") — this gives the auto-citation a natural anchor.`;
+- A short distinctive phrase from the source ("3+ years of Go", "running EKS clusters") in your prose gives the auto-citation a natural anchor — but again, do not include the URL.`;
 
 export const DEFAULT_FEATURE_MAPPER_GEM = `1. Persona & Goal
 You are FeatureMapper Pro, a Technical Product Strategist. Your expertise lies in connecting engineering capabilities to business outcomes. Your goal is to ingest a structured tech stack report and map its components to a specific product, feature, or initiative provided by the user. You explain why a specific technology is the right (or wrong) tool for that initiative.

@@ -61,7 +61,15 @@ interface BlockCitation {
   title?: string | null;
 }
 
-const MODEL_SOURCE_LINK_RE = /\s*\[Source\]\([^)]+\)/gi;
+// Strip ANY markdown link the model writes (not just [Source]) and any bare URL
+// in plain text. The only links allowed in the final output are the ones we
+// inject from verified web_search citation metadata.
+const MARKDOWN_LINK_RE = /\s*\[[^\]\n]*\]\([^)\n]*\)/g;
+const BARE_URL_RE = /\s*<?https?:\/\/\S+>?/g;
+
+function stripModelLinks(text: string): string {
+  return text.replace(MARKDOWN_LINK_RE, "").replace(BARE_URL_RE, "");
+}
 
 function citationLabel(c: BlockCitation): string {
   const rawTitle = (c.title ?? "").trim();
@@ -79,21 +87,72 @@ function citationLabel(c: BlockCitation): string {
   return "Source";
 }
 
-function blockTextWithVerifiedSources(block: Anthropic.TextBlock): string {
-  const stripped = block.text.replace(MODEL_SOURCE_LINK_RE, "");
+async function urlIsLive(url: string, timeoutMs = 4000): Promise<boolean> {
+  const headers = {
+    "User-Agent":
+      "Mozilla/5.0 (compatible; SDR-Engine-LinkChecker/1.0; +https://example.com/bot)",
+    Accept: "*/*",
+  };
+  const tryFetch = async (method: "HEAD" | "GET") => {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), timeoutMs);
+    try {
+      const res = await fetch(url, {
+        method,
+        signal: ctrl.signal,
+        redirect: "follow",
+        headers,
+      });
+      return res;
+    } finally {
+      clearTimeout(t);
+    }
+  };
+  try {
+    const res = await tryFetch("HEAD");
+    if (res.ok) return true;
+    // Some sites (LinkedIn, many job boards) return 4xx/405 to HEAD. Retry GET.
+    if ([403, 405, 400, 401].includes(res.status)) {
+      const res2 = await tryFetch("GET");
+      return res2.ok;
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+async function verifiedCitationsForBlock(
+  block: Anthropic.TextBlock,
+): Promise<BlockCitation[]> {
   const raw = (block as unknown as { citations?: BlockCitation[] }).citations;
-  if (!Array.isArray(raw) || raw.length === 0) return stripped;
+  if (!Array.isArray(raw) || raw.length === 0) return [];
   const seen = new Set<string>();
-  const links: string[] = [];
+  const candidates: BlockCitation[] = [];
   for (const c of raw) {
     if (c.type !== "web_search_result_location" || !c.url) continue;
     if (seen.has(c.url)) continue;
     seen.add(c.url);
-    links.push(`[${citationLabel(c)}](${c.url})`);
+    candidates.push(c);
   }
-  if (links.length === 0) return stripped;
+  if (candidates.length === 0) return [];
+  const checks = await Promise.all(
+    candidates.map((c) => urlIsLive(c.url as string)),
+  );
+  return candidates.filter((_, i) => checks[i]);
+}
+
+async function blockTextWithVerifiedSources(
+  block: Anthropic.TextBlock,
+): Promise<string> {
+  const stripped = stripModelLinks(block.text);
+  const verified = await verifiedCitationsForBlock(block);
+  if (verified.length === 0) return stripped;
   const trimmed = stripped.replace(/\s+$/, "");
-  return `${trimmed} ${links.join(" ")}`;
+  const links = verified
+    .map((c) => `[${citationLabel(c)}](${c.url})`)
+    .join(" ");
+  return `${trimmed} ${links}`;
 }
 
 export async function POST(req: NextRequest) {
@@ -216,10 +275,10 @@ export async function POST(req: NextRequest) {
           const textBlocks = response.content.filter(
             (c): c is Anthropic.TextBlock => c.type === "text",
           );
-          const text = textBlocks
-            .map(blockTextWithVerifiedSources)
-            .join("\n\n");
-          send({ result: text });
+          const processed = await Promise.all(
+            textBlocks.map(blockTextWithVerifiedSources),
+          );
+          send({ result: processed.join("\n\n") });
         }
       } catch (err) {
         const message = err instanceof Error ? err.message : "Unknown error";

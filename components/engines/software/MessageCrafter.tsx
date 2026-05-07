@@ -88,8 +88,9 @@ export function MessageCrafter({
             typeof result === "string" ? result : String(result ?? ""),
         },
       }));
-    } catch {
-      setError("Failed to craft technographic sales pitch. Please try again.");
+    } catch (err) {
+      console.error("Technographic pitch error:", err);
+      setError(err instanceof Error ? err.message : "Failed to craft technographic sales pitch.");
     } finally {
       setLoading(null);
     }
@@ -115,8 +116,9 @@ export function MessageCrafter({
             typeof result === "string" ? result : String(result ?? ""),
         },
       }));
-    } catch {
-      setError("Failed to craft personalized message. Please try again.");
+    } catch (err) {
+      console.error("Peer-to-peer outreach error:", err);
+      setError(err instanceof Error ? err.message : "Failed to craft peer-to-peer message.");
     } finally {
       setLoading(null);
     }
@@ -142,8 +144,9 @@ export function MessageCrafter({
             typeof result === "string" ? result : String(result ?? ""),
         },
       }));
-    } catch {
-      setError("Failed to craft technical auditor outreach. Please try again.");
+    } catch (err) {
+      console.error("Technical auditor error:", err);
+      setError(err instanceof Error ? err.message : "Failed to craft technical auditor outreach.");
     } finally {
       setLoading(null);
     }

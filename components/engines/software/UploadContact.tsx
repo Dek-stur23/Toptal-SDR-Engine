@@ -75,8 +75,9 @@ export function UploadContact({
       if (result.lastName) setLastName(result.lastName);
       if (result.title) setTitle(result.title);
       if (result.company) setCompany(result.company);
-    } catch {
-      setError("Failed to extract contact details.");
+    } catch (err) {
+      console.error("Contact extract error:", err);
+      setError(err instanceof Error ? err.message : "Failed to extract contact details.");
     } finally {
       setExtracting(false);
     }

@@ -36,8 +36,9 @@ export function StackMapper({
           stackMap: typeof result === "string" ? result : String(result ?? ""),
         },
       }));
-    } catch {
-      setError("Failed to run StackMapper. Please try again.");
+    } catch (err) {
+      console.error("StackMapper error:", err);
+      setError(err instanceof Error ? err.message : "Failed to run StackMapper.");
     } finally {
       setLoading(false);
     }

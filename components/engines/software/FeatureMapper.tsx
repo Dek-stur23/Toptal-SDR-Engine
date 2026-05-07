@@ -45,8 +45,9 @@ export function FeatureMapper({
           featureMap: typeof result === "string" ? result : String(result ?? ""),
         },
       }));
-    } catch {
-      setError("Failed to run FeatureMapper. Please try again.");
+    } catch (err) {
+      console.error("FeatureMapper error:", err);
+      setError(err instanceof Error ? err.message : "Failed to run FeatureMapper.");
     } finally {
       setLoading(false);
     }

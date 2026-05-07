@@ -39,8 +39,9 @@ export function KeywordGenerator({
           keywords: typeof result === "string" ? result : String(result ?? ""),
         },
       }));
-    } catch {
-      setError("Failed to generate keywords. Please try again.");
+    } catch (err) {
+      console.error("KeywordGenerator error:", err);
+      setError(err instanceof Error ? err.message : "Failed to generate keywords.");
     } finally {
       setLoading(false);
     }

@@ -1,10 +1,44 @@
 "use client";
 
-import { useState } from "react";
+import { Fragment, useState, type ReactNode } from "react";
 import { ChevronRight, Loader2, Sparkles } from "lucide-react";
 import type { StepProps } from "@/components/types";
 import { generateWithClaude } from "@/lib/api";
 import { DEFAULT_STACK_MAPPER_GEM } from "@/lib/gems";
+
+const SOURCE_LINK_RE = /\[Source\]\((https?:\/\/[^\s)]+)\)/gi;
+
+function renderWithSourceLinks(text: string): ReactNode {
+  const parts: ReactNode[] = [];
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+  let key = 0;
+  while ((match = SOURCE_LINK_RE.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push(
+        <Fragment key={`t-${key++}`}>
+          {text.slice(lastIndex, match.index)}
+        </Fragment>,
+      );
+    }
+    parts.push(
+      <a
+        key={`a-${key++}`}
+        href={match[1]}
+        target="_blank"
+        rel="noreferrer"
+        className="text-blue-600 hover:text-blue-800 underline underline-offset-2"
+      >
+        Source
+      </a>,
+    );
+    lastIndex = match.index + match[0].length;
+  }
+  if (lastIndex < text.length) {
+    parts.push(<Fragment key={`t-${key++}`}>{text.slice(lastIndex)}</Fragment>);
+  }
+  return parts;
+}
 
 export function StackMapper({
   accountData,
@@ -70,9 +104,9 @@ export function StackMapper({
           <h4 className="font-bold text-blue-800 text-sm uppercase tracking-wider">
             Stack Map
           </h4>
-          <pre className="text-sm text-slate-800 whitespace-pre-wrap font-sans leading-relaxed">
-            {engine.stackMap}
-          </pre>
+          <div className="text-sm text-slate-800 whitespace-pre-wrap font-sans leading-relaxed">
+            {renderWithSourceLinks(engine.stackMap)}
+          </div>
           <div className="pt-2 flex justify-end">
             <button
               onClick={onComplete}

@@ -124,7 +124,7 @@ export async function POST(req: NextRequest) {
       max_uses:
         typeof maxWebSearches === "number" && maxWebSearches > 0
           ? Math.min(maxWebSearches, 10)
-          : 5,
+          : 3,
     } as unknown as Anthropic.Tool);
   }
 

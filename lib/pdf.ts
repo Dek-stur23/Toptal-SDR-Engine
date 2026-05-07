@@ -83,31 +83,45 @@ export function exportAccountToPdf(data: AccountData): void {
     `);
   }
 
-  if (Object.keys(data.architectResults || {}).length > 0) {
-    const items = [
-      ...(data.initiativeResearch?.initiatives || []),
-      ...(data.initiativeResearch?.challenges || []),
+  if (data.productMap && data.productMap.entries.length > 0) {
+    const categoryLabels: Record<string, string> = {
+      "customer-facing": "Customer-Facing",
+      platform: "Platform & Developer",
+      "recent-launch": "Recent Launches",
+      "in-development": "In Development",
+    };
+    const order = [
+      "recent-launch",
+      "in-development",
+      "customer-facing",
+      "platform",
     ];
+    const grouped: Record<string, typeof data.productMap.entries> = {};
+    for (const e of data.productMap.entries) {
+      (grouped[e.category] ??= []).push(e);
+    }
     sections.push(`
-      <h2>Step 4: Initiative / Challenge Architect</h2>
-      ${items
-        .map((item, idx) => {
-          const res = data.architectResults[idx];
-          if (!res) return "";
-          return `
+      <h2>Step 4: Product &amp; Project Map</h2>
+      ${data.productMap.metadata ? `<p class="text-sm">${escapeHtml(data.productMap.metadata)}</p>` : ""}
+      ${order
+        .filter((c) => grouped[c] && grouped[c].length > 0)
+        .map(
+          (c) => `
             <div class="card">
-              <h3>Architect: ${escapeHtml(item.name)}</h3>
-              <h4>Simple English Breakdown</h4><p>${escapeHtml(res.simpleEnglish)}</p>
-              <h4>Project Anatomy</h4>
-              <ul>${res.projectAnatomy.map((a) => `<li><strong>${escapeHtml(a.pillar)}:</strong> ${escapeHtml(a.description)}</li>`).join("")}</ul>
-              <h4>Talent Map</h4>
-              <ul>${res.talentMap.map((c) => `<li><strong>${escapeHtml(c.category)}:</strong> ${c.roles.map(escapeHtml).join(", ")}</li>`).join("")}</ul>
-              <h4>Sales Edge Questions</h4>
-              <ul>${res.salesEdgeQuestions.map((q) => `<li>"${escapeHtml(q)}"</li>`).join("")}</ul>
-              <h4>Red Flags &amp; Cost of Delay</h4>
-              <ul>${res.redFlags.map((f) => `<li>${escapeHtml(f)}</li>`).join("")}</ul>
-            </div>`;
-        })
+              <h3>${escapeHtml(categoryLabels[c] ?? c)}</h3>
+              <ul>${grouped[c]
+                .map(
+                  (e) => `<li>
+                    <strong>${escapeHtml(e.name)}</strong>
+                    <span class="badge">${escapeHtml(e.status)}</span>
+                    <p>${escapeHtml(e.description)}</p>
+                    ${e.evidenceSummary ? `<p class="text-sm"><em>Evidence:</em> ${escapeHtml(e.evidenceSummary)}</p>` : ""}
+                    ${e.primarySource && /^https?:\/\//i.test(e.primarySource) ? `<p class="text-sm"><a href="${escapeHtml(e.primarySource)}">Source</a></p>` : ""}
+                  </li>`,
+                )
+                .join("")}</ul>
+            </div>`,
+        )
         .join("")}
     `);
   }

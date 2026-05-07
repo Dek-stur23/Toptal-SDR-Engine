@@ -34,7 +34,7 @@ import { ToolCard } from "@/components/ToolCard";
 import { AccountRelationship } from "@/components/steps/AccountRelationship";
 import { AccountIntelligence } from "@/components/steps/AccountIntelligence";
 import { AccountInitiative } from "@/components/steps/AccountInitiative";
-import { InitiativeArchitect } from "@/components/steps/InitiativeArchitect";
+import { ProductMap } from "@/components/steps/ProductMap";
 import { ProcurementBureaucracy } from "@/components/steps/ProcurementBureaucracy";
 import { AccountContext } from "@/components/steps/AccountContext";
 import { PreviousContacts } from "@/components/steps/PreviousContacts";
@@ -73,7 +73,7 @@ const steps: StepDef[] = [
   { id: 1, title: "Account Relationship", icon: Users, Component: AccountRelationship },
   { id: 2, title: "Account Overview", icon: Briefcase, Component: AccountIntelligence },
   { id: 3, title: "Account Initiative & Challenges", icon: Target, Component: AccountInitiative },
-  { id: 4, title: "Initiative / Challenge Architect", icon: Layers, Component: InitiativeArchitect },
+  { id: 4, title: "Product & Project Map", icon: Layers, Component: ProductMap },
   { id: 5, title: "Procurement Insights", icon: FileText, Component: ProcurementBureaucracy },
   { id: 6, title: "Account Context", icon: BookOpen, Component: AccountContext },
   { id: 7, title: "Previous Contacts", icon: History, Component: PreviousContacts },

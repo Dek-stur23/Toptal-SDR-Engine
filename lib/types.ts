@@ -41,22 +41,31 @@ export interface InitiativeResearch {
   challenges: InitiativeOrChallenge[];
 }
 
-export interface ProjectAnatomy {
-  pillar: string;
+export type ProductCategory =
+  | "customer-facing"
+  | "platform"
+  | "recent-launch"
+  | "in-development";
+
+export type ProductStatus =
+  | "live"
+  | "announced"
+  | "in-development"
+  | "deprecated"
+  | "unknown";
+
+export interface ProductMapEntry {
+  name: string;
+  category: ProductCategory;
   description: string;
+  status: ProductStatus;
+  primarySource: string;
+  evidenceSummary: string;
 }
 
-export interface TalentMapEntry {
-  category: string;
-  roles: string[];
-}
-
-export interface ArchitectResult {
-  simpleEnglish: string;
-  projectAnatomy: ProjectAnatomy[];
-  talentMap: TalentMapEntry[];
-  salesEdgeQuestions: string[];
-  redFlags: string[];
+export interface ProductMap {
+  metadata: string;
+  entries: ProductMapEntry[];
 }
 
 export interface ProcurementTarget {
@@ -259,7 +268,7 @@ export interface AccountData {
   icpIntelResult: IcpIntelResult | null;
   aiResearch: AiResearch | null;
   initiativeResearch: InitiativeResearch | null;
-  architectResults: Record<number, ArchitectResult>;
+  productMap: ProductMap | null;
   softwareEngine: SoftwareEngineState;
 }
 

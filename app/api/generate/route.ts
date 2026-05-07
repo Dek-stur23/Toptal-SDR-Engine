@@ -155,6 +155,32 @@ async function blockTextWithVerifiedSources(
   return `${trimmed} ${links}`;
 }
 
+// Recursively walks a structured tool-use result and replaces any string field
+// that looks like a URL but doesn't pass a HEAD/GET live check with an empty
+// string. Keeps the structure intact so consumers don't crash on shape changes.
+async function validateUrlsInStructured(value: unknown): Promise<unknown> {
+  if (typeof value === "string") {
+    if (/^https?:\/\//i.test(value.trim())) {
+      const live = await urlIsLive(value.trim());
+      return live ? value : "";
+    }
+    return value;
+  }
+  if (Array.isArray(value)) {
+    return Promise.all(value.map(validateUrlsInStructured));
+  }
+  if (value && typeof value === "object") {
+    const out: Record<string, unknown> = {};
+    const entries = Object.entries(value as Record<string, unknown>);
+    const validated = await Promise.all(
+      entries.map(async ([k, v]) => [k, await validateUrlsInStructured(v)] as const),
+    );
+    for (const [k, v] of validated) out[k] = v;
+    return out;
+  }
+  return value;
+}
+
 export async function POST(req: NextRequest) {
   if (!process.env.ANTHROPIC_API_KEY) {
     return NextResponse.json(
@@ -269,7 +295,8 @@ export async function POST(req: NextRequest) {
           if (!toolUse) {
             send({ error: "Model did not return structured output." });
           } else {
-            send({ result: toolUse.input });
+            const validated = await validateUrlsInStructured(toolUse.input);
+            send({ result: validated });
           }
         } else {
           const textBlocks = response.content.filter(

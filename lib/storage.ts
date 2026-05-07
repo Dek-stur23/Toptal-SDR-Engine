@@ -63,7 +63,7 @@ export function emptyAccountData(): AccountData {
     icpIntelResult: null,
     aiResearch: null,
     initiativeResearch: null,
-    architectResults: {},
+    productMap: null,
     softwareEngine: emptySoftwareEngine(),
   };
 }

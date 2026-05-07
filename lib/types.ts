@@ -226,6 +226,7 @@ export interface SoftwareEngineState {
   contact: SoftwareEngineContact;
   craftedMessage: string;
   technographicPitch: string;
+  technicalAuditor: string;
 }
 
 export interface AccountData {

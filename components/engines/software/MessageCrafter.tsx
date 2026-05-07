@@ -6,10 +6,11 @@ import type { StepProps } from "@/components/types";
 import { generateWithClaude } from "@/lib/api";
 import {
   DEFAULT_MESSAGE_CRAFTER_GEM,
+  DEFAULT_TECHNICAL_AUDITOR_GEM,
   DEFAULT_TECHNOGRAPHIC_PITCH_GEM,
 } from "@/lib/gems";
 
-type ActionKey = "technographic" | "personalized";
+type ActionKey = "technographic" | "personalized" | "auditor";
 
 const COMPANY_PLACEHOLDER = "the target company";
 
@@ -121,12 +122,39 @@ export function MessageCrafter({
     }
   };
 
-  const runBoth = async () => {
-    setLoading("technographic");
+  const runAuditor = async () => {
+    setLoading("auditor");
+    setError("");
+    try {
+      const prompt = buildPrompt(
+        'Generate the DirectGap Pro "Direct Audit" email using the inputs below. Be ultra-direct and stay under 120 words.',
+      );
+      const result = await generateWithClaude<string>({
+        prompt,
+        system: DEFAULT_TECHNICAL_AUDITOR_GEM,
+        image: contact.liImage,
+      });
+      setAccountData((prev) => ({
+        ...prev,
+        softwareEngine: {
+          ...prev.softwareEngine,
+          technicalAuditor:
+            typeof result === "string" ? result : String(result ?? ""),
+        },
+      }));
+    } catch {
+      setError("Failed to craft technical auditor outreach. Please try again.");
+    } finally {
+      setLoading(null);
+    }
+  };
+
+  const runAll = async () => {
     setError("");
     try {
       await runTechnographic();
       await runPersonalized();
+      await runAuditor();
     } finally {
       setLoading(null);
     }
@@ -138,7 +166,10 @@ export function MessageCrafter({
     }
   };
 
-  const eitherOutput = !!engine.technographicPitch || !!engine.craftedMessage;
+  const anyOutput =
+    !!engine.technographicPitch ||
+    !!engine.craftedMessage ||
+    !!engine.technicalAuditor;
 
   return (
     <div className="space-y-4">
@@ -147,10 +178,10 @@ export function MessageCrafter({
         <strong>
           {contact.firstName} {contact.lastName}
         </strong>
-        . Pick one option, the other, or run both.
+        . Pick any of the three options or run all.
       </p>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <OptionCard
           title="Craft Technographic Sales Pitch"
           description='OutreachSynthesizer Pro converts your StackMapper / FeatureMapper / TalentSource intel into the "Talent Friction" Insight email aimed at VPs of Engineering / CTOs.'
@@ -167,15 +198,23 @@ export function MessageCrafter({
           disabled={loading !== null}
           onRun={runPersonalized}
         />
+        <OptionCard
+          title="Craft Technical Auditor Outreach"
+          description='DirectGap Pro produces an ultra-direct "Direct Audit" email under 120 words — a stack list plus one diagnostic friction question.'
+          buttonLabel="Craft Auditor Email"
+          loading={loading === "auditor"}
+          disabled={loading !== null}
+          onRun={runAuditor}
+        />
       </div>
 
       <div className="flex justify-center">
         <button
-          onClick={runBoth}
+          onClick={runAll}
           disabled={loading !== null}
           className="text-xs font-semibold text-slate-600 hover:text-slate-900 underline underline-offset-2 transition-colors disabled:opacity-50"
         >
-          Or run both
+          Or run all
         </button>
       </div>
 
@@ -197,7 +236,15 @@ export function MessageCrafter({
         />
       )}
 
-      {eitherOutput && (
+      {engine.technicalAuditor && (
+        <ResultCard
+          heading="Technical Auditor Outreach"
+          content={engine.technicalAuditor}
+          onCopy={() => copy(engine.technicalAuditor)}
+        />
+      )}
+
+      {anyOutput && (
         <div className="pt-2 flex justify-end">
           <button
             onClick={onComplete}

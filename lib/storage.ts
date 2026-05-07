@@ -30,6 +30,7 @@ export function emptySoftwareEngine(): SoftwareEngineState {
     },
     craftedMessage: "",
     technographicPitch: "",
+    technicalAuditor: "",
   };
 }
 

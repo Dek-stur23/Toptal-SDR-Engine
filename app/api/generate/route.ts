@@ -55,6 +55,31 @@ interface GenerateRequest {
   maxWebSearches?: number;
 }
 
+interface BlockCitation {
+  type?: string;
+  url?: string;
+  title?: string | null;
+}
+
+const MODEL_SOURCE_LINK_RE = /\s*\[Source\]\([^)]+\)/gi;
+
+function blockTextWithVerifiedSources(block: Anthropic.TextBlock): string {
+  const stripped = block.text.replace(MODEL_SOURCE_LINK_RE, "");
+  const raw = (block as unknown as { citations?: BlockCitation[] }).citations;
+  if (!Array.isArray(raw) || raw.length === 0) return stripped;
+  const urls = Array.from(
+    new Set(
+      raw
+        .filter((c) => c.type === "web_search_result_location" && !!c.url)
+        .map((c) => c.url as string),
+    ),
+  );
+  if (urls.length === 0) return stripped;
+  const trimmed = stripped.replace(/\s+$/, "");
+  const links = urls.map((url) => `[Source](${url})`).join(" ");
+  return `${trimmed} ${links}`;
+}
+
 export async function POST(req: NextRequest) {
   if (!process.env.ANTHROPIC_API_KEY) {
     return NextResponse.json(
@@ -175,7 +200,9 @@ export async function POST(req: NextRequest) {
           const textBlocks = response.content.filter(
             (c): c is Anthropic.TextBlock => c.type === "text",
           );
-          const text = textBlocks.map((b) => b.text).join("\n\n");
+          const text = textBlocks
+            .map(blockTextWithVerifiedSources)
+            .join("\n\n");
           send({ result: text });
         }
       } catch (err) {

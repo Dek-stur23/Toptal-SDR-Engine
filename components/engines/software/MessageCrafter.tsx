@@ -160,9 +160,9 @@ export function MessageCrafter({
           onRun={runTechnographic}
         />
         <OptionCard
-          title="Craft Personalized Outreach"
-          description="MessageCrafter writes a short, peer-to-peer outreach message tied to the contact, the initiative, and the relevant stack components."
-          buttonLabel="Craft Personalized Message"
+          title="Peer-to-Peer Outreach"
+          description='ArchitectWriter Pro synthesizes StackMapper and FeatureMapper into an "Architect-to-Architect" email — engineering observations, not marketing copy.'
+          buttonLabel="Craft Peer-to-Peer Email"
           loading={loading === "personalized"}
           disabled={loading !== null}
           onRun={runPersonalized}
@@ -191,7 +191,7 @@ export function MessageCrafter({
 
       {engine.craftedMessage && (
         <ResultCard
-          heading="Personalized Outreach"
+          heading="Peer-to-Peer Outreach"
           content={engine.craftedMessage}
           onCopy={() => copy(engine.craftedMessage)}
         />

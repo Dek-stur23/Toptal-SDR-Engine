@@ -102,8 +102,13 @@ export function AccountIntelligence({
         companyName,
         aiResearch: result,
       }));
-    } catch {
-      setError("Failed to gather intelligence. Make sure the API key is configured.");
+    } catch (err) {
+      console.error("AccountIntelligence error:", err);
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Failed to gather intelligence. Make sure the API key is configured.",
+      );
     } finally {
       setLoading(false);
     }

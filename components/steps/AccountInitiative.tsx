@@ -72,8 +72,13 @@ export function AccountInitiative({
         ...prev,
         initiativeResearch: result,
       }));
-    } catch {
-      setError("Failed to gather initiative data. Please try again.");
+    } catch (err) {
+      console.error("AccountInitiative error:", err);
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Failed to gather initiative data. Please try again.",
+      );
     } finally {
       setLoading(false);
     }

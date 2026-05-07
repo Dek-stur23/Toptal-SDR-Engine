@@ -143,31 +143,57 @@ export async function POST(req: NextRequest) {
 
   if (tools.length > 0) params.tools = tools;
 
-  try {
-    const response = await client.messages.create(params);
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      const pingInterval = setInterval(() => {
+        try {
+          controller.enqueue(encoder.encode(`{"event":"ping"}\n`));
+        } catch {
+          // controller already closed; ignore
+        }
+      }, 5000);
 
-    if (schema) {
-      const toolUse = response.content.find(
-        (c): c is Anthropic.ToolUseBlock =>
-          c.type === "tool_use" && c.name === "submit_result",
-      );
-      if (!toolUse) {
-        return NextResponse.json(
-          { error: "Model did not return structured output." },
-          { status: 502 },
-        );
+      const send = (payload: Record<string, unknown>) => {
+        controller.enqueue(encoder.encode(JSON.stringify(payload) + "\n"));
+      };
+
+      try {
+        const response = await client.messages.create(params);
+
+        if (schema) {
+          const toolUse = response.content.find(
+            (c): c is Anthropic.ToolUseBlock =>
+              c.type === "tool_use" && c.name === "submit_result",
+          );
+          if (!toolUse) {
+            send({ error: "Model did not return structured output." });
+          } else {
+            send({ result: toolUse.input });
+          }
+        } else {
+          const textBlocks = response.content.filter(
+            (c): c is Anthropic.TextBlock => c.type === "text",
+          );
+          const text = textBlocks.map((b) => b.text).join("\n\n");
+          send({ result: text });
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Unknown error";
+        console.error("Generate error:", err);
+        send({ error: message });
+      } finally {
+        clearInterval(pingInterval);
+        controller.close();
       }
-      return NextResponse.json({ result: toolUse.input });
-    }
+    },
+  });
 
-    const textBlocks = response.content.filter(
-      (c): c is Anthropic.TextBlock => c.type === "text",
-    );
-    const text = textBlocks.map((b) => b.text).join("\n\n");
-    return NextResponse.json({ result: text });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "Unknown error";
-    console.error("Generate error:", err);
-    return NextResponse.json({ error: message }, { status: 500 });
-  }
+  return new Response(stream, {
+    headers: {
+      "Content-Type": "application/x-ndjson; charset=utf-8",
+      "Cache-Control": "no-store, no-transform",
+      "X-Accel-Buffering": "no",
+    },
+  });
 }

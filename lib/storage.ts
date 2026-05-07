@@ -29,6 +29,7 @@ export function emptySoftwareEngine(): SoftwareEngineState {
       liImage: null,
     },
     craftedMessage: "",
+    technographicPitch: "",
   };
 }
 

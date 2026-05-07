@@ -1,44 +1,12 @@
 "use client";
 
-import { Fragment, useState, type ReactNode } from "react";
+import { useState } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { ChevronRight, Loader2, Sparkles } from "lucide-react";
 import type { StepProps } from "@/components/types";
 import { generateWithClaude } from "@/lib/api";
 import { DEFAULT_STACK_MAPPER_GEM } from "@/lib/gems";
-
-const SOURCE_LINK_RE = /\[Source\]\((https?:\/\/[^\s)]+)\)/gi;
-
-function renderWithSourceLinks(text: string): ReactNode {
-  const parts: ReactNode[] = [];
-  let lastIndex = 0;
-  let match: RegExpExecArray | null;
-  let key = 0;
-  while ((match = SOURCE_LINK_RE.exec(text)) !== null) {
-    if (match.index > lastIndex) {
-      parts.push(
-        <Fragment key={`t-${key++}`}>
-          {text.slice(lastIndex, match.index)}
-        </Fragment>,
-      );
-    }
-    parts.push(
-      <a
-        key={`a-${key++}`}
-        href={match[1]}
-        target="_blank"
-        rel="noreferrer"
-        className="text-blue-600 hover:text-blue-800 underline underline-offset-2"
-      >
-        Source
-      </a>,
-    );
-    lastIndex = match.index + match[0].length;
-  }
-  if (lastIndex < text.length) {
-    parts.push(<Fragment key={`t-${key++}`}>{text.slice(lastIndex)}</Fragment>);
-  }
-  return parts;
-}
 
 export function StackMapper({
   accountData,
@@ -101,11 +69,10 @@ export function StackMapper({
 
       {engine.stackMap && (
         <div className="bg-blue-50/30 border border-blue-100 rounded-xl p-5 space-y-3">
-          <h4 className="font-bold text-blue-800 text-sm uppercase tracking-wider">
-            Stack Map
-          </h4>
-          <div className="text-sm text-slate-800 whitespace-pre-wrap font-sans leading-relaxed">
-            {renderWithSourceLinks(engine.stackMap)}
+          <div className="prose prose-sm prose-slate max-w-none prose-headings:font-semibold prose-h1:text-lg prose-h2:text-base prose-h3:text-sm prose-h2:mt-4 prose-h3:mt-3 prose-p:my-2 prose-li:my-0.5 prose-a:text-blue-600 prose-a:no-underline hover:prose-a:underline">
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+              {engine.stackMap}
+            </ReactMarkdown>
           </div>
           <div className="pt-2 flex justify-end">
             <button

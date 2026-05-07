@@ -63,21 +63,37 @@ interface BlockCitation {
 
 const MODEL_SOURCE_LINK_RE = /\s*\[Source\]\([^)]+\)/gi;
 
+function citationLabel(c: BlockCitation): string {
+  const rawTitle = (c.title ?? "").trim();
+  // Strip trailing "| Site" or " - Site" suffixes that page titles often carry.
+  const cleaned = rawTitle.replace(/\s*[|\-–—]\s*[^|\-–—]+$/u, "").trim();
+  const title = cleaned || rawTitle;
+  if (title) return title.length > 60 ? title.slice(0, 60).trim() + "…" : title;
+  if (c.url) {
+    try {
+      return new URL(c.url).hostname.replace(/^www\./, "");
+    } catch {
+      return "Source";
+    }
+  }
+  return "Source";
+}
+
 function blockTextWithVerifiedSources(block: Anthropic.TextBlock): string {
   const stripped = block.text.replace(MODEL_SOURCE_LINK_RE, "");
   const raw = (block as unknown as { citations?: BlockCitation[] }).citations;
   if (!Array.isArray(raw) || raw.length === 0) return stripped;
-  const urls = Array.from(
-    new Set(
-      raw
-        .filter((c) => c.type === "web_search_result_location" && !!c.url)
-        .map((c) => c.url as string),
-    ),
-  );
-  if (urls.length === 0) return stripped;
+  const seen = new Set<string>();
+  const links: string[] = [];
+  for (const c of raw) {
+    if (c.type !== "web_search_result_location" || !c.url) continue;
+    if (seen.has(c.url)) continue;
+    seen.add(c.url);
+    links.push(`[${citationLabel(c)}](${c.url})`);
+  }
+  if (links.length === 0) return stripped;
   const trimmed = stripped.replace(/\s+$/, "");
-  const links = urls.map((url) => `[Source](${url})`).join(" ");
-  return `${trimmed} ${links}`;
+  return `${trimmed} ${links.join(" ")}`;
 }
 
 export async function POST(req: NextRequest) {

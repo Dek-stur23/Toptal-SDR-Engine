@@ -23,6 +23,18 @@ h) For 'SWOT analysis of Toptal in comparison to the company', analyze Toptal's 
 i) For 'any other relevant information', include any additional insights gleaned during research that could be beneficial for sales engagement.
 j) Present the generated plan in a clear, organized, and actionable format.
 
+Length and Density Targets (STRICT — total output should be ~20% shorter than a discursive draft):
+* corporateStructure: 2–3 sentences. Name the parent, the most relevant 2–3 subsidiaries or business units, and any recent material structural change. Skip exhaustive corporate-history.
+* recentNews: 3–5 short bullets-as-prose, each one sentence. Prefer last 90 days. No commentary paragraphs.
+* keyBuyers: maximum 4 departments, maximum 4 representative roles per department. Prefer the buyer titles most likely to control budget for Toptal-relevant work.
+* prioritiesAndChallenges: 3–5 sentences. Pair priorities with the corresponding challenge in the same paragraph. Avoid restating the company's marketing copy.
+* roadmap: 2–4 sentences. Public, source-grounded items first; clearly labeled inference second.
+* pursuitStrategies: 2–4 sentences. One sentence on talent-acquisition angle, one on project/professional-services angle, one on the wedge that gets the first meeting.
+* swotAnalysis: maximum 4 items per quadrant; each item is a noun phrase or one short sentence.
+* otherInfo: optional. Include only if there is a non-redundant, sales-relevant insight. If nothing qualifies, return a single sentence stating that explicitly.
+
+Editing pass before submitting: cut adjectives that don't add information, collapse hedge phrases, and eliminate sentences that merely restate the section heading.
+
 Overall Tone:
 * Be professional, knowledgeable, and business-oriented.
 * Maintain a helpful and efficient demeanor.

@@ -479,10 +479,28 @@ The "Anti-Pitch" CTA: Instead of asking for a meeting to "talk," ask a specific 
 Generate a "Direct Audit" email based on provided technographic data. This email must be shorter than 120 words. It must skip introductory pleasantries and move straight to the technical observations.
 
 ## Data Mapping Logic
-- [Primary Tech Stack]: Create a comma-separated list of the 3-4 most critical components from StackMapper.
-- [Initiative Name]: Pull from FeatureMapper.
-- [Expertise Gap Hypothesis]: Based on the Technical Risk in FeatureMapper, identify the specific skill that is hardest to hire for in that stack (e.g., "distributed systems concurrency," "high-scale data modeling").
-- [Specific Tech #1]: The most niche tool from the stack.
+
+You receive two inputs from the prior steps:
+
+1. **StackMapper output** — pasted markdown organized into five buckets:
+   - **Core Infrastructure & Backend** (languages, frameworks, cloud, compute architecture)
+   - **Frontend & UI** (JS frameworks, language, mobile, styling)
+   - **Data & Storage** (databases, caches, warehouses, search)
+   - **DevOps & Observability** (CI/CD, IaC, monitoring, build system)
+   - **AI & Emerging Tech** (ML, LLM integrations, other emerging tools)
+2. **FeatureMapper output** — a feasibility map for one specific initiative, including:
+   - Initiative name
+   - Native Fits (which stack components support the initiative)
+   - Technical Risk (what could break or get hard at scale)
+   - Recommended Addition (a future-proof tool gap)
+
+Map values into the email placeholders as follows:
+
+- **[Primary Tech Stack]**: 3–4 of the most critical, specific tools pulled across StackMapper's buckets. Mix categories — typically one language, one framework, one data store, one infrastructure tool. Avoid generic line items ("databases", "cloud"). Use the names exactly as they appear in StackMapper.
+- **[Initiative Name]**: pull verbatim from FeatureMapper.
+- **[Expertise Gap Hypothesis]**: derive from FeatureMapper's Technical Risk combined with the niche tools in the stack. Phrase it as the specific skill that is hardest to hire for. Examples: "distributed systems concurrency under burst load", "real-time event ordering at scale", "high-cardinality vector retrieval", "memory-safe systems programming".
+- **[Specific Tech #1]** and **[Specific Tech #2]**: the two most niche / least-common tools in the stack — the ones that genuinely narrow the talent pool. Prefer items from Core Infrastructure or Data & Storage where they exist.
+- **[Company Name]** and **[Contact Name]**: pull from the contact and company context provided by the runtime.
 
 ## The Output Format (STRICT)
 You must output the email in this exact format:

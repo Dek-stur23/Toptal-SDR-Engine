@@ -207,19 +207,19 @@ export function exportAccountToPdf(data: AccountData): void {
     `);
   }
 
-  if (data.cadences?.length) {
+  if (data.missions?.length) {
     sections.push(`
-      <h2>Step 9: Cadence Builder</h2>
+      <h2>Step 9: Mission Builder</h2>
       <div class="card">
         <ul>
-          ${data.cadences
+          ${data.missions
             .map(
-              (c) => `
+              (m) => `
             <li style="margin-bottom: 16px;">
-              <strong>${escapeHtml(c.name)}</strong> <span class="badge">${escapeHtml(c.type)}</span>
-              <span class="text-sm">- ${c.completed ? "Completed" : "Launched"} ${escapeHtml(c.dateLaunched)}</span><br/>
-              <span class="text-sm"><strong>Strategy:</strong> ${escapeHtml(c.details)}</span>
-              ${c.resultsBriefing ? `<br/><span class="text-sm"><strong>Results:</strong> ${escapeHtml(c.resultsBriefing)}</span>` : ""}
+              <strong>${escapeHtml(m.name)}</strong> <span class="badge">${escapeHtml(m.type)}</span>
+              <span class="text-sm">- ${m.completed ? "Completed" : "Launched"} ${escapeHtml(m.dateLaunched)}</span><br/>
+              <span class="text-sm"><strong>Strategy:</strong> ${escapeHtml(m.details)}</span>
+              ${m.resultsBriefing ? `<br/><span class="text-sm"><strong>Results:</strong> ${escapeHtml(m.resultsBriefing)}</span>` : ""}
             </li>`,
             )
             .join("")}

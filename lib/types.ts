@@ -121,13 +121,13 @@ export interface TeamLink {
   contacted: boolean;
 }
 
-export interface CadenceTask {
+export interface MissionTask {
   id: string;
   label: string;
   completed: boolean;
 }
 
-export interface Cadence {
+export interface Mission {
   id: number;
   name: string;
   type: string;
@@ -136,7 +136,7 @@ export interface Cadence {
   dateLaunched: string;
   completed: boolean;
   resultsBriefing: string;
-  tasks: CadenceTask[];
+  tasks: MissionTask[];
 }
 
 export interface ActivityLog {
@@ -258,7 +258,7 @@ export interface AccountData {
   messagingLogs: MessagingLog[];
   previousContacts: PreviousContact[];
   teamLinks: TeamLink[];
-  cadences: Cadence[];
+  missions: Mission[];
   eseMeetings: EseMeeting[];
   activityLogs: ActivityLog[];
   recentNewsResult: RecentNewsResult | null;

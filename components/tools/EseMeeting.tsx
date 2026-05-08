@@ -15,7 +15,7 @@ const initialTasks = () => [
   {
     id: "q1",
     label:
-      "Tell the ESE what you've been working on for the account. Reference the Cadence Builder if needed. Share results.",
+      "Tell the ESE what you've been working on for the account. Reference the Mission Builder if needed. Share results.",
     completed: false,
   },
   {

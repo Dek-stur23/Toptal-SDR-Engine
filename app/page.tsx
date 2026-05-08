@@ -38,7 +38,7 @@ import { ProcurementBureaucracy } from "@/components/steps/ProcurementBureaucrac
 import { AccountContext } from "@/components/steps/AccountContext";
 import { PreviousContacts } from "@/components/steps/PreviousContacts";
 import { TeamLinkSearch } from "@/components/steps/TeamLinkSearch";
-import { CadenceBuilder } from "@/components/steps/CadenceBuilder";
+import { MissionBuilder } from "@/components/steps/MissionBuilder";
 import { RecentNews } from "@/components/tools/RecentNews";
 import { IcpIntel } from "@/components/tools/IcpIntel";
 import { PersonalizedMessaging } from "@/components/tools/PersonalizedMessaging";
@@ -76,7 +76,7 @@ const steps: StepDef[] = [
   { id: 6, title: "Account Context", icon: BookOpen, Component: AccountContext },
   { id: 7, title: "Previous Contacts", icon: History, Component: PreviousContacts },
   { id: 8, title: "Team Link Search", icon: Network, Component: TeamLinkSearch },
-  { id: 9, title: "Cadence Builder", icon: Send, Component: CadenceBuilder },
+  { id: 9, title: "Mission Builder", icon: Send, Component: MissionBuilder },
 ];
 
 const softwareEngineSteps: StepDef[] = [

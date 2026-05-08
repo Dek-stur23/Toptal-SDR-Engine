@@ -53,7 +53,7 @@ export function emptyAccountData(): AccountData {
     messagingLogs: [],
     previousContacts: [],
     teamLinks: [],
-    cadences: [],
+    missions: [],
     eseMeetings: [],
     activityLogs: [],
     recentNewsResult: null,
@@ -105,9 +105,18 @@ export function loadAppState(): AppState {
           : typeof loadedEngine.activeStep === "number"
             ? [loadedEngine.activeStep]
             : [];
+        const legacyAccountData = (a?.accountData ?? {}) as Partial<
+          AccountData & { cadences?: AccountData["missions"] }
+        >;
+        const missions = Array.isArray(legacyAccountData.missions)
+          ? legacyAccountData.missions
+          : Array.isArray(legacyAccountData.cadences)
+            ? legacyAccountData.cadences
+            : [];
         const accountData = {
           ...emptyAccountData(),
-          ...(a?.accountData ?? {}),
+          ...legacyAccountData,
+          missions,
           softwareEngine: {
             ...baseEngine,
             ...loadedEngine,

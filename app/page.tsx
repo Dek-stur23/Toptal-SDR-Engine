@@ -9,7 +9,6 @@ import {
   Cpu,
   Download,
   FileText,
-  Hash,
   History,
   Layers,
   Loader2,
@@ -47,7 +46,6 @@ import { LogConversation } from "@/components/tools/LogConversation";
 import { EseMeeting } from "@/components/tools/EseMeeting";
 import { StackMapper } from "@/components/engines/software/StackMapper";
 import { FeatureMapper } from "@/components/engines/software/FeatureMapper";
-import { KeywordGenerator } from "@/components/engines/software/KeywordGenerator";
 import { UploadContact } from "@/components/engines/software/UploadContact";
 import { MessageCrafter } from "@/components/engines/software/MessageCrafter";
 import { exportAccountToPdf } from "@/lib/pdf";
@@ -84,9 +82,8 @@ const steps: StepDef[] = [
 const softwareEngineSteps: StepDef[] = [
   { id: 1, title: "StackMapper", icon: Layers, Component: StackMapper },
   { id: 2, title: "FeatureMapper", icon: Code2, Component: FeatureMapper },
-  { id: 3, title: "Keyword Generator", icon: Hash, Component: KeywordGenerator },
-  { id: 4, title: "Upload Contact", icon: Upload, Component: UploadContact },
-  { id: 5, title: "MessageCrafter", icon: MessageSquare, Component: MessageCrafter },
+  { id: 3, title: "Upload Contact", icon: Upload, Component: UploadContact },
+  { id: 4, title: "MessageCrafter", icon: MessageSquare, Component: MessageCrafter },
 ];
 
 const actionTools: ToolDef[] = [

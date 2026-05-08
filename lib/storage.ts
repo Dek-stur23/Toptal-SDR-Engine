@@ -25,7 +25,6 @@ export function emptySoftwareEngine(): SoftwareEngineState {
     },
     productInput: "",
     featureMap: "",
-    keywords: "",
     contact: {
       firstName: "",
       lastName: "",

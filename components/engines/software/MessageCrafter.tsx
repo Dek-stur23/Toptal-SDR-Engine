@@ -21,7 +21,6 @@ function buildContext(args: {
   productInput: string;
   stackMap: string;
   featureMap: string;
-  keywords: string;
   companyName: string;
 }) {
   return [
@@ -31,7 +30,6 @@ function buildContext(args: {
     `Product / Initiative / Feature:\n${args.productInput || "(not provided)"}`,
     `StackMapper Output:\n${args.stackMap || "(none)"}`,
     `FeatureMapper Output:\n${args.featureMap || "(none)"}`,
-    `TalentSource (Keyword Generator) Output:\n${args.keywords || "(none)"}`,
   ].join("\n\n");
 }
 
@@ -65,7 +63,6 @@ export function MessageCrafter({
       productInput: engine.productInput,
       stackMap: stackToText(engine.stack),
       featureMap: engine.featureMap,
-      keywords: engine.keywords,
       companyName: accountData.companyName,
     })}`;
 
@@ -188,7 +185,7 @@ export function MessageCrafter({
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <OptionCard
           title="Craft Technographic Sales Pitch"
-          description='OutreachSynthesizer Pro converts your StackMapper / FeatureMapper / TalentSource intel into the "Talent Friction" Insight email aimed at VPs of Engineering / CTOs.'
+          description='OutreachSynthesizer Pro converts your StackMapper and FeatureMapper intel into the "Talent Friction" Insight email aimed at VPs of Engineering / CTOs.'
           buttonLabel="Craft Technographic Pitch"
           loading={loading === "technographic"}
           disabled={loading !== null}

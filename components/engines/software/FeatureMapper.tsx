@@ -100,7 +100,7 @@ export function FeatureMapper({
               onClick={onComplete}
               className="text-blue-700 hover:text-blue-900 font-medium text-sm flex items-center gap-1"
             >
-              Save &amp; Continue to Keyword Generator{" "}
+              Save &amp; Continue to Upload Contact{" "}
               <ChevronRight className="w-4 h-4" />
             </button>
           </div>

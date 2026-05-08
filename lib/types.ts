@@ -239,7 +239,6 @@ export interface SoftwareEngineState {
   stack: StackBuckets;
   productInput: string;
   featureMap: string;
-  keywords: string;
   contact: SoftwareEngineContact;
   craftedMessage: string;
   technographicPitch: string;

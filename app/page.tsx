@@ -48,6 +48,10 @@ import { StackMapper } from "@/components/engines/software/StackMapper";
 import { FeatureMapper } from "@/components/engines/software/FeatureMapper";
 import { UploadContact } from "@/components/engines/software/UploadContact";
 import { MessageCrafter } from "@/components/engines/software/MessageCrafter";
+import { ContactMap } from "@/components/engines/procurement/ContactMap";
+import { LeaderProfile } from "@/components/engines/procurement/LeaderProfile";
+import { Priorities } from "@/components/engines/procurement/Priorities";
+import { ProcurementPitch } from "@/components/engines/procurement/ProcurementPitch";
 import { exportAccountToPdf } from "@/lib/pdf";
 import { createAccount, loadAppState, saveAppState } from "@/lib/storage";
 import type { Account, AccountData, AppState, ToolId } from "@/lib/types";
@@ -84,6 +88,13 @@ const softwareEngineSteps: StepDef[] = [
   { id: 2, title: "FeatureMapper", icon: Code2, Component: FeatureMapper },
   { id: 3, title: "Upload Contact", icon: Upload, Component: UploadContact },
   { id: 4, title: "MessageCrafter", icon: MessageSquare, Component: MessageCrafter },
+];
+
+const procurementEngineSteps: StepDef[] = [
+  { id: 1, title: "Contact Map", icon: Users, Component: ContactMap },
+  { id: 2, title: "Leader Profile", icon: User, Component: LeaderProfile },
+  { id: 3, title: "Priorities & Pain", icon: Target, Component: Priorities },
+  { id: 4, title: "Procurement Pitch", icon: MessageSquare, Component: ProcurementPitch },
 ];
 
 function scrollAnchorIntoView(anchorId: string) {
@@ -236,6 +247,48 @@ export default function App() {
     });
     if (stepId + 1 <= softwareEngineSteps.length) {
       scrollAnchorIntoView(`engine-step-${stepId + 1}`);
+    }
+  };
+
+  const toggleProcurementEngineStep = (stepId: number) => {
+    updateAccount(currentAccount.id, (acc) => {
+      const engine = acc.accountData.procurementEngine;
+      const next = engine.activeSteps.includes(stepId)
+        ? engine.activeSteps.filter((s) => s !== stepId)
+        : [...engine.activeSteps, stepId];
+      return {
+        ...acc,
+        accountData: {
+          ...acc.accountData,
+          procurementEngine: { ...engine, activeSteps: next },
+        },
+      };
+    });
+  };
+
+  const handleProcurementEngineStepComplete = (stepId: number) => {
+    updateAccount(currentAccount.id, (acc) => {
+      const engine = acc.accountData.procurementEngine;
+      const completedSteps = engine.completedSteps.includes(stepId)
+        ? engine.completedSteps
+        : [...engine.completedSteps, stepId];
+      const nextId = stepId + 1;
+      const withoutCurrent = engine.activeSteps.filter((s) => s !== stepId);
+      const activeSteps =
+        nextId <= procurementEngineSteps.length &&
+        !withoutCurrent.includes(nextId)
+          ? [...withoutCurrent, nextId]
+          : withoutCurrent;
+      return {
+        ...acc,
+        accountData: {
+          ...acc.accountData,
+          procurementEngine: { ...engine, completedSteps, activeSteps },
+        },
+      };
+    });
+    if (stepId + 1 <= procurementEngineSteps.length) {
+      scrollAnchorIntoView(`procurement-step-${stepId + 1}`);
     }
   };
 
@@ -493,6 +546,54 @@ export default function App() {
                             setAccountData={setAccountData}
                             onComplete={() =>
                               handleSoftwareEngineStepComplete(step.id)
+                            }
+                          />
+                        </StepCard>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-6 space-y-6 mt-6">
+                <div className="flex items-center gap-3 border-b border-gray-100 pb-4">
+                  <div className="bg-emerald-600 text-white p-2 rounded-lg">
+                    <Briefcase className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-bold text-emerald-700 uppercase tracking-widest">
+                      Engine
+                    </p>
+                    <h3 className="text-lg font-semibold text-slate-900">
+                      Procurement Engine
+                    </h3>
+                  </div>
+                </div>
+
+                <div className="relative">
+                  <div className="absolute left-[23px] top-4 bottom-8 w-[2px] bg-gray-200 rounded-full" />
+                  <div className="space-y-6">
+                    {procurementEngineSteps.map((step) => {
+                      const engine = currentAccount.accountData.procurementEngine;
+                      const isCompleted = engine.completedSteps.includes(step.id);
+                      const isActive = engine.activeSteps.includes(step.id);
+                      return (
+                        <StepCard
+                          key={step.id}
+                          anchorId={`procurement-step-${step.id}`}
+                          stepNumber={step.id}
+                          title={step.title}
+                          Icon={step.icon}
+                          isCompleted={isCompleted}
+                          isActive={isActive}
+                          isLocked={false}
+                          onToggle={() => toggleProcurementEngineStep(step.id)}
+                        >
+                          <step.Component
+                            accountData={currentAccount.accountData}
+                            setAccountData={setAccountData}
+                            onComplete={() =>
+                              handleProcurementEngineStepComplete(step.id)
                             }
                           />
                         </StepCard>

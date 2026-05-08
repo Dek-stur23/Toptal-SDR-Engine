@@ -243,6 +243,59 @@ export interface SoftwareEngineState {
   technicalAuditor: string;
 }
 
+export type ProcurementFunction =
+  | "sourcing"
+  | "category"
+  | "vendor-mgmt"
+  | "ta-ops"
+  | "indirect"
+  | "it-procurement"
+  | "other";
+
+export type ProcurementSeniority =
+  | "executive"
+  | "director"
+  | "manager"
+  | "ic"
+  | "unknown";
+
+export interface ProcurementContact {
+  id: string;
+  name: string;
+  title: string;
+  function: ProcurementFunction;
+  seniority: ProcurementSeniority;
+  ownsHint: string;
+}
+
+export interface LeaderActivity {
+  headline: string;
+  source: string;
+}
+
+export interface LeaderProfile {
+  team: string;
+  scope: string;
+  reportingChain: string;
+  recentActivity: LeaderActivity[];
+}
+
+export interface PriorityItem {
+  priority: string;
+  reasoning: string;
+  evidenceSource: string;
+}
+
+export interface ProcurementEngineState {
+  activeSteps: number[];
+  completedSteps: number[];
+  contactMap: ProcurementContact[];
+  selectedContactId: string | null;
+  leaderProfile: LeaderProfile | null;
+  priorities: PriorityItem[];
+  craftedMessage: string;
+}
+
 export interface AccountData {
   accountStatus: AccountStatus;
   companyName: string;
@@ -267,6 +320,7 @@ export interface AccountData {
   initiativeResearch: InitiativeResearch | null;
   productMap: ProductMap | null;
   softwareEngine: SoftwareEngineState;
+  procurementEngine: ProcurementEngineState;
 }
 
 export interface Account {

@@ -1,7 +1,7 @@
 "use client";
 
 import type { Account, AccountData, AppState } from "./types";
-import type { SoftwareEngineState } from "./types";
+import type { ProcurementEngineState, SoftwareEngineState } from "./types";
 
 const ROOT_KEY = "toptal-sdr-engine::app";
 
@@ -37,6 +37,18 @@ export function emptySoftwareEngine(): SoftwareEngineState {
   };
 }
 
+export function emptyProcurementEngine(): ProcurementEngineState {
+  return {
+    activeSteps: [],
+    completedSteps: [],
+    contactMap: [],
+    selectedContactId: null,
+    leaderProfile: null,
+    priorities: [],
+    craftedMessage: "",
+  };
+}
+
 export function emptyAccountData(): AccountData {
   return {
     accountStatus: "",
@@ -62,6 +74,7 @@ export function emptyAccountData(): AccountData {
     initiativeResearch: null,
     productMap: null,
     softwareEngine: emptySoftwareEngine(),
+    procurementEngine: emptyProcurementEngine(),
   };
 }
 
@@ -113,6 +126,9 @@ export function loadAppState(): AppState {
           : Array.isArray(legacyAccountData.cadences)
             ? legacyAccountData.cadences
             : [];
+        const baseProcurement = emptyProcurementEngine();
+        const loadedProcurement = (legacyAccountData.procurementEngine ??
+          {}) as Partial<ProcurementEngineState>;
         const accountData = {
           ...emptyAccountData(),
           ...legacyAccountData,
@@ -125,6 +141,22 @@ export function loadAppState(): AppState {
               ...baseEngine.stack,
               ...(loadedEngine.stack ?? {}),
             },
+          },
+          procurementEngine: {
+            ...baseProcurement,
+            ...loadedProcurement,
+            activeSteps: Array.isArray(loadedProcurement.activeSteps)
+              ? loadedProcurement.activeSteps
+              : [],
+            completedSteps: Array.isArray(loadedProcurement.completedSteps)
+              ? loadedProcurement.completedSteps
+              : [],
+            contactMap: Array.isArray(loadedProcurement.contactMap)
+              ? loadedProcurement.contactMap
+              : [],
+            priorities: Array.isArray(loadedProcurement.priorities)
+              ? loadedProcurement.priorities
+              : [],
           },
         };
         const legacy = a as Partial<Account & { activeStep?: number | null }>;

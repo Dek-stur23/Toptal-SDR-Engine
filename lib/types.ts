@@ -234,7 +234,7 @@ export interface StackBuckets {
 }
 
 export interface SoftwareEngineState {
-  activeStep: number | null;
+  activeSteps: number[];
   completedSteps: number[];
   stack: StackBuckets;
   productInput: string;
@@ -277,7 +277,7 @@ export interface Account {
   createdAt: number;
   name: string;
   isArchived: boolean;
-  activeStep: number | null;
+  activeSteps: number[];
   activeTool: ToolId | null;
   completedSteps: number[];
   accountData: AccountData;

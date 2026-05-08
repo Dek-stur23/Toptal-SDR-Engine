@@ -203,7 +203,7 @@ export function AccountInitiative({
               onClick={onComplete}
               className="text-indigo-700 hover:text-indigo-900 font-medium text-sm flex items-center gap-1"
             >
-              Save &amp; Continue to Architect <ChevronRight className="w-4 h-4" />
+              Save &amp; Continue to Product Map <ChevronRight className="w-4 h-4" />
             </button>
           </div>
         </div>

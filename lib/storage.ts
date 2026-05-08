@@ -14,7 +14,7 @@ function newId(): string {
 
 export function emptySoftwareEngine(): SoftwareEngineState {
   return {
-    activeStep: null,
+    activeSteps: [],
     completedSteps: [],
     stack: {
       backend: "",
@@ -74,7 +74,7 @@ export function createAccount(): Account {
     createdAt: Date.now(),
     name: "New Account",
     isArchived: false,
-    activeStep: 1,
+    activeSteps: [1],
     activeTool: null,
     completedSteps: [],
     accountData: emptyAccountData(),
@@ -100,23 +100,37 @@ export function loadAppState(): AppState {
       accounts: (parsed.accounts ?? []).map((a) => {
         const skeleton = createAccount();
         const baseEngine = emptySoftwareEngine();
-        const loadedEngine = a?.accountData?.softwareEngine ?? {};
+        const loadedEngine = (a?.accountData?.softwareEngine ?? {}) as Partial<
+          SoftwareEngineState & { activeStep?: number | null }
+        >;
+        const engineActiveSteps = Array.isArray(loadedEngine.activeSteps)
+          ? loadedEngine.activeSteps
+          : typeof loadedEngine.activeStep === "number"
+            ? [loadedEngine.activeStep]
+            : [];
         const accountData = {
           ...emptyAccountData(),
           ...(a?.accountData ?? {}),
           softwareEngine: {
             ...baseEngine,
             ...loadedEngine,
+            activeSteps: engineActiveSteps,
             stack: {
               ...baseEngine.stack,
-              ...((loadedEngine as { stack?: Partial<typeof baseEngine.stack> })
-                .stack ?? {}),
+              ...(loadedEngine.stack ?? {}),
             },
           },
         };
+        const legacy = a as Partial<Account & { activeStep?: number | null }>;
+        const activeSteps = Array.isArray(legacy?.activeSteps)
+          ? legacy.activeSteps
+          : typeof legacy?.activeStep === "number"
+            ? [legacy.activeStep]
+            : [1];
         return {
           ...skeleton,
           ...(a ?? {}),
+          activeSteps,
           completedSteps: Array.isArray(a?.completedSteps)
             ? a.completedSteps
             : [],

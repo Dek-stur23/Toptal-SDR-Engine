@@ -160,40 +160,43 @@ export default function App() {
     });
   };
 
-  const setActiveStep = (step: number | null) => {
-    updateAccount(currentAccount.id, (acc) => ({ ...acc, activeStep: step }));
-  };
-
-  const setCompletedSteps = (
-    updater: number[] | ((prev: number[]) => number[]),
-  ) => {
+  const toggleActiveStep = (stepId: number) => {
     updateAccount(currentAccount.id, (acc) => {
-      const newSteps =
-        typeof updater === "function" ? updater(acc.completedSteps) : updater;
-      return { ...acc, completedSteps: newSteps };
+      const next = acc.activeSteps.includes(stepId)
+        ? acc.activeSteps.filter((s) => s !== stepId)
+        : [...acc.activeSteps, stepId];
+      return { ...acc, activeSteps: next };
     });
   };
 
   const handleStepComplete = (stepId: number) => {
-    if (!currentAccount.completedSteps.includes(stepId)) {
-      setCompletedSteps([...currentAccount.completedSteps, stepId]);
-    }
-    if (currentAccount.activeStep === stepId && stepId < steps.length) {
-      setActiveStep(stepId + 1);
-    }
+    updateAccount(currentAccount.id, (acc) => {
+      const completedSteps = acc.completedSteps.includes(stepId)
+        ? acc.completedSteps
+        : [...acc.completedSteps, stepId];
+      const nextId = stepId + 1;
+      const activeSteps =
+        nextId <= steps.length && !acc.activeSteps.includes(nextId)
+          ? [...acc.activeSteps, nextId]
+          : acc.activeSteps;
+      return { ...acc, completedSteps, activeSteps };
+    });
   };
 
-  const setSoftwareEngineActiveStep = (stepId: number | null) => {
-    updateAccount(currentAccount.id, (acc) => ({
-      ...acc,
-      accountData: {
-        ...acc.accountData,
-        softwareEngine: {
-          ...acc.accountData.softwareEngine,
-          activeStep: stepId,
+  const toggleSoftwareEngineStep = (stepId: number) => {
+    updateAccount(currentAccount.id, (acc) => {
+      const engine = acc.accountData.softwareEngine;
+      const next = engine.activeSteps.includes(stepId)
+        ? engine.activeSteps.filter((s) => s !== stepId)
+        : [...engine.activeSteps, stepId];
+      return {
+        ...acc,
+        accountData: {
+          ...acc.accountData,
+          softwareEngine: { ...engine, activeSteps: next },
         },
-      },
-    }));
+      };
+    });
   };
 
   const handleSoftwareEngineStepComplete = (stepId: number) => {
@@ -202,15 +205,17 @@ export default function App() {
       const completedSteps = engine.completedSteps.includes(stepId)
         ? engine.completedSteps
         : [...engine.completedSteps, stepId];
-      const activeStep =
-        engine.activeStep === stepId && stepId < softwareEngineSteps.length
-          ? stepId + 1
-          : engine.activeStep;
+      const nextId = stepId + 1;
+      const activeSteps =
+        nextId <= softwareEngineSteps.length &&
+        !engine.activeSteps.includes(nextId)
+          ? [...engine.activeSteps, nextId]
+          : engine.activeSteps;
       return {
         ...acc,
         accountData: {
           ...acc.accountData,
-          softwareEngine: { ...engine, completedSteps, activeStep },
+          softwareEngine: { ...engine, completedSteps, activeSteps },
         },
       };
     });
@@ -346,7 +351,7 @@ export default function App() {
                 <div className="space-y-6">
                   {phase1Steps.map((step) => {
                     const isCompleted = currentAccount.completedSteps.includes(step.id);
-                    const isActive = currentAccount.activeStep === step.id;
+                    const isActive = currentAccount.activeSteps.includes(step.id);
                     return (
                       <StepCard
                         key={step.id}
@@ -356,7 +361,7 @@ export default function App() {
                         isCompleted={isCompleted}
                         isActive={isActive}
                         isLocked={false}
-                        onToggle={() => setActiveStep(isActive ? null : step.id)}
+                        onToggle={() => toggleActiveStep(step.id)}
                       >
                         <step.Component
                           accountData={currentAccount.accountData}
@@ -390,7 +395,7 @@ export default function App() {
                 <div className="space-y-6">
                   {phase2Steps.map((step) => {
                     const isCompleted = currentAccount.completedSteps.includes(step.id);
-                    const isActive = currentAccount.activeStep === step.id;
+                    const isActive = currentAccount.activeSteps.includes(step.id);
                     return (
                       <StepCard
                         key={step.id}
@@ -400,7 +405,7 @@ export default function App() {
                         isCompleted={isCompleted}
                         isActive={isActive}
                         isLocked={false}
-                        onToggle={() => setActiveStep(isActive ? null : step.id)}
+                        onToggle={() => toggleActiveStep(step.id)}
                       >
                         <step.Component
                           accountData={currentAccount.accountData}
@@ -450,7 +455,7 @@ export default function App() {
                     {softwareEngineSteps.map((step) => {
                       const engine = currentAccount.accountData.softwareEngine;
                       const isCompleted = engine.completedSteps.includes(step.id);
-                      const isActive = engine.activeStep === step.id;
+                      const isActive = engine.activeSteps.includes(step.id);
                       return (
                         <StepCard
                           key={step.id}
@@ -460,9 +465,7 @@ export default function App() {
                           isCompleted={isCompleted}
                           isActive={isActive}
                           isLocked={false}
-                          onToggle={() =>
-                            setSoftwareEngineActiveStep(isActive ? null : step.id)
-                          }
+                          onToggle={() => toggleSoftwareEngineStep(step.id)}
                         >
                           <step.Component
                             accountData={currentAccount.accountData}

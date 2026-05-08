@@ -292,6 +292,7 @@ export interface ProcurementEngineState {
   completedSteps: number[];
   contactMap: ProcurementContact[];
   selectedContactId: string | null;
+  leaderImage: string | null;
   leaderProfile: LeaderProfile | null;
   priorities: PriorityItem[];
   craftedMessage: string;

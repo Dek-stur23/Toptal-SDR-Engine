@@ -43,6 +43,7 @@ export function emptyProcurementEngine(): ProcurementEngineState {
     completedSteps: [],
     contactMap: [],
     selectedContactId: null,
+    leaderImage: null,
     leaderProfile: null,
     priorities: [],
     craftedMessage: "",

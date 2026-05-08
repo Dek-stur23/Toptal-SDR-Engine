@@ -1,7 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronRight, Loader2, Sparkles } from "lucide-react";
+import {
+  ChevronRight,
+  Image as ImageIcon,
+  Loader2,
+  Sparkles,
+} from "lucide-react";
 import type { StepProps } from "@/components/types";
 import type { LeaderProfile as LeaderProfileData } from "@/lib/types";
 import { generateWithClaude } from "@/lib/api";
@@ -28,11 +33,38 @@ export function LeaderProfile({
     );
   }
 
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      if (typeof reader.result !== "string") return;
+      setAccountData((prev) => ({
+        ...prev,
+        procurementEngine: {
+          ...prev.procurementEngine,
+          leaderImage: reader.result as string,
+        },
+      }));
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const removeImage = () => {
+    setAccountData((prev) => ({
+      ...prev,
+      procurementEngine: { ...prev.procurementEngine, leaderImage: null },
+    }));
+  };
+
   const run = async () => {
     setLoading(true);
     setError("");
     try {
-      const prompt = `Profile this procurement leader at ${accountData.companyName || "the target company"}:\n\nName: ${selected.name}\nTitle: ${selected.title}\nClassified function: ${selected.function}\nSeniority: ${selected.seniority}\nWhat they likely own (initial inference): ${selected.ownsHint}`;
+      const screenshotNote = engine.leaderImage
+        ? "\n\nA LinkedIn screenshot is attached. Treat it as the most authoritative source for this leader's title, team, scope, and recent activity. Web search is supplementary — corroborate, do not contradict."
+        : "";
+      const prompt = `Profile this procurement leader at ${accountData.companyName || "the target company"}:\n\nName: ${selected.name}\nTitle: ${selected.title}\nClassified function: ${selected.function}\nSeniority: ${selected.seniority}\nWhat they likely own (initial inference): ${selected.ownsHint}${screenshotNote}`;
       const schema = {
         type: "OBJECT",
         properties: {
@@ -58,6 +90,7 @@ export function LeaderProfile({
         system: DEFAULT_PROCUREMENT_LEADER_PROFILE_GEM,
         schema,
         webSearch: true,
+        image: engine.leaderImage,
       });
       setAccountData((prev) => ({
         ...prev,
@@ -88,6 +121,52 @@ export function LeaderProfile({
         {accountData.companyName || "the target company"} — what their team
         owns, who they report to, and what they&apos;ve said publicly.
       </p>
+
+      <div>
+        <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-2">
+          LinkedIn Screenshot{" "}
+          <span className="text-slate-400 font-normal normal-case">
+            (optional — prioritized over web research when provided)
+          </span>
+        </label>
+        <div className="border-2 border-dashed border-blue-200 rounded-lg h-24 flex items-center justify-center bg-white relative overflow-hidden shadow-sm hover:bg-blue-50/50 transition-colors">
+          {engine.leaderImage ? (
+            <div className="w-full h-full relative group">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={engine.leaderImage}
+                alt={`LinkedIn screenshot for ${selected.name}`}
+                className="w-full h-full object-cover opacity-60"
+              />
+              <button
+                onClick={removeImage}
+                className="absolute inset-0 flex items-center justify-center text-sm font-semibold text-red-600 bg-white/80 hover:bg-white transition-all opacity-0 group-hover:opacity-100"
+              >
+                Remove Image
+              </button>
+            </div>
+          ) : (
+            <>
+              <input
+                type="file"
+                accept="image/*"
+                id="procurement-leader-image-upload"
+                className="hidden"
+                onChange={handleImageUpload}
+              />
+              <label
+                htmlFor="procurement-leader-image-upload"
+                className="cursor-pointer flex flex-col items-center justify-center w-full h-full text-blue-500 hover:text-blue-700 transition-colors"
+              >
+                <ImageIcon className="w-5 h-5 mb-1 opacity-80" />
+                <span className="text-[11px] font-medium">
+                  Click to upload LinkedIn screenshot
+                </span>
+              </label>
+            </>
+          )}
+        </div>
+      </div>
 
       <button
         onClick={run}

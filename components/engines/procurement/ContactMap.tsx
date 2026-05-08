@@ -128,6 +128,7 @@ export function ContactMap({
           contactMap,
           // Reset downstream state when re-running the map.
           selectedContactId: null,
+          leaderImage: null,
           leaderProfile: null,
           priorities: [],
           craftedMessage: "",
@@ -153,7 +154,11 @@ export function ContactMap({
         procurementEngine: {
           ...prev.procurementEngine,
           selectedContactId: sameSelection ? null : id,
-          // Picking a new leader invalidates downstream output.
+          // Picking a new leader invalidates downstream output and resets
+          // the uploaded LinkedIn screenshot so it doesn't bleed across leaders.
+          leaderImage: sameSelection
+            ? prev.procurementEngine.leaderImage
+            : null,
           leaderProfile: sameSelection
             ? prev.procurementEngine.leaderProfile
             : null,

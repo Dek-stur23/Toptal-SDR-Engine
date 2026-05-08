@@ -497,8 +497,8 @@ You receive two inputs from the prior steps:
 Map values into the email placeholders as follows:
 
 - **[Tech 1] … [Tech 4]**: 3–4 of the most critical, specific tools across StackMapper's buckets. Mix categories — typically one language, one framework, one data store, one infrastructure tool. Avoid generic line items ("databases", "cloud"). Use the names exactly as they appear in StackMapper.
-- **[purpose of the technology specific to product/feature in plain english]** (one per tech): one short clause connecting that tool to its role in the initiative. Pull from FeatureMapper's Native Fits and Technical Risk to phrase the purpose. Examples: "to handle the burst-write traffic during peak on-sale events", "to keep checkout latency under 200ms across regions", "to power the unified search index that drives the new recommendation feature". Plain English — no buzzwords.
-- **[Initiative Name]**: pull verbatim from FeatureMapper.
+- **[very broad purpose of the technology specific to product/feature in plain english]** (one per tech): one short, broadly-framed clause connecting that tool to its role in the initiative. Pull from FeatureMapper's Native Fits and Technical Risk. Stay general rather than ultra-specific — "to handle peak traffic spikes", "to keep checkout fast across regions", "to power the search and recommendations layer", "to coordinate the deployment pipeline across services". Plain English — no buzzwords, no implementation specifics that the model can't actually verify.
+- **[Initiative Name]**: pull verbatim from FeatureMapper. This same value also fills the subject line slot ("Scaling [Initiative Name] - elite contingency team").
 - **[Specific Tech #1]** and **[Specific Tech #2]**: the two most niche / least-common tools in the stack — the ones that genuinely narrow the talent pool. Prefer items from Core Infrastructure or Data & Storage where they exist. These appear inside the friction question, not in the stack list.
 - **[Company Name]** and **[Contact Name]**: pull from the contact and company context provided by the runtime.
 
@@ -507,17 +507,17 @@ You must output the email in this exact format:
 
 ---
 ### 📧 Draft: The "Direct Audit" Email
-**Subject:** [Company Name] / [Initiative Name] // Technical Gap
+**Subject:** Scaling [Initiative Name] - elite contingency team
 
 Hi [Contact Name],
 
 I've been researching the tech stack for [Company Name]'s work on [Initiative Name].
 
 Looks like the current stack for this is:
-- [Tech 1], to [purpose of the technology specific to product/feature in plain english]
-- [Tech 2], to [purpose of the technology specific to product/feature in plain english]
-- [Tech 3], to [purpose of the technology specific to product/feature in plain english]
-- [Tech 4], to [purpose of the technology specific to product/feature in plain english]
+- [Tech 1], to [very broad purpose of the technology specific to product/feature in plain english]
+- [Tech 2], to [very broad purpose of the technology specific to product/feature in plain english]
+- [Tech 3], to [very broad purpose of the technology specific to product/feature in plain english]
+- [Tech 4], to [very broad purpose of the technology specific to product/feature in plain english]
 
 Frequently, when I see teams scaling a stack with such specific overlap, they run into a meaningful expertise gap that is exacerbated when a team member leaves or timelines are condensed.
 
@@ -525,7 +525,7 @@ Where are you currently seeing the most friction in hiring or technical velocity
 
 Toptal has a specialized pod of engineers who have deep expertise in the various components of your stack within enterprise initiatives. Our model is synonymous to a NFL team having a veteran QB on the bench. When it's playoffs and the need is urgent, they have the right guy with the right expertise. The key here is, the team has the backup already on the sidelines BEFORE they even think they may need him.
 
-Do you have 15 minutes this month to discuss the merits of Toptal as your backup?
+Do you have 15 minutes this month to discuss the merits of Toptal as your contingency/agile support?
 
 Best,
 

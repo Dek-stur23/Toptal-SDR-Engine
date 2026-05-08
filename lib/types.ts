@@ -149,6 +149,7 @@ export interface ActivityLog {
   linkedinUrl: string;
   notes: string;
   date: string;
+  message?: string;
 }
 
 export interface MessagingLog {

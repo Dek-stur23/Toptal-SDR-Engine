@@ -42,7 +42,7 @@ import { MissionBuilder } from "@/components/steps/MissionBuilder";
 import { RecentNews } from "@/components/tools/RecentNews";
 import { IcpIntel } from "@/components/tools/IcpIntel";
 import { PersonalizedMessaging } from "@/components/tools/PersonalizedMessaging";
-import { LogConversation } from "@/components/tools/LogConversation";
+import { LogEngagement } from "@/components/tools/LogEngagement";
 import { EseMeeting } from "@/components/tools/EseMeeting";
 import { StackMapper } from "@/components/engines/software/StackMapper";
 import { FeatureMapper } from "@/components/engines/software/FeatureMapper";
@@ -114,7 +114,7 @@ const actionTools: ToolDef[] = [
   { id: "news", title: "Recent News", icon: Newspaper, Component: RecentNews },
   { id: "icpIntel", title: "ICP Intel", icon: User, Component: IcpIntel },
   { id: "messaging", title: "Personalized Messaging", icon: Wand2, Component: PersonalizedMessaging },
-  { id: "log", title: "Log Conversation", icon: Activity, Component: LogConversation },
+  { id: "log", title: "Log Engagement", icon: Activity, Component: LogEngagement },
   { id: "eseMeeting", title: "ESE Meeting", icon: Users, Component: EseMeeting },
 ];
 

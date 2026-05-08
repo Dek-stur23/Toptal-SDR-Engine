@@ -240,8 +240,6 @@ export interface SoftwareEngineState {
   productInput: string;
   featureMap: string;
   contact: SoftwareEngineContact;
-  craftedMessage: string;
-  technographicPitch: string;
   technicalAuditor: string;
 }
 

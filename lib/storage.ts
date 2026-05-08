@@ -33,8 +33,6 @@ export function emptySoftwareEngine(): SoftwareEngineState {
       liText: "",
       liImage: null,
     },
-    craftedMessage: "",
-    technographicPitch: "",
     technicalAuditor: "",
   };
 }

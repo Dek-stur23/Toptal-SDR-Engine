@@ -86,6 +86,19 @@ const softwareEngineSteps: StepDef[] = [
   { id: 4, title: "MessageCrafter", icon: MessageSquare, Component: MessageCrafter },
 ];
 
+function scrollAnchorIntoView(anchorId: string) {
+  if (typeof window === "undefined") return;
+  // Wait two frames for React to flush state + render the newly-active step,
+  // then smooth-scroll its anchor to the top of the viewport.
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      document
+        .getElementById(anchorId)
+        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  });
+}
+
 const actionTools: ToolDef[] = [
   { id: "news", title: "Recent News", icon: Newspaper, Component: RecentNews },
   { id: "icpIntel", title: "ICP Intel", icon: User, Component: IcpIntel },
@@ -172,12 +185,16 @@ export default function App() {
         ? acc.completedSteps
         : [...acc.completedSteps, stepId];
       const nextId = stepId + 1;
+      const withoutCurrent = acc.activeSteps.filter((s) => s !== stepId);
       const activeSteps =
-        nextId <= steps.length && !acc.activeSteps.includes(nextId)
-          ? [...acc.activeSteps, nextId]
-          : acc.activeSteps;
+        nextId <= steps.length && !withoutCurrent.includes(nextId)
+          ? [...withoutCurrent, nextId]
+          : withoutCurrent;
       return { ...acc, completedSteps, activeSteps };
     });
+    if (stepId + 1 <= steps.length) {
+      scrollAnchorIntoView(`step-${stepId + 1}`);
+    }
   };
 
   const toggleSoftwareEngineStep = (stepId: number) => {
@@ -203,11 +220,12 @@ export default function App() {
         ? engine.completedSteps
         : [...engine.completedSteps, stepId];
       const nextId = stepId + 1;
+      const withoutCurrent = engine.activeSteps.filter((s) => s !== stepId);
       const activeSteps =
         nextId <= softwareEngineSteps.length &&
-        !engine.activeSteps.includes(nextId)
-          ? [...engine.activeSteps, nextId]
-          : engine.activeSteps;
+        !withoutCurrent.includes(nextId)
+          ? [...withoutCurrent, nextId]
+          : withoutCurrent;
       return {
         ...acc,
         accountData: {
@@ -216,6 +234,9 @@ export default function App() {
         },
       };
     });
+    if (stepId + 1 <= softwareEngineSteps.length) {
+      scrollAnchorIntoView(`engine-step-${stepId + 1}`);
+    }
   };
 
   const handleToolToggle = (toolId: ToolId) => {
@@ -352,6 +373,7 @@ export default function App() {
                     return (
                       <StepCard
                         key={step.id}
+                        anchorId={`step-${step.id}`}
                         stepNumber={step.id}
                         title={step.title}
                         Icon={step.icon}
@@ -396,6 +418,7 @@ export default function App() {
                     return (
                       <StepCard
                         key={step.id}
+                        anchorId={`step-${step.id}`}
                         stepNumber={step.id}
                         title={step.title}
                         Icon={step.icon}
@@ -456,6 +479,7 @@ export default function App() {
                       return (
                         <StepCard
                           key={step.id}
+                          anchorId={`engine-step-${step.id}`}
                           stepNumber={step.id}
                           title={step.title}
                           Icon={step.icon}

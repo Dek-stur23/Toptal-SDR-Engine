@@ -10,6 +10,7 @@ interface Props {
   isActive: boolean;
   isLocked: boolean;
   onToggle: () => void;
+  anchorId?: string;
   children: React.ReactNode;
 }
 
@@ -21,10 +22,11 @@ export function StepCard({
   isActive,
   isLocked,
   onToggle,
+  anchorId,
   children,
 }: Props) {
   return (
-    <div className="relative pl-16">
+    <div className="relative pl-16" id={anchorId}>
       <div
         className={`absolute left-0 top-3 w-12 h-12 rounded-full border-4 border-[#F9FAFB] flex items-center justify-center transition-colors duration-300 ${
           isCompleted

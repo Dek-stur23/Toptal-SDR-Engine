@@ -25,9 +25,11 @@ export async function generateWithClaude<T>(opts: GenerateOptions): Promise<T> {
     throw new Error("No response body.");
   }
 
+  type Final = { result?: T; error?: string };
+
   const decoder = new TextDecoder();
   let buffer = "";
-  let final: { result?: T; error?: string } | null = null;
+  const finalRef: { current: Final | null } = { current: null };
 
   const parseEvent = (raw: string) => {
     const line = raw.trim();
@@ -39,7 +41,7 @@ export async function generateWithClaude<T>(opts: GenerateOptions): Promise<T> {
         error?: string;
       };
       if (event.event !== "ping") {
-        final = { result: event.result, error: event.error };
+        finalRef.current = { result: event.result, error: event.error };
       }
     } catch {
       // ignore malformed line
@@ -67,6 +69,7 @@ export async function generateWithClaude<T>(opts: GenerateOptions): Promise<T> {
     }
   }
 
+  const final = finalRef.current;
   if (!final) {
     if (!res.ok) {
       throw new Error(`Request failed (${res.status})`);

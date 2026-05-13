@@ -29,35 +29,48 @@ export async function generateWithClaude<T>(opts: GenerateOptions): Promise<T> {
   let buffer = "";
   let final: { result?: T; error?: string } | null = null;
 
+  const parseEvent = (raw: string) => {
+    const line = raw.trim();
+    if (!line) return;
+    try {
+      const event = JSON.parse(line) as {
+        event?: string;
+        result?: T;
+        error?: string;
+      };
+      if (event.event !== "ping") {
+        final = { result: event.result, error: event.error };
+      }
+    } catch {
+      // ignore malformed line
+    }
+  };
+
   for (;;) {
     const { value, done } = await reader.read();
     if (value) buffer += decoder.decode(value, { stream: true });
 
     let idx = buffer.indexOf("\n");
     while (idx !== -1) {
-      const line = buffer.slice(0, idx).trim();
+      parseEvent(buffer.slice(0, idx));
       buffer = buffer.slice(idx + 1);
-      if (line) {
-        try {
-          const event = JSON.parse(line) as {
-            event?: string;
-            result?: T;
-            error?: string;
-          };
-          if (event.event !== "ping") {
-            final = { result: event.result, error: event.error };
-          }
-        } catch {
-          // ignore malformed line
-        }
-      }
       idx = buffer.indexOf("\n");
     }
 
-    if (done) break;
+    if (done) {
+      // Flush trailing content with no terminating newline. This catches
+      // plain-JSON error responses from the route (e.g., missing API key)
+      // that don't follow the NDJSON streaming convention.
+      parseEvent(buffer);
+      buffer = "";
+      break;
+    }
   }
 
   if (!final) {
+    if (!res.ok) {
+      throw new Error(`Request failed (${res.status})`);
+    }
     throw new Error("Server closed the connection without a result.");
   }
   if (final.error) {

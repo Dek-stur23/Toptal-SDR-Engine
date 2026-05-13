@@ -5,6 +5,8 @@ import {
   Activity,
   BookOpen,
   Briefcase,
+  ChevronDown,
+  ChevronUp,
   Code2,
   Cpu,
   Download,
@@ -358,6 +360,20 @@ export default function App() {
     );
   };
 
+  const toggleEngineCollapsed = (key: "software" | "procurement") => {
+    setState((prev) =>
+      prev
+        ? {
+            ...prev,
+            engineCollapsed: {
+              ...prev.engineCollapsed,
+              [key]: !prev.engineCollapsed[key],
+            },
+          }
+        : prev,
+    );
+  };
+
   const handleExportPDF = () => {
     if (!currentAccount.accountData.companyName) {
       alert("Please specify a company name and run some research before exporting.");
@@ -507,101 +523,147 @@ export default function App() {
                 </div>
               </div>
 
-              <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-6 space-y-6">
-                <div className="flex items-center gap-3 border-b border-gray-100 pb-4">
-                  <div className="bg-blue-600 text-white p-2 rounded-lg">
-                    <Code2 className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-bold text-blue-700 uppercase tracking-widest">
-                      Engine
-                    </p>
-                    <h3 className="text-lg font-semibold text-slate-900">
-                      Software Engine
-                    </h3>
-                  </div>
-                </div>
+              {(() => {
+                const softwareCollapsed = state.engineCollapsed.software;
+                const softwareEngine = currentAccount.accountData.softwareEngine;
+                const softwareDoneCount = softwareEngine.completedSteps.filter(
+                  (id) => id >= 1 && id <= softwareEngineSteps.length,
+                ).length;
+                return (
+                  <div className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
+                    <button
+                      onClick={() => toggleEngineCollapsed("software")}
+                      className={`w-full flex items-center gap-3 p-6 text-left hover:bg-slate-50/50 transition-colors ${softwareCollapsed ? "" : "border-b border-gray-100"}`}
+                    >
+                      <div className="bg-blue-600 text-white p-2 rounded-lg">
+                        <Code2 className="w-5 h-5" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[10px] font-bold text-blue-700 uppercase tracking-widest">
+                          Engine
+                        </p>
+                        <h3 className="text-lg font-semibold text-slate-900">
+                          Software Engine
+                        </h3>
+                      </div>
+                      <span className="text-xs text-slate-500 font-medium mr-2 hidden sm:inline">
+                        {softwareDoneCount} / {softwareEngineSteps.length}
+                      </span>
+                      {softwareCollapsed ? (
+                        <ChevronDown className="w-5 h-5 text-slate-400 shrink-0" />
+                      ) : (
+                        <ChevronUp className="w-5 h-5 text-slate-400 shrink-0" />
+                      )}
+                    </button>
 
-                <div className="relative">
-                  <div className="absolute left-[23px] top-4 bottom-8 w-[2px] bg-gray-200 rounded-full" />
-                  <div className="space-y-6">
-                    {softwareEngineSteps.map((step) => {
-                      const engine = currentAccount.accountData.softwareEngine;
-                      const isCompleted = engine.completedSteps.includes(step.id);
-                      const isActive = engine.activeSteps.includes(step.id);
-                      return (
-                        <StepCard
-                          key={step.id}
-                          anchorId={`engine-step-${step.id}`}
-                          stepNumber={step.id}
-                          title={step.title}
-                          Icon={step.icon}
-                          isCompleted={isCompleted}
-                          isActive={isActive}
-                          isLocked={false}
-                          onToggle={() => toggleSoftwareEngineStep(step.id)}
-                        >
-                          <step.Component
-                            accountData={currentAccount.accountData}
-                            setAccountData={setAccountData}
-                            onComplete={() =>
-                              handleSoftwareEngineStepComplete(step.id)
-                            }
-                          />
-                        </StepCard>
-                      );
-                    })}
+                    {!softwareCollapsed && (
+                      <div className="p-6 space-y-6">
+                        <div className="relative">
+                          <div className="absolute left-[23px] top-4 bottom-8 w-[2px] bg-gray-200 rounded-full" />
+                          <div className="space-y-6">
+                            {softwareEngineSteps.map((step) => {
+                              const isCompleted = softwareEngine.completedSteps.includes(step.id);
+                              const isActive = softwareEngine.activeSteps.includes(step.id);
+                              return (
+                                <StepCard
+                                  key={step.id}
+                                  anchorId={`engine-step-${step.id}`}
+                                  stepNumber={step.id}
+                                  title={step.title}
+                                  Icon={step.icon}
+                                  isCompleted={isCompleted}
+                                  isActive={isActive}
+                                  isLocked={false}
+                                  onToggle={() => toggleSoftwareEngineStep(step.id)}
+                                >
+                                  <step.Component
+                                    accountData={currentAccount.accountData}
+                                    setAccountData={setAccountData}
+                                    onComplete={() =>
+                                      handleSoftwareEngineStepComplete(step.id)
+                                    }
+                                  />
+                                </StepCard>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
-                </div>
-              </div>
+                );
+              })()}
 
-              <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-6 space-y-6 mt-6">
-                <div className="flex items-center gap-3 border-b border-gray-100 pb-4">
-                  <div className="bg-emerald-600 text-white p-2 rounded-lg">
-                    <Briefcase className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-bold text-emerald-700 uppercase tracking-widest">
-                      Engine
-                    </p>
-                    <h3 className="text-lg font-semibold text-slate-900">
-                      Procurement Engine
-                    </h3>
-                  </div>
-                </div>
+              {(() => {
+                const procurementCollapsed = state.engineCollapsed.procurement;
+                const procurementEngine = currentAccount.accountData.procurementEngine;
+                const procurementDoneCount = procurementEngine.completedSteps.filter(
+                  (id) => id >= 1 && id <= procurementEngineSteps.length,
+                ).length;
+                return (
+                  <div className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden mt-6">
+                    <button
+                      onClick={() => toggleEngineCollapsed("procurement")}
+                      className={`w-full flex items-center gap-3 p-6 text-left hover:bg-slate-50/50 transition-colors ${procurementCollapsed ? "" : "border-b border-gray-100"}`}
+                    >
+                      <div className="bg-emerald-600 text-white p-2 rounded-lg">
+                        <Briefcase className="w-5 h-5" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[10px] font-bold text-emerald-700 uppercase tracking-widest">
+                          Engine
+                        </p>
+                        <h3 className="text-lg font-semibold text-slate-900">
+                          Procurement Engine
+                        </h3>
+                      </div>
+                      <span className="text-xs text-slate-500 font-medium mr-2 hidden sm:inline">
+                        {procurementDoneCount} / {procurementEngineSteps.length}
+                      </span>
+                      {procurementCollapsed ? (
+                        <ChevronDown className="w-5 h-5 text-slate-400 shrink-0" />
+                      ) : (
+                        <ChevronUp className="w-5 h-5 text-slate-400 shrink-0" />
+                      )}
+                    </button>
 
-                <div className="relative">
-                  <div className="absolute left-[23px] top-4 bottom-8 w-[2px] bg-gray-200 rounded-full" />
-                  <div className="space-y-6">
-                    {procurementEngineSteps.map((step) => {
-                      const engine = currentAccount.accountData.procurementEngine;
-                      const isCompleted = engine.completedSteps.includes(step.id);
-                      const isActive = engine.activeSteps.includes(step.id);
-                      return (
-                        <StepCard
-                          key={step.id}
-                          anchorId={`procurement-step-${step.id}`}
-                          stepNumber={step.id}
-                          title={step.title}
-                          Icon={step.icon}
-                          isCompleted={isCompleted}
-                          isActive={isActive}
-                          isLocked={false}
-                          onToggle={() => toggleProcurementEngineStep(step.id)}
-                        >
-                          <step.Component
-                            accountData={currentAccount.accountData}
-                            setAccountData={setAccountData}
-                            onComplete={() =>
-                              handleProcurementEngineStepComplete(step.id)
-                            }
-                          />
-                        </StepCard>
-                      );
-                    })}
+                    {!procurementCollapsed && (
+                      <div className="p-6 space-y-6">
+                        <div className="relative">
+                          <div className="absolute left-[23px] top-4 bottom-8 w-[2px] bg-gray-200 rounded-full" />
+                          <div className="space-y-6">
+                            {procurementEngineSteps.map((step) => {
+                              const isCompleted = procurementEngine.completedSteps.includes(step.id);
+                              const isActive = procurementEngine.activeSteps.includes(step.id);
+                              return (
+                                <StepCard
+                                  key={step.id}
+                                  anchorId={`procurement-step-${step.id}`}
+                                  stepNumber={step.id}
+                                  title={step.title}
+                                  Icon={step.icon}
+                                  isCompleted={isCompleted}
+                                  isActive={isActive}
+                                  isLocked={false}
+                                  onToggle={() => toggleProcurementEngineStep(step.id)}
+                                >
+                                  <step.Component
+                                    accountData={currentAccount.accountData}
+                                    setAccountData={setAccountData}
+                                    onComplete={() =>
+                                      handleProcurementEngineStepComplete(step.id)
+                                    }
+                                  />
+                                </StepCard>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
-                </div>
-              </div>
+                );
+              })()}
             </section>
 
             <section>

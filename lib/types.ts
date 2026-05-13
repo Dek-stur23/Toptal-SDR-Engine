@@ -341,4 +341,5 @@ export interface AppState {
   currentAccountId: string | null;
   isSidebarOpen: boolean;
   isArchivedSectionOpen: boolean;
+  engineCollapsed: { software: boolean; procurement: boolean };
 }

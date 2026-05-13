@@ -98,6 +98,7 @@ function emptyApp(): AppState {
     currentAccountId: null,
     isSidebarOpen: true,
     isArchivedSectionOpen: false,
+    engineCollapsed: { software: false, procurement: false },
   };
 }
 
@@ -179,6 +180,10 @@ export function loadAppState(): AppState {
       currentAccountId: parsed.currentAccountId ?? null,
       isSidebarOpen: parsed.isSidebarOpen ?? true,
       isArchivedSectionOpen: parsed.isArchivedSectionOpen ?? false,
+      engineCollapsed: {
+        software: parsed.engineCollapsed?.software ?? false,
+        procurement: parsed.engineCollapsed?.procurement ?? false,
+      },
     };
   } catch {
     return emptyApp();

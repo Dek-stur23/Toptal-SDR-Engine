@@ -198,3 +198,140 @@ export function saveAppState(state: AppState): void {
     console.error("Failed to save app state:", err);
   }
 }
+
+const EXPORT_FORMAT_VERSION = 1;
+
+interface ExportEnvelope {
+  app: "toptal-sdr-engine";
+  version: number;
+  exportedAt: string;
+  state: AppState;
+}
+
+export function exportAppStateJson(state: AppState): string {
+  const envelope: ExportEnvelope = {
+    app: "toptal-sdr-engine",
+    version: EXPORT_FORMAT_VERSION,
+    exportedAt: new Date().toISOString(),
+    state,
+  };
+  return JSON.stringify(envelope, null, 2);
+}
+
+export function parseImportedAppState(json: string): AppState {
+  const raw = JSON.parse(json) as unknown;
+  if (!raw || typeof raw !== "object") {
+    throw new Error("File is not a valid JSON object.");
+  }
+  // Accept either the envelope shape or a bare AppState (for forward
+  // compatibility with manual hand-edits / external tools).
+  const candidate = (() => {
+    const obj = raw as Record<string, unknown>;
+    if (
+      obj.app === "toptal-sdr-engine" &&
+      typeof obj.version === "number" &&
+      obj.state &&
+      typeof obj.state === "object"
+    ) {
+      return obj.state as Partial<AppState>;
+    }
+    if (Array.isArray((obj as Partial<AppState>).accounts)) {
+      return obj as Partial<AppState>;
+    }
+    throw new Error(
+      "File does not look like a Toptal SDR Engine export. Expected an envelope with { app, version, state } or a bare state with an accounts array.",
+    );
+  })();
+  const accountsRaw = Array.isArray(candidate.accounts)
+    ? candidate.accounts
+    : [];
+  // Run the imported state through the same migration logic used at load time
+  // by stuffing it into a temporary localStorage round-trip... actually no:
+  // do it inline so we don't clobber what the user already has on disk.
+  // Inline mirror of loadAppState's per-account merge:
+  const accounts: Account[] = accountsRaw.map((a) => {
+    const skeleton = createAccount();
+    const baseEngine = emptySoftwareEngine();
+    const loadedEngine = (a?.accountData?.softwareEngine ?? {}) as Partial<
+      SoftwareEngineState & { activeStep?: number | null }
+    >;
+    const engineActiveSteps = Array.isArray(loadedEngine.activeSteps)
+      ? loadedEngine.activeSteps
+      : typeof loadedEngine.activeStep === "number"
+        ? [loadedEngine.activeStep]
+        : [];
+    const legacyAccountData = (a?.accountData ?? {}) as Partial<
+      AccountData & { cadences?: AccountData["missions"] }
+    >;
+    const missions = Array.isArray(legacyAccountData.missions)
+      ? legacyAccountData.missions
+      : Array.isArray(legacyAccountData.cadences)
+        ? legacyAccountData.cadences
+        : [];
+    const baseProcurement = emptyProcurementEngine();
+    const loadedProcurement = (legacyAccountData.procurementEngine ??
+      {}) as Partial<ProcurementEngineState>;
+    const accountData: AccountData = {
+      ...emptyAccountData(),
+      ...legacyAccountData,
+      missions,
+      softwareEngine: {
+        ...baseEngine,
+        ...loadedEngine,
+        activeSteps: engineActiveSteps,
+        stack: {
+          ...baseEngine.stack,
+          ...(loadedEngine.stack ?? {}),
+        },
+      },
+      procurementEngine: {
+        ...baseProcurement,
+        ...loadedProcurement,
+        activeSteps: Array.isArray(loadedProcurement.activeSteps)
+          ? loadedProcurement.activeSteps
+          : [],
+        completedSteps: Array.isArray(loadedProcurement.completedSteps)
+          ? loadedProcurement.completedSteps
+          : [],
+        contactMap: Array.isArray(loadedProcurement.contactMap)
+          ? loadedProcurement.contactMap
+          : [],
+        priorities: Array.isArray(loadedProcurement.priorities)
+          ? loadedProcurement.priorities
+          : [],
+      },
+    };
+    const legacy = a as Partial<Account & { activeStep?: number | null }>;
+    const activeSteps = Array.isArray(legacy?.activeSteps)
+      ? legacy.activeSteps
+      : typeof legacy?.activeStep === "number"
+        ? [legacy.activeStep]
+        : [1];
+    return {
+      ...skeleton,
+      ...(a ?? {}),
+      activeSteps,
+      completedSteps: Array.isArray(a?.completedSteps) ? a.completedSteps : [],
+      accountData,
+    };
+  });
+  return {
+    accounts,
+    currentAccountId:
+      typeof candidate.currentAccountId === "string"
+        ? candidate.currentAccountId
+        : accounts[0]?.id ?? null,
+    isSidebarOpen:
+      typeof candidate.isSidebarOpen === "boolean"
+        ? candidate.isSidebarOpen
+        : true,
+    isArchivedSectionOpen:
+      typeof candidate.isArchivedSectionOpen === "boolean"
+        ? candidate.isArchivedSectionOpen
+        : false,
+    engineCollapsed: {
+      software: candidate.engineCollapsed?.software ?? false,
+      procurement: candidate.engineCollapsed?.procurement ?? false,
+    },
+  };
+}

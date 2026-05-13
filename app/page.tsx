@@ -55,7 +55,13 @@ import { LeaderProfile } from "@/components/engines/procurement/LeaderProfile";
 import { Priorities } from "@/components/engines/procurement/Priorities";
 import { ProcurementPitch } from "@/components/engines/procurement/ProcurementPitch";
 import { exportAccountToPdf } from "@/lib/pdf";
-import { createAccount, loadAppState, saveAppState } from "@/lib/storage";
+import {
+  createAccount,
+  exportAppStateJson,
+  loadAppState,
+  parseImportedAppState,
+  saveAppState,
+} from "@/lib/storage";
 import type { Account, AccountData, AppState, ToolId } from "@/lib/types";
 import type { StepProps, ToolProps } from "@/components/types";
 
@@ -382,6 +388,38 @@ export default function App() {
     exportAccountToPdf(currentAccount.accountData);
   };
 
+  const handleExportState = () => {
+    if (!state) return;
+    const json = exportAppStateJson(state);
+    const blob = new Blob([json], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    const stamp = new Date().toISOString().slice(0, 10);
+    a.href = url;
+    a.download = `toptal-sdr-engine-backup-${stamp}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleImportState = async (file: File) => {
+    const confirmed = window.confirm(
+      "Importing will replace your current accounts and state. Export your current state first if you want to keep it. Continue?",
+    );
+    if (!confirmed) return;
+    try {
+      const text = await file.text();
+      const imported = parseImportedAppState(text);
+      setState(imported);
+    } catch (err) {
+      console.error("Import error:", err);
+      alert(
+        `Could not import file: ${err instanceof Error ? err.message : "Unknown error"}`,
+      );
+    }
+  };
+
   const phase1Steps = steps.slice(0, 5);
   const phase2Steps = steps.slice(5);
 
@@ -399,6 +437,8 @@ export default function App() {
         onArchiveAccount={handleArchiveAccount}
         onDeleteAccount={handleDeleteAccount}
         onToggleArchivedSection={handleToggleArchivedSection}
+        onExportState={handleExportState}
+        onImportState={handleImportState}
       />
 
       <div className="flex-1 flex flex-col h-full overflow-y-auto relative bg-[#F9FAFB]">

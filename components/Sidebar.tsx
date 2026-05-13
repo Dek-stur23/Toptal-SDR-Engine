@@ -1,16 +1,18 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   Archive,
   ArchiveRestore,
   Building2,
   ChevronDown,
   ChevronRight,
+  Download,
   Edit2,
   MoreVertical,
   Plus,
   Trash2,
+  Upload,
   X,
 } from "lucide-react";
 import type { Account } from "@/lib/types";
@@ -27,6 +29,8 @@ interface Props {
   onArchiveAccount: (id: string) => void;
   onDeleteAccount: (id: string) => void;
   onToggleArchivedSection: () => void;
+  onExportState: () => void;
+  onImportState: (file: File) => void;
 }
 
 export function Sidebar({
@@ -41,10 +45,13 @@ export function Sidebar({
   onArchiveAccount,
   onDeleteAccount,
   onToggleArchivedSection,
+  onExportState,
+  onImportState,
 }: Props) {
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const activeAccounts = accounts.filter((a) => !a.isArchived);
   const archivedAccounts = accounts.filter((a) => a.isArchived);
@@ -233,6 +240,39 @@ export function Sidebar({
             )}
           </div>
         )}
+      </div>
+
+      <div className="border-t border-slate-800 p-3 space-y-2">
+        <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider px-1">
+          Backup
+        </p>
+        <div className="flex gap-2">
+          <button
+            onClick={onExportState}
+            className="flex-1 text-xs text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 px-3 py-2 rounded-md flex items-center justify-center gap-1.5 transition-colors"
+            title="Download all accounts and state as JSON"
+          >
+            <Download className="w-3.5 h-3.5" /> Export
+          </button>
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className="flex-1 text-xs text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 px-3 py-2 rounded-md flex items-center justify-center gap-1.5 transition-colors"
+            title="Restore from a previously exported JSON file"
+          >
+            <Upload className="w-3.5 h-3.5" /> Import
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="application/json,.json"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) onImportState(file);
+              if (fileInputRef.current) fileInputRef.current.value = "";
+            }}
+          />
+        </div>
       </div>
     </div>
   );

@@ -1,9 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { CheckCircle2, Copy, Loader2, Save, Sparkles } from "lucide-react";
+import { CheckCircle2, Copy, Flame, Loader2, Save, Sparkles } from "lucide-react";
 import type { StepProps } from "@/components/types";
-import type { ActivityLog } from "@/lib/types";
+import type { ActivityLog, HotlistProspect } from "@/lib/types";
 import { generateWithClaude } from "@/lib/api";
 import { DEFAULT_PROCUREMENT_PITCH_GEM } from "@/lib/gems";
 
@@ -23,6 +23,7 @@ export function ProcurementPitch({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [logged, setLogged] = useState(false);
+  const [addedToHotlist, setAddedToHotlist] = useState(false);
 
   const selected = engine.contactMap.find(
     (c) => c.id === engine.selectedContactId,
@@ -129,6 +130,33 @@ Draft the personalized procurement-leader email per the strict format.`;
     setTimeout(() => setLogged(false), 2000);
   };
 
+  const addToHotlist = () => {
+    if (!selected) return;
+    const { firstName, lastName } = splitName(selected.name);
+    const prospect: HotlistProspect = {
+      id: Date.now() + Math.floor(Math.random() * 1000),
+      firstName,
+      lastName,
+      title: selected.title,
+      company: accountData.companyName || "",
+      linkedinUrl: "",
+      priority: "high",
+      notes: `Added from Procurement Engine (${selected.function}).`,
+      dateAdded: new Date().toLocaleString([], {
+        dateStyle: "short",
+        timeStyle: "short",
+      }),
+      messages: [],
+      image: engine.leaderImage,
+    };
+    setAccountData((prev) => ({
+      ...prev,
+      hotlist: [prospect, ...(prev.hotlist || [])],
+    }));
+    setAddedToHotlist(true);
+    setTimeout(() => setAddedToHotlist(false), 2000);
+  };
+
   const focusIdx = engine.selectedPriorityIndex;
   const focusPriority =
     focusIdx !== null && focusIdx >= 0 && focusIdx < priorities.length
@@ -188,7 +216,21 @@ Draft the personalized procurement-leader email per the strict format.`;
           <pre className="text-sm text-slate-800 whitespace-pre-wrap font-sans leading-relaxed bg-white p-3 rounded border border-blue-100">
             {engine.craftedMessage}
           </pre>
-          <div className="pt-2 flex justify-end gap-3 items-center">
+          <div className="pt-2 flex justify-end gap-3 items-center flex-wrap">
+            <button
+              onClick={addToHotlist}
+              className="text-orange-700 hover:text-orange-900 font-medium text-sm flex items-center gap-1"
+            >
+              {addedToHotlist ? (
+                <>
+                  <CheckCircle2 className="w-4 h-4" /> Added to Hotlist
+                </>
+              ) : (
+                <>
+                  <Flame className="w-4 h-4" /> Add to Hotlist
+                </>
+              )}
+            </button>
             <button
               onClick={logMessage}
               className="text-blue-700 hover:text-blue-900 font-medium text-sm flex items-center gap-1"

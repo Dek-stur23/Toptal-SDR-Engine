@@ -6,6 +6,7 @@ import {
   Briefcase,
   CheckCircle2,
   Circle,
+  Flame,
   Image as ImageIcon,
   Layers,
   Lightbulb,
@@ -19,7 +20,7 @@ import {
   Zap,
 } from "lucide-react";
 import type { ToolProps } from "@/components/types";
-import type { IcpIntelData } from "@/lib/types";
+import type { HotlistProspect, IcpIntelData } from "@/lib/types";
 import { generateWithClaude } from "@/lib/api";
 import { DEFAULT_ICP_INTEL_GEM } from "@/lib/gems";
 
@@ -45,8 +46,35 @@ export function IcpIntel({
   const [isExtracting, setIsExtracting] = useState(false);
   const [focusEvidence, setFocusEvidence] = useState<Set<number>>(new Set());
   const [focusInferences, setFocusInferences] = useState<Set<number>>(new Set());
+  const [addedToHotlist, setAddedToHotlist] = useState(false);
 
   const latestResult = accountData.icpIntelResult;
+
+  const addLatestToHotlist = () => {
+    if (!latestResult) return;
+    const prospect: HotlistProspect = {
+      id: Date.now() + Math.floor(Math.random() * 1000),
+      firstName: latestResult.firstName,
+      lastName: latestResult.lastName,
+      title: latestResult.title,
+      company: latestResult.company || accountData.companyName || "",
+      linkedinUrl: "",
+      priority: "high",
+      notes: `Added from ICP Intel research. Primary focus: ${latestResult.result.executiveSummary.primaryFocus}`,
+      dateAdded: new Date().toLocaleString([], {
+        dateStyle: "short",
+        timeStyle: "short",
+      }),
+      messages: [],
+      image: null,
+    };
+    setAccountData((prev) => ({
+      ...prev,
+      hotlist: [prospect, ...(prev.hotlist || [])],
+    }));
+    setAddedToHotlist(true);
+    setTimeout(() => setAddedToHotlist(false), 2000);
+  };
 
   const toggleFocusEvidence = (i: number) => {
     setFocusEvidence((prev) => {
@@ -592,8 +620,22 @@ export function IcpIntel({
                 </div>
               </div>
 
-              {setActiveActionTool && (
-                <div className="pt-2 border-t border-slate-100">
+              <div className="pt-2 border-t border-slate-100 flex flex-wrap items-center gap-3">
+                <button
+                  onClick={addLatestToHotlist}
+                  className="text-xs font-semibold text-orange-700 hover:text-orange-900 flex items-center gap-1.5 transition-colors bg-orange-50 hover:bg-orange-100 px-3 py-2 rounded-lg w-fit shadow-sm"
+                >
+                  {addedToHotlist ? (
+                    <>
+                      <CheckCircle2 className="w-3.5 h-3.5" /> Added to Hotlist
+                    </>
+                  ) : (
+                    <>
+                      <Flame className="w-3.5 h-3.5" /> Add to Hotlist
+                    </>
+                  )}
+                </button>
+                {setActiveActionTool && (
                   <button
                     onClick={() => {
                       const confirmedStr =
@@ -624,8 +666,8 @@ export function IcpIntel({
                       </span>
                     )}
                   </button>
-                </div>
-              )}
+                )}
+              </div>
             </div>
           </div>
         </div>

@@ -2,12 +2,15 @@
 
 import { useState } from "react";
 import {
+  CheckCircle2,
   ChevronRight,
+  Flame,
   Image as ImageIcon,
   Loader2,
   Wand2,
 } from "lucide-react";
 import type { StepProps } from "@/components/types";
+import type { HotlistProspect } from "@/lib/types";
 import { generateWithClaude } from "@/lib/api";
 import { DEFAULT_SOFTWARE_CONTACT_EXTRACT_GEM } from "@/lib/gems";
 
@@ -35,6 +38,40 @@ export function UploadContact({
   const [liImage, setLiImage] = useState<string | null>(contact.liImage);
   const [extracting, setExtracting] = useState(false);
   const [error, setError] = useState("");
+  const [addedToHotlist, setAddedToHotlist] = useState(false);
+
+  const addToHotlist = () => {
+    const fn = firstName.trim();
+    const ln = lastName.trim();
+    const ttl = title.trim();
+    const co = company.trim();
+    if (!fn && !ln && !co) {
+      setError("Provide at least a name or company before adding to the hotlist.");
+      return;
+    }
+    const prospect: HotlistProspect = {
+      id: Date.now() + Math.floor(Math.random() * 1000),
+      firstName: fn,
+      lastName: ln,
+      title: ttl,
+      company: co || accountData.companyName || "",
+      linkedinUrl: "",
+      priority: "high",
+      notes: "Added from Software Engine - Upload Contact.",
+      dateAdded: new Date().toLocaleString([], {
+        dateStyle: "short",
+        timeStyle: "short",
+      }),
+      messages: [],
+      image: liImage,
+    };
+    setAccountData((prev) => ({
+      ...prev,
+      hotlist: [prospect, ...(prev.hotlist || [])],
+    }));
+    setAddedToHotlist(true);
+    setTimeout(() => setAddedToHotlist(false), 2000);
+  };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -217,7 +254,21 @@ export function UploadContact({
 
       {error && <p className="text-red-500 text-sm">{error}</p>}
 
-      <div className="pt-2 flex justify-end">
+      <div className="pt-2 flex justify-end items-center gap-3">
+        <button
+          onClick={addToHotlist}
+          className="text-orange-700 hover:text-orange-900 font-medium text-sm flex items-center gap-1"
+        >
+          {addedToHotlist ? (
+            <>
+              <CheckCircle2 className="w-4 h-4" /> Added to Hotlist
+            </>
+          ) : (
+            <>
+              <Flame className="w-4 h-4" /> Add to Hotlist
+            </>
+          )}
+        </button>
         <button
           onClick={handleSave}
           className="text-blue-700 hover:text-blue-900 font-medium text-sm flex items-center gap-1"

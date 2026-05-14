@@ -105,6 +105,14 @@ export function emptyProductEngine(): ProductEngineState {
     selectedProduct: "",
     analysis: "",
     expertProfile: "",
+    contact: {
+      firstName: "",
+      lastName: "",
+      title: "",
+      company: "",
+      linkedinUrl: "",
+      image: null,
+    },
   };
 }
 
@@ -241,6 +249,10 @@ export function loadAppState(): AppState {
             completedSteps: Array.isArray(loadedProduct.completedSteps)
               ? loadedProduct.completedSteps
               : [],
+            contact: {
+              ...baseProduct.contact,
+              ...(loadedProduct.contact ?? {}),
+            },
           },
         };
         const legacy = a as Partial<Account & { activeStep?: number | null }>;
@@ -403,6 +415,10 @@ export function parseImportedAppState(json: string): AppState {
         completedSteps: Array.isArray(loadedProduct.completedSteps)
           ? loadedProduct.completedSteps
           : [],
+        contact: {
+          ...baseProduct.contact,
+          ...(loadedProduct.contact ?? {}),
+        },
       },
     };
     const legacy = a as Partial<Account & { activeStep?: number | null }>;

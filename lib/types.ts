@@ -337,12 +337,22 @@ export interface ProcurementEngineState {
   craftedMessage: string;
 }
 
+export interface ProductEngineContact {
+  firstName: string;
+  lastName: string;
+  title: string;
+  company: string;
+  linkedinUrl: string;
+  image: string | null;
+}
+
 export interface ProductEngineState {
   activeSteps: number[];
   completedSteps: number[];
   selectedProduct: string;
   analysis: string;
   expertProfile: string;
+  contact: ProductEngineContact;
 }
 
 export interface AccountData {

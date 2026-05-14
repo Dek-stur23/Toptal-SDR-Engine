@@ -8,7 +8,11 @@ import type {
   HotlistPriority,
   HotlistProspect,
 } from "./types";
-import type { ProcurementEngineState, SoftwareEngineState } from "./types";
+import type {
+  ProcurementEngineState,
+  ProductEngineState,
+  SoftwareEngineState,
+} from "./types";
 
 const ROOT_KEY = "toptal-sdr-engine::app";
 
@@ -94,6 +98,13 @@ export function emptyProcurementEngine(): ProcurementEngineState {
   };
 }
 
+export function emptyProductEngine(): ProductEngineState {
+  return {
+    activeSteps: [],
+    completedSteps: [],
+  };
+}
+
 export function emptyAccountData(): AccountData {
   return {
     accountStatus: "",
@@ -122,6 +133,7 @@ export function emptyAccountData(): AccountData {
     productMap: null,
     softwareEngine: emptySoftwareEngine(),
     procurementEngine: emptyProcurementEngine(),
+    productEngine: emptyProductEngine(),
   };
 }
 
@@ -144,7 +156,7 @@ function emptyApp(): AppState {
     currentAccountId: null,
     isSidebarOpen: true,
     isArchivedSectionOpen: false,
-    engineCollapsed: { software: false, procurement: false },
+    engineCollapsed: { software: false, procurement: false, product: false },
   };
 }
 
@@ -183,6 +195,9 @@ export function loadAppState(): AppState {
         const baseProcurement = emptyProcurementEngine();
         const loadedProcurement = (legacyAccountData.procurementEngine ??
           {}) as Partial<ProcurementEngineState>;
+        const baseProduct = emptyProductEngine();
+        const loadedProduct = (legacyAccountData.productEngine ??
+          {}) as Partial<ProductEngineState>;
         const accountData = {
           ...emptyAccountData(),
           ...legacyAccountData,
@@ -214,6 +229,16 @@ export function loadAppState(): AppState {
               ? loadedProcurement.priorities
               : [],
           },
+          productEngine: {
+            ...baseProduct,
+            ...loadedProduct,
+            activeSteps: Array.isArray(loadedProduct.activeSteps)
+              ? loadedProduct.activeSteps
+              : [],
+            completedSteps: Array.isArray(loadedProduct.completedSteps)
+              ? loadedProduct.completedSteps
+              : [],
+          },
         };
         const legacy = a as Partial<Account & { activeStep?: number | null }>;
         const activeSteps = Array.isArray(legacy?.activeSteps)
@@ -237,6 +262,7 @@ export function loadAppState(): AppState {
       engineCollapsed: {
         software: parsed.engineCollapsed?.software ?? false,
         procurement: parsed.engineCollapsed?.procurement ?? false,
+        product: parsed.engineCollapsed?.product ?? false,
       },
     };
   } catch {
@@ -331,6 +357,9 @@ export function parseImportedAppState(json: string): AppState {
     const baseProcurement = emptyProcurementEngine();
     const loadedProcurement = (legacyAccountData.procurementEngine ??
       {}) as Partial<ProcurementEngineState>;
+    const baseProduct = emptyProductEngine();
+    const loadedProduct = (legacyAccountData.productEngine ??
+      {}) as Partial<ProductEngineState>;
     const accountData: AccountData = {
       ...emptyAccountData(),
       ...legacyAccountData,
@@ -360,6 +389,16 @@ export function parseImportedAppState(json: string): AppState {
           : [],
         priorities: Array.isArray(loadedProcurement.priorities)
           ? loadedProcurement.priorities
+          : [],
+      },
+      productEngine: {
+        ...baseProduct,
+        ...loadedProduct,
+        activeSteps: Array.isArray(loadedProduct.activeSteps)
+          ? loadedProduct.activeSteps
+          : [],
+        completedSteps: Array.isArray(loadedProduct.completedSteps)
+          ? loadedProduct.completedSteps
           : [],
       },
     };
@@ -394,6 +433,7 @@ export function parseImportedAppState(json: string): AppState {
     engineCollapsed: {
       software: candidate.engineCollapsed?.software ?? false,
       procurement: candidate.engineCollapsed?.procurement ?? false,
+      product: candidate.engineCollapsed?.product ?? false,
     },
   };
 }

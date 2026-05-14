@@ -337,6 +337,11 @@ export interface ProcurementEngineState {
   craftedMessage: string;
 }
 
+export interface ProductEngineState {
+  activeSteps: number[];
+  completedSteps: number[];
+}
+
 export interface AccountData {
   accountStatus: AccountStatus;
   companyName: string;
@@ -364,6 +369,7 @@ export interface AccountData {
   productMap: ProductMap | null;
   softwareEngine: SoftwareEngineState;
   procurementEngine: ProcurementEngineState;
+  productEngine: ProductEngineState;
 }
 
 export interface Account {
@@ -382,5 +388,9 @@ export interface AppState {
   currentAccountId: string | null;
   isSidebarOpen: boolean;
   isArchivedSectionOpen: boolean;
-  engineCollapsed: { software: boolean; procurement: boolean };
+  engineCollapsed: {
+    software: boolean;
+    procurement: boolean;
+    product: boolean;
+  };
 }

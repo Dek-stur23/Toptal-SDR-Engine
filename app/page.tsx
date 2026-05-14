@@ -18,6 +18,7 @@ import {
   MessageSquare,
   Network,
   Newspaper,
+  Package,
   Rocket,
   Search,
   Send,
@@ -106,6 +107,8 @@ const procurementEngineSteps: StepDef[] = [
   { id: 3, title: "Priorities & Pain", icon: Target, Component: Priorities },
   { id: 4, title: "Procurement Pitch", icon: MessageSquare, Component: ProcurementPitch },
 ];
+
+const productEngineSteps: StepDef[] = [];
 
 function scrollAnchorIntoView(anchorId: string) {
   if (typeof window === "undefined") return;
@@ -303,6 +306,47 @@ export default function App() {
     }
   };
 
+  const toggleProductEngineStep = (stepId: number) => {
+    updateAccount(currentAccount.id, (acc) => {
+      const engine = acc.accountData.productEngine;
+      const next = engine.activeSteps.includes(stepId)
+        ? engine.activeSteps.filter((s) => s !== stepId)
+        : [...engine.activeSteps, stepId];
+      return {
+        ...acc,
+        accountData: {
+          ...acc.accountData,
+          productEngine: { ...engine, activeSteps: next },
+        },
+      };
+    });
+  };
+
+  const handleProductEngineStepComplete = (stepId: number) => {
+    updateAccount(currentAccount.id, (acc) => {
+      const engine = acc.accountData.productEngine;
+      const completedSteps = engine.completedSteps.includes(stepId)
+        ? engine.completedSteps
+        : [...engine.completedSteps, stepId];
+      const nextId = stepId + 1;
+      const withoutCurrent = engine.activeSteps.filter((s) => s !== stepId);
+      const activeSteps =
+        nextId <= productEngineSteps.length && !withoutCurrent.includes(nextId)
+          ? [...withoutCurrent, nextId]
+          : withoutCurrent;
+      return {
+        ...acc,
+        accountData: {
+          ...acc.accountData,
+          productEngine: { ...engine, completedSteps, activeSteps },
+        },
+      };
+    });
+    if (stepId + 1 <= productEngineSteps.length) {
+      scrollAnchorIntoView(`product-step-${stepId + 1}`);
+    }
+  };
+
   const handleToolToggle = (toolId: ToolId) => {
     updateAccount(currentAccount.id, (acc) => ({
       ...acc,
@@ -369,7 +413,9 @@ export default function App() {
     );
   };
 
-  const toggleEngineCollapsed = (key: "software" | "procurement") => {
+  const toggleEngineCollapsed = (
+    key: "software" | "procurement" | "product",
+  ) => {
     setState((prev) =>
       prev
         ? {
@@ -702,6 +748,83 @@ export default function App() {
                             })}
                           </div>
                         </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
+              {(() => {
+                const productCollapsed = state.engineCollapsed.product;
+                const productEngine = currentAccount.accountData.productEngine;
+                const productDoneCount = productEngine.completedSteps.filter(
+                  (id) => id >= 1 && id <= productEngineSteps.length,
+                ).length;
+                return (
+                  <div className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden mt-6">
+                    <button
+                      onClick={() => toggleEngineCollapsed("product")}
+                      className={`w-full flex items-center gap-3 p-6 text-left hover:bg-slate-50/50 transition-colors ${productCollapsed ? "" : "border-b border-gray-100"}`}
+                    >
+                      <div className="bg-purple-600 text-white p-2 rounded-lg">
+                        <Package className="w-5 h-5" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[10px] font-bold text-purple-700 uppercase tracking-widest">
+                          Engine
+                        </p>
+                        <h3 className="text-lg font-semibold text-slate-900">
+                          Product Engine
+                        </h3>
+                      </div>
+                      <span className="text-xs text-slate-500 font-medium mr-2 hidden sm:inline">
+                        {productDoneCount} / {productEngineSteps.length}
+                      </span>
+                      {productCollapsed ? (
+                        <ChevronDown className="w-5 h-5 text-slate-400 shrink-0" />
+                      ) : (
+                        <ChevronUp className="w-5 h-5 text-slate-400 shrink-0" />
+                      )}
+                    </button>
+
+                    {!productCollapsed && (
+                      <div className="p-6 space-y-6">
+                        {productEngineSteps.length === 0 ? (
+                          <div className="text-center py-8 text-slate-400 text-sm italic">
+                            No steps configured yet — coming soon.
+                          </div>
+                        ) : (
+                          <div className="relative">
+                            <div className="absolute left-[23px] top-4 bottom-8 w-[2px] bg-gray-200 rounded-full" />
+                            <div className="space-y-6">
+                              {productEngineSteps.map((step) => {
+                                const isCompleted = productEngine.completedSteps.includes(step.id);
+                                const isActive = productEngine.activeSteps.includes(step.id);
+                                return (
+                                  <StepCard
+                                    key={step.id}
+                                    anchorId={`product-step-${step.id}`}
+                                    stepNumber={step.id}
+                                    title={step.title}
+                                    Icon={step.icon}
+                                    isCompleted={isCompleted}
+                                    isActive={isActive}
+                                    isLocked={false}
+                                    onToggle={() => toggleProductEngineStep(step.id)}
+                                  >
+                                    <step.Component
+                                      accountData={currentAccount.accountData}
+                                      setAccountData={setAccountData}
+                                      onComplete={() =>
+                                        handleProductEngineStepComplete(step.id)
+                                      }
+                                    />
+                                  </StepCard>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>

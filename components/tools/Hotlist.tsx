@@ -341,6 +341,26 @@ export function Hotlist({ accountData, setAccountData }: ToolProps) {
     }));
   };
 
+  const updateMessage = (
+    prospectId: number,
+    messageId: number,
+    patch: Partial<HotlistMessage>,
+  ) => {
+    setAccountData((prev) => ({
+      ...prev,
+      hotlist: (prev.hotlist || []).map((p) =>
+        p.id === prospectId
+          ? {
+              ...p,
+              messages: (p.messages || []).map((m) =>
+                m.id === messageId ? { ...m, ...patch } : m,
+              ),
+            }
+          : p,
+      ),
+    }));
+  };
+
   const handleBulkScreenshot = (file: File) => {
     setBulkLoading(true);
     setBulkError("");
@@ -835,6 +855,9 @@ export function Hotlist({ accountData, setAccountData }: ToolProps) {
                 onRemove={() => removeProspect(p.id)}
                 onAddMessage={(m) => addMessage(p.id, m)}
                 onRemoveMessage={(mid) => removeMessage(p.id, mid)}
+                onUpdateMessage={(mid, patch) =>
+                  updateMessage(p.id, mid, patch)
+                }
                 onOpenChat={() => setChatProspectId(p.id)}
               />
             ))}
@@ -914,6 +937,7 @@ function ProspectCard({
   onRemove,
   onAddMessage,
   onRemoveMessage,
+  onUpdateMessage,
   onOpenChat,
 }: {
   prospect: HotlistProspect;
@@ -921,6 +945,7 @@ function ProspectCard({
   onRemove: () => void;
   onAddMessage: (m: HotlistMessage) => void;
   onRemoveMessage: (id: number) => void;
+  onUpdateMessage: (id: number, patch: Partial<HotlistMessage>) => void;
   onOpenChat: () => void;
 }) {
   const [showMessages, setShowMessages] = useState(false);
@@ -1366,16 +1391,22 @@ function ProspectCard({
                                   <Copy className="w-3 h-3" />
                                 </button>
                               </div>
-                              {m.response && (
-                                <div>
-                                  <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider block mb-1">
-                                    Response
-                                  </span>
-                                  <p className="text-sm text-slate-700 whitespace-pre-wrap bg-emerald-50/40 border border-emerald-100 p-2 rounded">
-                                    {m.response}
-                                  </p>
-                                </div>
-                              )}
+                              <div>
+                                <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider block mb-1">
+                                  Response
+                                </span>
+                                <textarea
+                                  value={m.response}
+                                  onChange={(e) =>
+                                    onUpdateMessage(m.id, {
+                                      response: e.target.value,
+                                    })
+                                  }
+                                  placeholder="Add or update the response received from this contact..."
+                                  className="w-full text-sm text-slate-700 bg-emerald-50/40 border border-emerald-100 focus:border-emerald-300 focus:ring-2 focus:ring-emerald-200 outline-none p-2 rounded resize-y custom-scrollbar shadow-sm"
+                                  rows={2}
+                                />
+                              </div>
                             </div>
                           )}
                         </div>

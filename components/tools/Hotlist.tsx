@@ -1,6 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import {
   Activity,
   Calendar,
@@ -14,19 +16,27 @@ import {
   MessageCircle,
   Phone,
   Plus,
+  Save,
   Send,
+  Sparkles,
   Trash2,
   Wand2,
+  X,
 } from "lucide-react";
 import type { ToolProps } from "@/components/types";
+import type { ChatMessage as ChatTurn } from "@/lib/api";
 import type {
+  AccountData,
   HotlistChannel,
   HotlistMessage,
   HotlistPriority,
   HotlistProspect,
 } from "@/lib/types";
-import { generateWithClaude } from "@/lib/api";
-import { DEFAULT_HOTLIST_AUTOFILL_GEM } from "@/lib/gems";
+import { generateWithClaude, streamChatTurn } from "@/lib/api";
+import {
+  DEFAULT_HOTLIST_AUTOFILL_GEM,
+  DEFAULT_HOTLIST_NEXT_STEP_GEM,
+} from "@/lib/gems";
 
 interface ExtractedFields {
   firstName: string;
@@ -75,6 +85,8 @@ export function Hotlist({ accountData, setAccountData }: ToolProps) {
   const [booleanCopied, setBooleanCopied] = useState(false);
 
   const hotlist = accountData.hotlist || [];
+  const [chatProspectId, setChatProspectId] = useState<number | null>(null);
+  const chatProspect = hotlist.find((p) => p.id === chatProspectId) ?? null;
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -392,6 +404,7 @@ export function Hotlist({ accountData, setAccountData }: ToolProps) {
                 onRemove={() => removeProspect(p.id)}
                 onAddMessage={(m) => addMessage(p.id, m)}
                 onRemoveMessage={(mid) => removeMessage(p.id, mid)}
+                onOpenChat={() => setChatProspectId(p.id)}
               />
             ))}
           </div>
@@ -439,6 +452,27 @@ export function Hotlist({ accountData, setAccountData }: ToolProps) {
           </div>
         );
       })()}
+
+      {chatProspect && (
+        <NextStepChatModal
+          prospect={chatProspect}
+          accountData={accountData}
+          onClose={() => setChatProspectId(null)}
+          onSaveAsDraft={(body) =>
+            addMessage(chatProspect.id, {
+              id: genId(),
+              channel: "Other",
+              subject: "AI-recommended draft",
+              body,
+              date: new Date().toLocaleString([], {
+                dateStyle: "short",
+                timeStyle: "short",
+              }),
+              response: "",
+            })
+          }
+        />
+      )}
     </div>
   );
 }
@@ -449,12 +483,14 @@ function ProspectCard({
   onRemove,
   onAddMessage,
   onRemoveMessage,
+  onOpenChat,
 }: {
   prospect: HotlistProspect;
   onUpdate: (patch: Partial<HotlistProspect>) => void;
   onRemove: () => void;
   onAddMessage: (m: HotlistMessage) => void;
   onRemoveMessage: (id: number) => void;
+  onOpenChat: () => void;
 }) {
   const [showMessages, setShowMessages] = useState(false);
   const [draftChannel, setDraftChannel] = useState<HotlistChannel>("Email");
@@ -561,6 +597,13 @@ function ProspectCard({
           </a>
         </div>
       )}
+
+      <button
+        onClick={onOpenChat}
+        className="w-full text-xs font-semibold text-orange-700 hover:text-white bg-orange-50 hover:bg-orange-600 border border-orange-200 hover:border-orange-600 px-3 py-2 rounded-md transition-colors flex items-center justify-center gap-1.5"
+      >
+        <Sparkles className="w-3.5 h-3.5" /> Recommend Next Step
+      </button>
 
       <div className="border-t border-slate-100 pt-2">
         <label className="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1">
@@ -747,6 +790,324 @@ function ProspectCard({
           </button>
         </div>
       )}
+    </div>
+  );
+}
+
+function buildProspectContext(
+  prospect: HotlistProspect,
+  account: AccountData,
+): string {
+  const fullName = `${prospect.firstName} ${prospect.lastName}`.trim() || "Unknown";
+  const lines: string[] = [];
+  lines.push(`Prospect: ${fullName}`);
+  if (prospect.title) lines.push(`Title: ${prospect.title}`);
+  if (prospect.company) lines.push(`Company: ${prospect.company}`);
+  if (prospect.linkedinUrl) lines.push(`LinkedIn: ${prospect.linkedinUrl}`);
+  lines.push(`Priority on user's hotlist: ${prospect.priority}`);
+  if (prospect.dateAdded)
+    lines.push(`Added to hotlist on: ${prospect.dateAdded}`);
+  if (prospect.notes.trim()) {
+    lines.push(`\nWhy they're hot (user's notes):\n${prospect.notes.trim()}`);
+  }
+
+  const msgs = prospect.messages ?? [];
+  if (msgs.length === 0) {
+    lines.push(`\nMessage history: NO PRIOR CONTACT YET.`);
+  } else {
+    lines.push(`\nMessage history (most recent first, ${msgs.length} total):`);
+    msgs.forEach((m, i) => {
+      lines.push(
+        `  ${i + 1}. ${m.date || "(no date)"} — ${m.channel}${m.subject ? ` — subj: "${m.subject}"` : ""}`,
+      );
+      if (m.body) {
+        const trimmed =
+          m.body.length > 400 ? m.body.slice(0, 400) + "…" : m.body;
+        lines.push(`     Body: ${trimmed.replace(/\n/g, " ")}`);
+      }
+      if (m.response.trim()) {
+        lines.push(`     Response received: ${m.response.trim()}`);
+      } else {
+        lines.push(`     Response received: (none logged)`);
+      }
+    });
+  }
+
+  const acctLines: string[] = [];
+  if (account.companyName) acctLines.push(`Account: ${account.companyName}`);
+  if (account.accountStatus)
+    acctLines.push(`Toptal relationship status: ${account.accountStatus}`);
+  if (account.aiResearch?.prioritiesAndChallenges) {
+    acctLines.push(
+      `Company priorities & challenges:\n${account.aiResearch.prioritiesAndChallenges}`,
+    );
+  }
+  if (account.recentNewsResult?.data?.executiveSummary) {
+    acctLines.push(
+      `Recent news executive summary:\n${account.recentNewsResult.data.executiveSummary}`,
+    );
+  }
+  const initiatives = account.initiativeResearch?.initiatives ?? [];
+  if (initiatives.length > 0) {
+    acctLines.push(
+      `Active initiatives at the account:\n${initiatives
+        .slice(0, 3)
+        .map((i) => `- ${i.name}: ${i.analysis ?? ""}`)
+        .join("\n")}`,
+    );
+  }
+  if (acctLines.length > 0) {
+    lines.push(`\nAccount intel:\n${acctLines.join("\n")}`);
+  }
+
+  lines.push(`\nToday's date: ${new Date().toDateString()}`);
+  return lines.join("\n");
+}
+
+function NextStepChatModal({
+  prospect,
+  accountData,
+  onClose,
+  onSaveAsDraft,
+}: {
+  prospect: HotlistProspect;
+  accountData: AccountData;
+  onClose: () => void;
+  onSaveAsDraft: (body: string) => void;
+}) {
+  const [messages, setMessages] = useState<ChatTurn[]>([]);
+  const [streamingText, setStreamingText] = useState("");
+  const [streaming, setStreaming] = useState(false);
+  const [input, setInput] = useState("");
+  const [error, setError] = useState("");
+  const [savedIds, setSavedIds] = useState<Set<number>>(new Set());
+  const initialRanRef = useRef(false);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+
+  const systemPrompt = useMemo(() => {
+    const context = buildProspectContext(prospect, accountData);
+    return `${DEFAULT_HOTLIST_NEXT_STEP_GEM}\n\n=== PROSPECT + ACCOUNT CONTEXT ===\n${context}`;
+  }, [prospect, accountData]);
+
+  const sendTurn = async (text: string, history: ChatTurn[]) => {
+    setError("");
+    setStreamingText("");
+    setStreaming(true);
+    const next: ChatTurn[] = [...history, { role: "user", content: text }];
+    try {
+      const fullText = await streamChatTurn({
+        system: systemPrompt,
+        messages: next,
+        onDelta: (delta) => {
+          setStreamingText((prev) => prev + delta);
+        },
+      });
+      setMessages([...next, { role: "assistant", content: fullText }]);
+      setStreamingText("");
+    } catch (err) {
+      console.error("Next-step chat error:", err);
+      setError(err instanceof Error ? err.message : "Failed.");
+      setMessages(next);
+      setStreamingText("");
+    } finally {
+      setStreaming(false);
+    }
+  };
+
+  // Pre-stream the initial recommendation on mount.
+  useEffect(() => {
+    if (initialRanRef.current) return;
+    initialRanRef.current = true;
+    sendTurn(
+      "Recommend the next outreach step to book a meeting with this prospect. Give me 2-3 ranked options grounded in the data above.",
+      [],
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Auto-scroll to bottom whenever new content arrives.
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [messages, streamingText]);
+
+  const handleSend = () => {
+    const text = input.trim();
+    if (!text || streaming) return;
+    if (messages.length >= 20) {
+      setError(
+        "This conversation is getting long. Close and start fresh to keep responses fast.",
+      );
+      return;
+    }
+    setInput("");
+    sendTurn(text, messages);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
+    }
+  };
+
+  const saveAsDraft = (index: number, body: string) => {
+    onSaveAsDraft(body);
+    setSavedIds((prev) => new Set(prev).add(index));
+  };
+
+  const prospectFullName =
+    `${prospect.firstName} ${prospect.lastName}`.trim() || "this prospect";
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      onClick={onClose}
+      className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 animate-in fade-in"
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="bg-white rounded-xl w-full max-w-3xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden"
+      >
+        <header className="flex items-center justify-between gap-3 px-5 py-4 border-b border-slate-200">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="bg-orange-100 text-orange-700 p-1.5 rounded-md shrink-0">
+              <Sparkles className="w-4 h-4" />
+            </div>
+            <div className="min-w-0">
+              <h3 className="font-semibold text-slate-900 text-sm truncate">
+                Next Step for {prospectFullName}
+              </h3>
+              <p className="text-xs text-slate-500 truncate">
+                MeetingCloser Pro — ephemeral chat, closes on dismissal
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="text-slate-400 hover:text-slate-700 p-1.5 hover:bg-slate-100 rounded-md transition-colors shrink-0"
+            aria-label="Close"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </header>
+
+        <div
+          ref={scrollRef}
+          className="flex-1 overflow-y-auto px-5 py-4 space-y-4 bg-slate-50/50 custom-scrollbar"
+        >
+          {messages.map((m, i) => (
+            <ChatBubble
+              key={i}
+              role={m.role}
+              content={m.content}
+              showSaveAsDraft={m.role === "assistant"}
+              saved={savedIds.has(i)}
+              onSaveAsDraft={() => saveAsDraft(i, m.content)}
+            />
+          ))}
+          {streaming && (
+            <ChatBubble role="assistant" content={streamingText} streaming />
+          )}
+          {error && (
+            <div className="text-red-600 text-sm bg-red-50 border border-red-200 rounded-md p-2">
+              {error}
+            </div>
+          )}
+        </div>
+
+        <footer className="border-t border-slate-200 p-3 space-y-2 bg-white">
+          <div className="flex gap-2">
+            <textarea
+              className="flex-1 p-2 text-sm text-gray-800 border border-gray-300 rounded-md focus:ring-2 focus:ring-orange-500 outline-none resize-none shadow-sm"
+              rows={2}
+              placeholder='Ask a follow-up (e.g. "draft the LinkedIn version", "shorter and more direct")'
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              disabled={streaming}
+            />
+            <button
+              onClick={handleSend}
+              disabled={streaming || !input.trim()}
+              className="self-end bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5 shadow-sm"
+            >
+              {streaming ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Send className="w-4 h-4" />
+              )}
+              Send
+            </button>
+          </div>
+          <p className="text-[10px] text-slate-400">
+            Press Enter to send. Shift+Enter for a new line.
+          </p>
+        </footer>
+      </div>
+    </div>
+  );
+}
+
+function ChatBubble({
+  role,
+  content,
+  streaming = false,
+  showSaveAsDraft = false,
+  saved = false,
+  onSaveAsDraft,
+}: {
+  role: "user" | "assistant";
+  content: string;
+  streaming?: boolean;
+  showSaveAsDraft?: boolean;
+  saved?: boolean;
+  onSaveAsDraft?: () => void;
+}) {
+  if (role === "user") {
+    return (
+      <div className="flex justify-end">
+        <div className="max-w-[80%] bg-orange-600 text-white px-3 py-2 rounded-lg text-sm whitespace-pre-wrap shadow-sm">
+          {content}
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className="flex justify-start">
+      <div className="max-w-[90%] bg-white border border-slate-200 px-3 py-2 rounded-lg shadow-sm">
+        <div className="prose prose-sm prose-slate max-w-none prose-headings:font-semibold prose-h1:text-base prose-h2:text-sm prose-h3:text-sm prose-p:my-1.5 prose-li:my-0.5 prose-a:text-blue-600">
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>
+            {content || (streaming ? "Thinking…" : "")}
+          </ReactMarkdown>
+        </div>
+        {streaming && (
+          <div className="mt-1 text-[10px] text-slate-400 flex items-center gap-1">
+            <Loader2 className="w-3 h-3 animate-spin" /> streaming…
+          </div>
+        )}
+        {showSaveAsDraft && !streaming && content.trim().length > 0 && (
+          <div className="mt-2 pt-2 border-t border-slate-100 flex justify-end">
+            <button
+              onClick={onSaveAsDraft}
+              disabled={saved}
+              className="text-[11px] font-semibold text-orange-700 hover:text-orange-900 flex items-center gap-1 disabled:text-emerald-600 disabled:cursor-default"
+            >
+              {saved ? (
+                <>
+                  <Save className="w-3 h-3" /> Saved to prospect
+                </>
+              ) : (
+                <>
+                  <Save className="w-3 h-3" /> Save as draft
+                </>
+              )}
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

@@ -9,6 +9,7 @@ import {
   ChevronDown,
   ChevronRight,
   Copy,
+  Edit2,
   Flame,
   Image as ImageIcon,
   Loader2,
@@ -499,6 +500,48 @@ function ProspectCard({
   const [draftResponse, setDraftResponse] = useState("");
   const [expandedMsg, setExpandedMsg] = useState<Record<number, boolean>>({});
   const [viewingImage, setViewingImage] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState<HotlistProspect>(prospect);
+
+  // Keep draft in sync with the prospect when not actively editing.
+  // (Prevents stale draft if the prospect changes underneath, e.g. via
+  // a message log change reflowing the parent state.)
+  useEffect(() => {
+    if (!editing) setDraft(prospect);
+  }, [prospect, editing]);
+
+  const startEdit = () => {
+    setDraft(prospect);
+    setEditing(true);
+  };
+  const cancelEdit = () => {
+    setDraft(prospect);
+    setEditing(false);
+  };
+  const saveEdit = () => {
+    onUpdate({
+      firstName: draft.firstName.trim(),
+      lastName: draft.lastName.trim(),
+      title: draft.title.trim(),
+      company: draft.company.trim(),
+      linkedinUrl: draft.linkedinUrl.trim(),
+      priority: draft.priority,
+      image: draft.image,
+    });
+    setEditing(false);
+  };
+
+  const handleEditImage = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      if (typeof reader.result === "string") {
+        setDraft((prev) => ({ ...prev, image: reader.result as string }));
+      }
+    };
+    reader.readAsDataURL(file);
+  };
 
   const messages = prospect.messages || [];
 
@@ -563,22 +606,31 @@ function ProspectCard({
             {prospect.company}
           </p>
         </div>
-        <button
-          onClick={() => {
-            const fullName =
-              `${prospect.firstName} ${prospect.lastName}`.trim() ||
-              "this prospect";
-            if (
-              window.confirm(`Remove ${fullName} from the hotlist?`)
-            ) {
-              onRemove();
-            }
-          }}
-          className="shrink-0 inline-flex items-center gap-1 text-xs font-semibold text-slate-500 hover:text-red-600 bg-slate-50 hover:bg-red-50 border border-slate-200 hover:border-red-200 px-2 py-1 rounded-md transition-colors"
-          title="Remove prospect from the hotlist"
-        >
-          <Trash2 className="w-3.5 h-3.5" /> Remove
-        </button>
+        <div className="shrink-0 flex items-start gap-1.5">
+          <button
+            onClick={startEdit}
+            className="inline-flex items-center gap-1 text-xs font-semibold text-slate-500 hover:text-blue-600 bg-slate-50 hover:bg-blue-50 border border-slate-200 hover:border-blue-200 px-2 py-1 rounded-md transition-colors"
+            title="Edit prospect"
+          >
+            <Edit2 className="w-3.5 h-3.5" /> Edit
+          </button>
+          <button
+            onClick={() => {
+              const fullName =
+                `${prospect.firstName} ${prospect.lastName}`.trim() ||
+                "this prospect";
+              if (
+                window.confirm(`Remove ${fullName} from the hotlist?`)
+              ) {
+                onRemove();
+              }
+            }}
+            className="inline-flex items-center gap-1 text-xs font-semibold text-slate-500 hover:text-red-600 bg-slate-50 hover:bg-red-50 border border-slate-200 hover:border-red-200 px-2 py-1 rounded-md transition-colors"
+            title="Remove prospect from the hotlist"
+          >
+            <Trash2 className="w-3.5 h-3.5" /> Remove
+          </button>
+        </div>
       </div>
 
       {prospect.linkedinUrl && (
@@ -595,6 +647,153 @@ function ProspectCard({
           >
             <MessageCircle className="w-3 h-3" /> LinkedIn
           </a>
+        </div>
+      )}
+
+      {editing && (
+        <div className="border-t border-slate-100 pt-3 space-y-3 bg-slate-50/50 -mx-4 px-4 py-3 mt-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1">
+                First Name
+              </label>
+              <input
+                type="text"
+                className="w-full rounded-md border border-gray-300 px-2 py-1.5 focus:ring-2 focus:ring-orange-500 outline-none transition-all bg-white text-sm text-gray-800"
+                value={draft.firstName}
+                onChange={(e) =>
+                  setDraft((p) => ({ ...p, firstName: e.target.value }))
+                }
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1">
+                Last Name
+              </label>
+              <input
+                type="text"
+                className="w-full rounded-md border border-gray-300 px-2 py-1.5 focus:ring-2 focus:ring-orange-500 outline-none transition-all bg-white text-sm text-gray-800"
+                value={draft.lastName}
+                onChange={(e) =>
+                  setDraft((p) => ({ ...p, lastName: e.target.value }))
+                }
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1">
+                Title
+              </label>
+              <input
+                type="text"
+                className="w-full rounded-md border border-gray-300 px-2 py-1.5 focus:ring-2 focus:ring-orange-500 outline-none transition-all bg-white text-sm text-gray-800"
+                value={draft.title}
+                onChange={(e) =>
+                  setDraft((p) => ({ ...p, title: e.target.value }))
+                }
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1">
+                Company
+              </label>
+              <input
+                type="text"
+                className="w-full rounded-md border border-gray-300 px-2 py-1.5 focus:ring-2 focus:ring-orange-500 outline-none transition-all bg-white text-sm text-gray-800"
+                value={draft.company}
+                onChange={(e) =>
+                  setDraft((p) => ({ ...p, company: e.target.value }))
+                }
+              />
+            </div>
+            <div className="sm:col-span-2">
+              <label className="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1">
+                LinkedIn URL
+              </label>
+              <input
+                type="text"
+                className="w-full rounded-md border border-gray-300 px-2 py-1.5 focus:ring-2 focus:ring-orange-500 outline-none transition-all bg-white text-sm text-gray-800"
+                value={draft.linkedinUrl}
+                onChange={(e) =>
+                  setDraft((p) => ({ ...p, linkedinUrl: e.target.value }))
+                }
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1">
+                Priority
+              </label>
+              <select
+                className="w-full rounded-md border border-gray-300 px-2 py-1.5 focus:ring-2 focus:ring-orange-500 outline-none transition-all bg-white text-sm text-gray-800"
+                value={draft.priority}
+                onChange={(e) =>
+                  setDraft((p) => ({
+                    ...p,
+                    priority: e.target.value as HotlistPriority,
+                  }))
+                }
+              >
+                <option value="high">High</option>
+                <option value="medium">Medium</option>
+                <option value="low">Low</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1">
+                Screenshot
+              </label>
+              <div className="flex items-center gap-2">
+                {draft.image && (
+                  <div className="w-10 h-10 rounded-md overflow-hidden border border-slate-200 shrink-0">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={draft.image}
+                      alt="Current screenshot"
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                )}
+                <input
+                  type="file"
+                  accept="image/*"
+                  id={`hotlist-edit-image-${prospect.id}`}
+                  className="hidden"
+                  onChange={handleEditImage}
+                />
+                <label
+                  htmlFor={`hotlist-edit-image-${prospect.id}`}
+                  className="cursor-pointer text-xs font-semibold text-slate-600 hover:text-slate-900 bg-white hover:bg-slate-100 border border-slate-200 px-2 py-1.5 rounded-md transition-colors flex items-center gap-1"
+                >
+                  <ImageIcon className="w-3.5 h-3.5" />
+                  {draft.image ? "Replace" : "Upload"}
+                </label>
+                {draft.image && (
+                  <button
+                    onClick={() =>
+                      setDraft((p) => ({ ...p, image: null }))
+                    }
+                    className="text-xs font-semibold text-slate-500 hover:text-red-600 hover:bg-red-50 border border-slate-200 hover:border-red-200 px-2 py-1.5 rounded-md transition-colors"
+                  >
+                    Remove
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-2 pt-1">
+            <button
+              onClick={cancelEdit}
+              className="text-xs font-semibold text-slate-500 hover:text-slate-900 bg-white hover:bg-slate-100 border border-slate-200 px-3 py-1.5 rounded-md transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={saveEdit}
+              className="text-xs font-semibold text-white bg-orange-600 hover:bg-orange-700 px-3 py-1.5 rounded-md transition-colors flex items-center gap-1"
+            >
+              <Save className="w-3.5 h-3.5" /> Save Changes
+            </button>
+          </div>
         </div>
       )}
 

@@ -342,6 +342,7 @@ export interface ProductEngineState {
   completedSteps: number[];
   selectedProduct: string;
   analysis: string;
+  expertProfile: string;
 }
 
 export interface AccountData {

@@ -58,6 +58,7 @@ import { LeaderProfile } from "@/components/engines/procurement/LeaderProfile";
 import { Priorities } from "@/components/engines/procurement/Priorities";
 import { ProcurementPitch } from "@/components/engines/procurement/ProcurementPitch";
 import { ProductAnalysis } from "@/components/engines/product/ProductAnalysis";
+import { ExpertProfile } from "@/components/engines/product/ExpertProfile";
 import { exportAccountToPdf } from "@/lib/pdf";
 import {
   createAccount,
@@ -111,6 +112,7 @@ const procurementEngineSteps: StepDef[] = [
 
 const productEngineSteps: StepDef[] = [
   { id: 1, title: "Product Analysis", icon: Layers, Component: ProductAnalysis },
+  { id: 2, title: "Expert Profile", icon: Users, Component: ExpertProfile },
 ];
 
 function scrollAnchorIntoView(anchorId: string) {

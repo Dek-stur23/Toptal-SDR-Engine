@@ -104,6 +104,7 @@ export function emptyProductEngine(): ProductEngineState {
     completedSteps: [],
     selectedProduct: "",
     analysis: "",
+    expertProfile: "",
   };
 }
 

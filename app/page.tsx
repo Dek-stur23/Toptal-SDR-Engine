@@ -60,6 +60,7 @@ import { ProcurementPitch } from "@/components/engines/procurement/ProcurementPi
 import { ProductAnalysis } from "@/components/engines/product/ProductAnalysis";
 import { ExpertProfile } from "@/components/engines/product/ExpertProfile";
 import { UploadContact as ProductUploadContact } from "@/components/engines/product/UploadContact";
+import { MessageComposer } from "@/components/engines/product/MessageComposer";
 import { exportAccountToPdf } from "@/lib/pdf";
 import {
   createAccount,
@@ -115,6 +116,7 @@ const productEngineSteps: StepDef[] = [
   { id: 1, title: "Product Analysis", icon: Layers, Component: ProductAnalysis },
   { id: 2, title: "Expert Profile", icon: Users, Component: ExpertProfile },
   { id: 3, title: "Upload Contact", icon: Upload, Component: ProductUploadContact },
+  { id: 4, title: "Message Composer", icon: MessageSquare, Component: MessageComposer },
 ];
 
 function scrollAnchorIntoView(anchorId: string) {

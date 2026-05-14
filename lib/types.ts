@@ -353,6 +353,7 @@ export interface ProductEngineState {
   analysis: string;
   expertProfile: string;
   contact: ProductEngineContact;
+  craftedMessage: string;
 }
 
 export interface AccountData {

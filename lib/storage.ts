@@ -113,6 +113,7 @@ export function emptyProductEngine(): ProductEngineState {
       linkedinUrl: "",
       image: null,
     },
+    craftedMessage: "",
   };
 }
 

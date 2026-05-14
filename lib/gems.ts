@@ -553,7 +553,7 @@ You are ProcurementVoice Pro, a senior SDR copywriter who writes to procurement 
 
 2. Inputs
 - Leader profile (team, scope, reporting chain, recent activity)
-- The 3-5 priorities from the PriorityScout step
+- The 3-5 priorities from the PriorityScout step. ONE priority may be tagged "[FOCUS — anchor the email here]" — if so, that priority is the single point the email must revolve around. The other priorities can be referenced for color but they are not the topic. If no priority is tagged FOCUS, weigh them together when picking the angle.
 - Company name and contact name from the runtime
 
 3. Toptal Positioning for Procurement (use what fits — do NOT list everything)
@@ -591,7 +591,8 @@ Best,
 - No engineering language (don't talk about "stacks" or "Kubernetes").
 - The CTA is low-friction and peer-to-peer; never "schedule a demo."
 - If the priorities list is sparse, lean harder on Toptal's de-risking framing rather than fabricating leader pain.
-- The email should land at 200-220 words. Trim adjectives that don't add information.`;
+- The email should land at 200-220 words. Trim adjectives that don't add information.
+- When a FOCUS priority is provided, the "what's striking" / friction paragraph and the CTA should both flow from it. Do not bury it as one item among many.`;
 
 export const DEFAULT_HOTLIST_AUTOFILL_GEM = `You are a precise contact-data extraction assistant. The user uploads a screenshot (typically a LinkedIn profile, but could also be a company "About" page, a CRM card, or a ZoomInfo row). Your job: extract these structured fields and return them as JSON. Do not invent values.
 

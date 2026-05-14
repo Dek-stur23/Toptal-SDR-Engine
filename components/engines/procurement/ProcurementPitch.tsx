@@ -42,9 +42,20 @@ export function ProcurementPitch({
     setLoading(true);
     setError("");
     try {
+      const focusIndex = engine.selectedPriorityIndex;
+      const focusPriority =
+        focusIndex !== null && focusIndex >= 0 && focusIndex < priorities.length
+          ? priorities[focusIndex]
+          : null;
       const prioritiesBlock = priorities
-        .map((p, i) => `${i + 1}. ${p.priority} — ${p.reasoning}`)
+        .map((p, i) => {
+          const marker = i === focusIndex ? " [FOCUS — anchor the email here]" : "";
+          return `${i + 1}.${marker} ${p.priority} — ${p.reasoning}`;
+        })
         .join("\n");
+      const focusLine = focusPriority
+        ? `\nFOCUS PRIORITY (anchor the entire email on this one): "${focusPriority.priority}"\n`
+        : "\nNo single focus selected; weigh the listed priorities together when picking the angle.\n";
       const prompt = `Company: ${accountData.companyName || "the target company"}
 Contact: ${selected.name} (${selected.title})
 Function: ${selected.function}
@@ -58,7 +69,7 @@ Leader Profile:
 
 Priorities & Pain:
 ${prioritiesBlock}
-
+${focusLine}
 Draft the personalized procurement-leader email per the strict format.`;
 
       const result = await generateWithClaude<string>({
@@ -118,6 +129,12 @@ Draft the personalized procurement-leader email per the strict format.`;
     setTimeout(() => setLogged(false), 2000);
   };
 
+  const focusIdx = engine.selectedPriorityIndex;
+  const focusPriority =
+    focusIdx !== null && focusIdx >= 0 && focusIdx < priorities.length
+      ? priorities[focusIdx]
+      : null;
+
   return (
     <div className="space-y-4">
       <p className="text-sm text-gray-600">
@@ -126,6 +143,20 @@ Draft the personalized procurement-leader email per the strict format.`;
         gathered above. ProcurementVoice Pro frames Toptal as the
         de-risking layer, not the engineering vendor.
       </p>
+
+      {focusPriority ? (
+        <div className="bg-blue-50/60 border border-blue-200 rounded-md p-3 text-sm text-slate-800">
+          <span className="text-[10px] font-bold text-blue-700 uppercase tracking-wider block mb-1">
+            Focus priority
+          </span>
+          {focusPriority.priority}
+        </div>
+      ) : (
+        <p className="text-xs text-slate-500 italic">
+          No focus priority selected — the pitch will weigh all priorities
+          together. Pick one in the Priorities step to anchor it.
+        </p>
+      )}
 
       <button
         onClick={run}

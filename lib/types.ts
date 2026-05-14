@@ -333,6 +333,7 @@ export interface ProcurementEngineState {
   leaderImage: string | null;
   leaderProfile: LeaderProfile | null;
   priorities: PriorityItem[];
+  selectedPriorityIndex: number | null;
   craftedMessage: string;
 }
 

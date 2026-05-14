@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronRight, Loader2, Sparkles } from "lucide-react";
+import { CheckCircle2, ChevronRight, Loader2, Sparkles } from "lucide-react";
 import type { StepProps } from "@/components/types";
 import type { PriorityItem } from "@/lib/types";
 import { generateWithClaude } from "@/lib/api";
@@ -80,7 +80,8 @@ export function Priorities({
         procurementEngine: {
           ...prev.procurementEngine,
           priorities: result.priorities || [],
-          // Reset crafted message when priorities change.
+          // Reset selection + crafted message when priorities change.
+          selectedPriorityIndex: null,
           craftedMessage: "",
         },
       }));
@@ -95,13 +96,33 @@ export function Priorities({
   };
 
   const priorities = engine.priorities;
+  const selectedIndex = engine.selectedPriorityIndex;
+
+  const selectPriority = (index: number) => {
+    setAccountData((prev) => {
+      const current = prev.procurementEngine.selectedPriorityIndex;
+      const sameSelection = current === index;
+      return {
+        ...prev,
+        procurementEngine: {
+          ...prev.procurementEngine,
+          selectedPriorityIndex: sameSelection ? null : index,
+          // Changing the focus invalidates the previous draft.
+          craftedMessage: sameSelection
+            ? prev.procurementEngine.craftedMessage
+            : "",
+        },
+      };
+    });
+  };
 
   return (
     <div className="space-y-4">
       <p className="text-sm text-gray-600">
         Map what <strong>{selected.name}</strong> likely cares about right now —
         a prioritized list of KPIs and pain points anchored in the leader
-        profile and the company&apos;s strategic context.
+        profile and the company&apos;s strategic context. Click a priority to
+        mark it as the focus for the Procurement Pitch.
       </p>
 
       <button
@@ -123,27 +144,60 @@ export function Priorities({
           <h4 className="font-bold text-blue-800 text-sm uppercase tracking-wider">
             Priorities &amp; Pain
           </h4>
-          <ol className="space-y-3 list-decimal list-inside">
-            {priorities.map((p, i) => (
-              <li key={i} className="text-sm text-slate-800">
-                <span className="font-semibold">{p.priority}</span>
-                {p.reasoning && (
-                  <p className="ml-5 text-slate-600 mt-0.5">{p.reasoning}</p>
-                )}
-                {p.evidenceSource &&
-                  /^https?:\/\//i.test(p.evidenceSource) && (
-                    <a
-                      href={p.evidenceSource}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="ml-5 text-xs text-blue-600 hover:text-blue-800 underline underline-offset-2"
-                    >
-                      Source
-                    </a>
-                  )}
-              </li>
-            ))}
-          </ol>
+          <ul className="space-y-2">
+            {priorities.map((p, i) => {
+              const isSelected = selectedIndex === i;
+              return (
+                <li
+                  key={i}
+                  onClick={() => selectPriority(i)}
+                  className={`text-sm text-slate-800 border rounded-lg p-3 transition-colors cursor-pointer ${
+                    isSelected
+                      ? "border-blue-400 bg-blue-50/60"
+                      : "border-slate-200 bg-white hover:border-slate-300"
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <span className="font-semibold">
+                        {i + 1}. {p.priority}
+                      </span>
+                      {p.reasoning && (
+                        <p className="text-slate-600 mt-1">{p.reasoning}</p>
+                      )}
+                      {p.evidenceSource &&
+                        /^https?:\/\//i.test(p.evidenceSource) && (
+                          <a
+                            href={p.evidenceSource}
+                            target="_blank"
+                            rel="noreferrer"
+                            onClick={(e) => e.stopPropagation()}
+                            className="inline-block mt-1 text-xs text-blue-600 hover:text-blue-800 underline underline-offset-2"
+                          >
+                            Source
+                          </a>
+                        )}
+                    </div>
+                    {isSelected ? (
+                      <span className="shrink-0 text-blue-700 text-xs font-semibold flex items-center gap-1">
+                        <CheckCircle2 className="w-3.5 h-3.5" /> Focus
+                      </span>
+                    ) : (
+                      <span className="shrink-0 text-slate-400 text-[10px] font-medium tracking-wider uppercase">
+                        Click to focus
+                      </span>
+                    )}
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+          {selectedIndex === null && (
+            <p className="text-[11px] text-slate-500 italic">
+              No focus selected — the Procurement Pitch will weigh all
+              priorities equally. Click one above to anchor the pitch on it.
+            </p>
+          )}
           <div className="pt-2 flex justify-end">
             <button
               onClick={onComplete}

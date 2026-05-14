@@ -89,6 +89,7 @@ export function emptyProcurementEngine(): ProcurementEngineState {
     leaderImage: null,
     leaderProfile: null,
     priorities: [],
+    selectedPriorityIndex: null,
     craftedMessage: "",
   };
 }

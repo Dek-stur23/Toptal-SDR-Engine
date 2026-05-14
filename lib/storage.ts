@@ -106,6 +106,7 @@ export function emptyAccountData(): AccountData {
     messagingLiImage: null,
     messagingContext: "",
     messagingContactName: "",
+    messagingFocus: [],
     generatedMessaging: "",
     messagingLogs: [],
     previousContacts: [],
@@ -174,6 +175,11 @@ export function loadAppState(): AppState {
             ? legacyAccountData.cadences
             : [];
         const hotlist = cleanHotlist(legacyAccountData.hotlist);
+        const messagingFocus = Array.isArray(legacyAccountData.messagingFocus)
+          ? legacyAccountData.messagingFocus.filter(
+              (s): s is string => typeof s === "string",
+            )
+          : [];
         const baseProcurement = emptyProcurementEngine();
         const loadedProcurement = (legacyAccountData.procurementEngine ??
           {}) as Partial<ProcurementEngineState>;
@@ -182,6 +188,7 @@ export function loadAppState(): AppState {
           ...legacyAccountData,
           missions,
           hotlist,
+          messagingFocus,
           softwareEngine: {
             ...baseEngine,
             ...loadedEngine,
@@ -316,6 +323,11 @@ export function parseImportedAppState(json: string): AppState {
         ? legacyAccountData.cadences
         : [];
     const hotlist = cleanHotlist(legacyAccountData.hotlist);
+    const messagingFocus = Array.isArray(legacyAccountData.messagingFocus)
+      ? legacyAccountData.messagingFocus.filter(
+          (s): s is string => typeof s === "string",
+        )
+      : [];
     const baseProcurement = emptyProcurementEngine();
     const loadedProcurement = (legacyAccountData.procurementEngine ??
       {}) as Partial<ProcurementEngineState>;
@@ -324,6 +336,7 @@ export function parseImportedAppState(json: string): AppState {
       ...legacyAccountData,
       missions,
       hotlist,
+      messagingFocus,
       softwareEngine: {
         ...baseEngine,
         ...loadedEngine,

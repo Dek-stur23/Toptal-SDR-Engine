@@ -7,6 +7,8 @@ import {
   Loader2,
   Plus,
   Sparkles,
+  Target,
+  X,
 } from "lucide-react";
 import type { ToolProps } from "@/components/types";
 import type { MessagingLog } from "@/lib/types";
@@ -39,6 +41,15 @@ export function PersonalizedMessaging({
   const setContactName = (val: string) =>
     setAccountData((prev) => ({ ...prev, messagingContactName: val }));
 
+  const focus = accountData.messagingFocus || [];
+  const removeFocus = (i: number) =>
+    setAccountData((prev) => ({
+      ...prev,
+      messagingFocus: (prev.messagingFocus || []).filter((_, j) => j !== i),
+    }));
+  const clearFocus = () =>
+    setAccountData((prev) => ({ ...prev, messagingFocus: [] }));
+
   const logs = accountData.messagingLogs || [];
   const generatedNotes = accountData.generatedMessaging || "";
 
@@ -59,6 +70,11 @@ export function PersonalizedMessaging({
     setIsComposing(true);
     setAccountData((prev) => ({ ...prev, generatedMessaging: "" }));
 
+    const focusBlock =
+      focus.length > 0
+        ? `\nFOCUS POINTS (anchor the message on these — they are the user's selected priorities):\n${focus.map((p, i) => `  ${i + 1}. ${p}`).join("\n")}\n`
+        : "";
+
     const prompt = `
       Account Context:
       Company Name: ${accountData.companyName}
@@ -68,7 +84,7 @@ export function PersonalizedMessaging({
 
       Contact LinkedIn Information:
       ${liText ? liText : "See attached image for LinkedIn profile."}
-
+${focusBlock}
       ${composerContext ? `Additional Context/Notes from User:\n${composerContext}\n` : ""}
 
       Generate personalized outreach for this contact based on their LinkedIn profile and the account context.
@@ -196,6 +212,47 @@ export function PersonalizedMessaging({
             </div>
           </div>
         </div>
+
+        {focus.length > 0 && (
+          <div className="mb-5 p-3 bg-purple-50/60 border border-purple-200 rounded-lg">
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-xs font-semibold text-purple-800 uppercase tracking-wider flex items-center gap-1.5">
+                <Target className="w-3.5 h-3.5" /> Focus Points{" "}
+                <span className="text-[10px] font-normal normal-case text-purple-600">
+                  ({focus.length})
+                </span>
+              </label>
+              <button
+                onClick={clearFocus}
+                className="text-[10px] font-semibold text-slate-500 hover:text-red-600 uppercase tracking-wider"
+              >
+                Clear all
+              </button>
+            </div>
+            <p className="text-[11px] text-purple-700/80 mb-2">
+              These came from your ICP Intel selections. The AI will anchor the
+              message on them.
+            </p>
+            <ul className="space-y-1">
+              {focus.map((f, i) => (
+                <li
+                  key={i}
+                  className="flex items-start justify-between gap-2 bg-white border border-purple-100 rounded px-2 py-1.5 text-xs text-slate-800"
+                >
+                  <span className="flex-1 min-w-0">{f}</span>
+                  <button
+                    onClick={() => removeFocus(i)}
+                    className="shrink-0 text-slate-400 hover:text-red-600"
+                    aria-label={`Remove focus point ${i + 1}`}
+                    title="Remove"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         <div className="mb-5">
           <label className="block text-xs font-medium text-slate-700 mb-1.5">

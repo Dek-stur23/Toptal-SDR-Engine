@@ -4,6 +4,7 @@ import { useState } from "react";
 import {
   BookOpen,
   Briefcase,
+  CheckCircle2,
   Circle,
   Image as ImageIcon,
   Layers,
@@ -42,8 +43,46 @@ export function IcpIntel({
   const [liImage, setLiImage] = useState<string | null>(null);
   const [isResearching, setIsResearching] = useState(false);
   const [isExtracting, setIsExtracting] = useState(false);
+  const [focusEvidence, setFocusEvidence] = useState<Set<number>>(new Set());
+  const [focusInferences, setFocusInferences] = useState<Set<number>>(new Set());
 
   const latestResult = accountData.icpIntelResult;
+
+  const toggleFocusEvidence = (i: number) => {
+    setFocusEvidence((prev) => {
+      const next = new Set(prev);
+      if (next.has(i)) next.delete(i);
+      else next.add(i);
+      return next;
+    });
+  };
+  const toggleFocusInference = (i: number) => {
+    setFocusInferences((prev) => {
+      const next = new Set(prev);
+      if (next.has(i)) next.delete(i);
+      else next.add(i);
+      return next;
+    });
+  };
+  const focusCount = focusEvidence.size + focusInferences.size;
+
+  const buildFocusList = (): string[] => {
+    if (!latestResult) return [];
+    const list: string[] = [];
+    Array.from(focusEvidence)
+      .sort((a, b) => a - b)
+      .forEach((idx) => {
+        const item = latestResult.result.evidenceBackedInvolvement[idx];
+        if (item) list.push(`Confirmed project: ${item.confirmedProject}`);
+      });
+    Array.from(focusInferences)
+      .sort((a, b) => a - b)
+      .forEach((idx) => {
+        const item = latestResult.result.logicalInferences[idx];
+        if (item) list.push(`Inferred priority: ${item.inferredPriority}`);
+      });
+    return list;
+  };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -191,7 +230,11 @@ export function IcpIntel({
         messagingLiImage: liImage,
         messagingContext: draftContext,
         messagingContactName: `${firstName.trim()} ${lastName.trim()}`,
+        // Fresh research wipes any focus selections from the prior contact.
+        messagingFocus: [],
       }));
+      setFocusEvidence(new Set());
+      setFocusInferences(new Set());
 
       setFirstName("");
       setLastName("");
@@ -410,36 +453,57 @@ export function IcpIntel({
                   <h5 className="text-xs font-bold text-slate-600 uppercase tracking-wider mb-2 flex items-center gap-1.5">
                     <Layers className="w-4 h-4 text-emerald-500" /> Evidence-Backed
                     Involvement
+                    <span className="text-[10px] font-normal normal-case text-slate-400 ml-1">
+                      (click to mark as focus for messaging)
+                    </span>
                   </h5>
                   <div className="space-y-2">
                     {latestResult.result.evidenceBackedInvolvement.map(
-                      (proj, i) => (
-                        <div
-                          key={i}
-                          className="bg-emerald-50/30 p-3 rounded-lg border border-emerald-100"
-                        >
-                          <span className="font-semibold text-sm text-slate-800">
-                            {proj.confirmedProject}
-                          </span>
-                          <p className="text-xs text-slate-600 leading-relaxed mt-1">
-                            <strong className="text-slate-500">
-                              Verified Source:
-                            </strong>{" "}
-                            {proj.verifiedSource.startsWith("http") ? (
-                              <a
-                                href={proj.verifiedSource}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="text-emerald-600 hover:underline"
-                              >
-                                {proj.verifiedSource}
-                              </a>
-                            ) : (
-                              proj.verifiedSource
-                            )}
-                          </p>
-                        </div>
-                      ),
+                      (proj, i) => {
+                        const selected = focusEvidence.has(i);
+                        return (
+                          <div
+                            key={i}
+                            onClick={() => toggleFocusEvidence(i)}
+                            className={`bg-emerald-50/30 p-3 rounded-lg border cursor-pointer transition-colors ${selected ? "border-emerald-500 ring-2 ring-emerald-300 bg-emerald-50/70" : "border-emerald-100 hover:border-emerald-300"}`}
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="flex-1 min-w-0">
+                                <span className="font-semibold text-sm text-slate-800">
+                                  {proj.confirmedProject}
+                                </span>
+                                <p className="text-xs text-slate-600 leading-relaxed mt-1">
+                                  <strong className="text-slate-500">
+                                    Verified Source:
+                                  </strong>{" "}
+                                  {proj.verifiedSource.startsWith("http") ? (
+                                    <a
+                                      href={proj.verifiedSource}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      onClick={(e) => e.stopPropagation()}
+                                      className="text-emerald-600 hover:underline"
+                                    >
+                                      {proj.verifiedSource}
+                                    </a>
+                                  ) : (
+                                    proj.verifiedSource
+                                  )}
+                                </p>
+                              </div>
+                              {selected ? (
+                                <span className="shrink-0 text-emerald-700 text-xs font-semibold flex items-center gap-1">
+                                  <CheckCircle2 className="w-3.5 h-3.5" /> Focus
+                                </span>
+                              ) : (
+                                <span className="shrink-0 text-slate-400 text-[10px] font-medium tracking-wider uppercase">
+                                  Click to focus
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      },
                     )}
                   </div>
                 </div>
@@ -449,22 +513,42 @@ export function IcpIntel({
                 <div>
                   <h5 className="text-xs font-bold text-slate-600 uppercase tracking-wider mb-2 flex items-center gap-1.5">
                     <Zap className="w-4 h-4 text-amber-500" /> Logical Inferences
+                    <span className="text-[10px] font-normal normal-case text-slate-400 ml-1">
+                      (click to mark as focus for messaging)
+                    </span>
                   </h5>
                   <div className="space-y-2">
-                    {latestResult.result.logicalInferences.map((inf, i) => (
-                      <div
-                        key={i}
-                        className="bg-amber-50/30 p-3 rounded-lg border border-amber-100"
-                      >
-                        <span className="font-semibold text-sm text-slate-800">
-                          {inf.inferredPriority}
-                        </span>
-                        <p className="text-xs text-slate-600 leading-relaxed mt-1">
-                          <strong className="text-slate-500">Reasoning:</strong>{" "}
-                          {inf.reasoning}
-                        </p>
-                      </div>
-                    ))}
+                    {latestResult.result.logicalInferences.map((inf, i) => {
+                      const selected = focusInferences.has(i);
+                      return (
+                        <div
+                          key={i}
+                          onClick={() => toggleFocusInference(i)}
+                          className={`bg-amber-50/30 p-3 rounded-lg border cursor-pointer transition-colors ${selected ? "border-amber-500 ring-2 ring-amber-300 bg-amber-50/70" : "border-amber-100 hover:border-amber-300"}`}
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex-1 min-w-0">
+                              <span className="font-semibold text-sm text-slate-800">
+                                {inf.inferredPriority}
+                              </span>
+                              <p className="text-xs text-slate-600 leading-relaxed mt-1">
+                                <strong className="text-slate-500">Reasoning:</strong>{" "}
+                                {inf.reasoning}
+                              </p>
+                            </div>
+                            {selected ? (
+                              <span className="shrink-0 text-amber-700 text-xs font-semibold flex items-center gap-1">
+                                <CheckCircle2 className="w-3.5 h-3.5" /> Focus
+                              </span>
+                            ) : (
+                              <span className="shrink-0 text-slate-400 text-[10px] font-medium tracking-wider uppercase">
+                                Click to focus
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -521,17 +605,24 @@ export function IcpIntel({
                           ?.map((p) => p.inferredPriority)
                           .join(", ") || "None";
                       const restoredContext = `ICP Research for ${latestResult.firstName} ${latestResult.lastName} (${latestResult.title}):\n- Focus: ${latestResult.result.executiveSummary.primaryFocus}\n- Confirmed Projects: ${confirmedStr}\n- Inferred Projects: ${inferredStr}\n- Talking Points: ${latestResult.result.recommendedTalkingPoints.join(" | ")}`;
+                      const focusList = buildFocusList();
                       setAccountData((prev) => ({
                         ...prev,
                         messagingLiText: latestResult.liText || "",
                         messagingContext: restoredContext,
                         messagingContactName: `${latestResult.firstName} ${latestResult.lastName}`,
+                        messagingFocus: focusList,
                       }));
                       setActiveActionTool("messaging");
                     }}
                     className="text-xs font-semibold text-blue-600 hover:text-blue-800 flex items-center gap-1.5 transition-colors bg-blue-50 hover:bg-blue-100 px-3 py-2 rounded-lg w-fit shadow-sm"
                   >
                     <Wand2 className="w-3.5 h-3.5" /> Start Messaging Draft
+                    {focusCount > 0 && (
+                      <span className="bg-blue-100 text-blue-800 text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded ml-1">
+                        {focusCount} focus
+                      </span>
+                    )}
                   </button>
                 </div>
               )}

@@ -348,6 +348,7 @@ export interface AccountData {
   messagingLiImage: string | null;
   messagingContext: string;
   messagingContactName: string;
+  messagingFocus: string[];
   generatedMessaging: string;
   messagingLogs: MessagingLog[];
   previousContacts: PreviousContact[];

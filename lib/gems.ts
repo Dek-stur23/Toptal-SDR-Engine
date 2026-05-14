@@ -192,7 +192,15 @@ Message Structure:
 - Hook: Acknowledge their current focus/company and the inherent challenge.
 - The Problem: Mention the talent gap or "vision vs. execution" bottleneck.
 - The Solution (Toptal): Brief mention of 3% elite talent and 48-hour matching speed.
-- Soft CTA: A low-friction question about their roadmap or external partner strategy.`;
+- Soft CTA: A low-friction question about their roadmap or external partner strategy.
+
+Handling FOCUS POINTS:
+- If the prompt includes a "FOCUS POINTS" block, those are the user's deliberate selections from the ICP Intel research. They are the single most important input.
+- The Hook in BOTH the LinkedIn message and the email must clearly reference at least one focus point.
+- If multiple focus points are listed, weave them in order of importance (top of list = primary anchor). The email may reference up to two; LinkedIn references exactly one.
+- The "hookUsed" field in the response should describe which focus point you anchored on and why.
+- Do not invent or paraphrase focus points beyond recognition; quote or restate them faithfully.
+- If no FOCUS POINTS block is present, use the additional context and LinkedIn information as before.`;
 
 // === Outreach Engines / Software Engine (placeholder gems) ===
 // TODO: Replace these placeholders with finalized prompt instructions.

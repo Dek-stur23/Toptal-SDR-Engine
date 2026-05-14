@@ -69,6 +69,7 @@ export function emptyAccountData(): AccountData {
     missions: [],
     eseMeetings: [],
     activityLogs: [],
+    hotlist: [],
     recentNewsResult: null,
     icpIntelResult: null,
     aiResearch: null,
@@ -128,6 +129,9 @@ export function loadAppState(): AppState {
           : Array.isArray(legacyAccountData.cadences)
             ? legacyAccountData.cadences
             : [];
+        const hotlist = Array.isArray(legacyAccountData.hotlist)
+          ? legacyAccountData.hotlist
+          : [];
         const baseProcurement = emptyProcurementEngine();
         const loadedProcurement = (legacyAccountData.procurementEngine ??
           {}) as Partial<ProcurementEngineState>;
@@ -135,6 +139,7 @@ export function loadAppState(): AppState {
           ...emptyAccountData(),
           ...legacyAccountData,
           missions,
+          hotlist,
           softwareEngine: {
             ...baseEngine,
             ...loadedEngine,
@@ -268,6 +273,9 @@ export function parseImportedAppState(json: string): AppState {
       : Array.isArray(legacyAccountData.cadences)
         ? legacyAccountData.cadences
         : [];
+    const hotlist = Array.isArray(legacyAccountData.hotlist)
+      ? legacyAccountData.hotlist
+      : [];
     const baseProcurement = emptyProcurementEngine();
     const loadedProcurement = (legacyAccountData.procurementEngine ??
       {}) as Partial<ProcurementEngineState>;
@@ -275,6 +283,7 @@ export function parseImportedAppState(json: string): AppState {
       ...emptyAccountData(),
       ...legacyAccountData,
       missions,
+      hotlist,
       softwareEngine: {
         ...baseEngine,
         ...loadedEngine,

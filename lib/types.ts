@@ -215,7 +215,46 @@ export interface IcpIntelResult {
   date: string;
 }
 
-export type ToolId = "news" | "icpIntel" | "messaging" | "log" | "eseMeeting";
+export type ToolId =
+  | "news"
+  | "icpIntel"
+  | "messaging"
+  | "log"
+  | "eseMeeting"
+  | "hotlist";
+
+export type HotlistPriority = "high" | "medium" | "low";
+
+export type HotlistChannel =
+  | "Email"
+  | "LinkedIn"
+  | "Phone"
+  | "Meeting"
+  | "Other";
+
+export interface HotlistMessage {
+  id: number;
+  channel: HotlistChannel;
+  subject: string;
+  body: string;
+  date: string;
+  response: string;
+}
+
+export interface HotlistProspect {
+  id: number;
+  firstName: string;
+  lastName: string;
+  title: string;
+  company: string;
+  linkedinUrl: string;
+  email: string;
+  phone: string;
+  priority: HotlistPriority;
+  notes: string;
+  dateAdded: string;
+  messages: HotlistMessage[];
+}
 
 export interface SoftwareEngineContact {
   firstName: string;
@@ -316,6 +355,7 @@ export interface AccountData {
   missions: Mission[];
   eseMeetings: EseMeeting[];
   activityLogs: ActivityLog[];
+  hotlist: HotlistProspect[];
   recentNewsResult: RecentNewsResult | null;
   icpIntelResult: IcpIntelResult | null;
   aiResearch: AiResearch | null;

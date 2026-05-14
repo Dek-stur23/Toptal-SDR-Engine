@@ -10,6 +10,7 @@ import {
   ChevronRight,
   Copy,
   Edit2,
+  FileSpreadsheet,
   Flame,
   Image as ImageIcon,
   Loader2,
@@ -21,6 +22,7 @@ import {
   Send,
   Sparkles,
   Trash2,
+  Upload,
   Wand2,
   X,
 } from "lucide-react";
@@ -36,6 +38,7 @@ import type {
 import { generateWithClaude, streamChatTurn } from "@/lib/api";
 import {
   DEFAULT_HOTLIST_AUTOFILL_GEM,
+  DEFAULT_HOTLIST_BULK_AUTOFILL_GEM,
   DEFAULT_HOTLIST_NEXT_STEP_GEM,
 } from "@/lib/gems";
 
@@ -45,6 +48,115 @@ interface ExtractedFields {
   title: string;
   company: string;
   linkedinUrl: string;
+}
+
+interface BulkExtractResult {
+  contacts: ExtractedFields[];
+}
+
+interface BulkPreviewRow extends ExtractedFields {
+  id: string;
+  selected: boolean;
+}
+
+function parseCsv(text: string): Record<string, string>[] {
+  const lines = text.split(/\r?\n/).filter((l) => l.trim().length > 0);
+  if (lines.length < 2) return [];
+  const parseLine = (line: string): string[] => {
+    const out: string[] = [];
+    let curr = "";
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (ch === '"') {
+        if (inQuotes && line[i + 1] === '"') {
+          curr += '"';
+          i++;
+        } else {
+          inQuotes = !inQuotes;
+        }
+      } else if (ch === "," && !inQuotes) {
+        out.push(curr);
+        curr = "";
+      } else {
+        curr += ch;
+      }
+    }
+    out.push(curr);
+    return out.map((s) => s.trim());
+  };
+  const headers = parseLine(lines[0]).map((h) => h.toLowerCase());
+  return lines.slice(1).map((line) => {
+    const values = parseLine(line);
+    const row: Record<string, string> = {};
+    headers.forEach((h, i) => {
+      row[h] = (values[i] ?? "").trim();
+    });
+    return row;
+  });
+}
+
+function mapCsvRowsToPreview(
+  rows: Record<string, string>[],
+): BulkPreviewRow[] {
+  const firstNameKeys = ["first name", "firstname", "first", "given name"];
+  const lastNameKeys = [
+    "last name",
+    "lastname",
+    "last",
+    "family name",
+    "surname",
+  ];
+  const fullNameKeys = ["name", "full name", "contact name", "contact"];
+  const titleKeys = ["title", "job title", "position", "role"];
+  const companyKeys = [
+    "company",
+    "company name",
+    "organization",
+    "employer",
+    "account",
+  ];
+  const linkedinKeys = [
+    "linkedin",
+    "linkedin url",
+    "linkedin profile",
+    "profile url",
+    "li url",
+  ];
+
+  const pick = (row: Record<string, string>, keys: string[]): string => {
+    for (const k of keys) {
+      const v = row[k];
+      if (v) return v;
+    }
+    return "";
+  };
+
+  const out: BulkPreviewRow[] = [];
+  rows.forEach((row, i) => {
+    let firstName = pick(row, firstNameKeys);
+    let lastName = pick(row, lastNameKeys);
+    const fullName = pick(row, fullNameKeys);
+    if (!firstName && !lastName && fullName) {
+      const parts = fullName.split(/\s+/).filter(Boolean);
+      firstName = parts[0] || "";
+      lastName = parts.slice(1).join(" ");
+    }
+    const title = pick(row, titleKeys);
+    const company = pick(row, companyKeys);
+    const linkedinUrl = pick(row, linkedinKeys);
+    if (!firstName && !lastName && !company) return; // skip empty rows
+    out.push({
+      id: `csv-${i}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      firstName,
+      lastName,
+      title,
+      company,
+      linkedinUrl,
+      selected: true,
+    });
+  });
+  return out;
 }
 
 const PRIORITY_BADGE: Record<HotlistPriority, string> = {
@@ -84,6 +196,14 @@ export function Hotlist({ accountData, setAccountData }: ToolProps) {
   const [extracting, setExtracting] = useState(false);
   const [extractError, setExtractError] = useState("");
   const [booleanCopied, setBooleanCopied] = useState(false);
+
+  const [bulkPreview, setBulkPreview] = useState<BulkPreviewRow[] | null>(null);
+  const [bulkLoading, setBulkLoading] = useState(false);
+  const [bulkError, setBulkError] = useState("");
+  const [bulkAddedCount, setBulkAddedCount] = useState(0);
+  const [bulkSource, setBulkSource] = useState<"screenshot" | "csv" | null>(
+    null,
+  );
 
   const hotlist = accountData.hotlist || [];
   const [chatProspectId, setChatProspectId] = useState<number | null>(null);
@@ -219,6 +339,174 @@ export function Hotlist({ accountData, setAccountData }: ToolProps) {
           : p,
       ),
     }));
+  };
+
+  const handleBulkScreenshot = (file: File) => {
+    setBulkLoading(true);
+    setBulkError("");
+    setBulkAddedCount(0);
+    setBulkSource("screenshot");
+    const reader = new FileReader();
+    reader.onloadend = async () => {
+      if (typeof reader.result !== "string") {
+        setBulkError("Could not read file.");
+        setBulkLoading(false);
+        return;
+      }
+      try {
+        const schema = {
+          type: "OBJECT",
+          properties: {
+            contacts: {
+              type: "ARRAY",
+              items: {
+                type: "OBJECT",
+                properties: {
+                  firstName: { type: "STRING" },
+                  lastName: { type: "STRING" },
+                  title: { type: "STRING" },
+                  company: { type: "STRING" },
+                  linkedinUrl: { type: "STRING" },
+                },
+                required: [
+                  "firstName",
+                  "lastName",
+                  "title",
+                  "company",
+                  "linkedinUrl",
+                ],
+              },
+            },
+          },
+          required: ["contacts"],
+        };
+        const result = await generateWithClaude<BulkExtractResult>({
+          prompt:
+            "Extract every visible contact from this screenshot. Return as many as you can read with confidence. Skip rows that have neither a readable name nor a readable company. Do not extract emails or phone numbers.",
+          system: DEFAULT_HOTLIST_BULK_AUTOFILL_GEM,
+          schema,
+          image: reader.result,
+        });
+        const rows: BulkPreviewRow[] = (result.contacts || [])
+          .filter(
+            (c) =>
+              !!(c.firstName?.trim() || c.lastName?.trim() || c.company?.trim()),
+          )
+          .map((c, i) => ({
+            id: `img-${i}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+            firstName: c.firstName?.trim() ?? "",
+            lastName: c.lastName?.trim() ?? "",
+            title: c.title?.trim() ?? "",
+            company: c.company?.trim() ?? "",
+            linkedinUrl: c.linkedinUrl?.trim() ?? "",
+            selected: true,
+          }));
+        if (rows.length === 0) {
+          setBulkError("No contacts were extracted from the screenshot.");
+        } else {
+          setBulkPreview(rows);
+        }
+      } catch (err) {
+        console.error("Bulk screenshot error:", err);
+        setBulkError(
+          err instanceof Error
+            ? err.message
+            : "Failed to extract contacts from the screenshot.",
+        );
+      } finally {
+        setBulkLoading(false);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleBulkCsv = (file: File) => {
+    setBulkLoading(true);
+    setBulkError("");
+    setBulkAddedCount(0);
+    setBulkSource("csv");
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      if (typeof reader.result !== "string") {
+        setBulkError("Could not read file.");
+        setBulkLoading(false);
+        return;
+      }
+      try {
+        const rows = parseCsv(reader.result);
+        const preview = mapCsvRowsToPreview(rows);
+        if (preview.length === 0) {
+          setBulkError(
+            "No contacts found. The CSV needs a header row with at least Name (or First Name + Last Name) or Company columns.",
+          );
+        } else {
+          setBulkPreview(preview);
+        }
+      } catch (err) {
+        console.error("Bulk CSV error:", err);
+        setBulkError(
+          err instanceof Error ? err.message : "Could not parse the CSV.",
+        );
+      } finally {
+        setBulkLoading(false);
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  const toggleBulkRow = (id: string) => {
+    setBulkPreview((prev) =>
+      prev
+        ? prev.map((r) => (r.id === id ? { ...r, selected: !r.selected } : r))
+        : prev,
+    );
+  };
+
+  const setAllBulk = (selected: boolean) => {
+    setBulkPreview((prev) => (prev ? prev.map((r) => ({ ...r, selected })) : prev));
+  };
+
+  const clearBulkPreview = () => {
+    setBulkPreview(null);
+    setBulkError("");
+    setBulkAddedCount(0);
+    setBulkSource(null);
+  };
+
+  const commitBulkPreview = () => {
+    if (!bulkPreview) return;
+    const selectedRows = bulkPreview.filter((r) => r.selected);
+    if (selectedRows.length === 0) {
+      setBulkError("Select at least one contact to add.");
+      return;
+    }
+    const sourceTag =
+      bulkSource === "csv" ? "CSV bulk add" : "screenshot bulk add";
+    const dateAdded = new Date().toLocaleString([], {
+      dateStyle: "short",
+      timeStyle: "short",
+    });
+    const newProspects: HotlistProspect[] = selectedRows.map((r, i) => ({
+      id: Date.now() + i + Math.floor(Math.random() * 1000),
+      firstName: r.firstName,
+      lastName: r.lastName,
+      title: r.title,
+      company: r.company || accountData.companyName || "",
+      linkedinUrl: r.linkedinUrl,
+      priority: "high",
+      notes: `Added via ${sourceTag}.`,
+      dateAdded,
+      messages: [],
+      image: null,
+    }));
+    setAccountData((prev) => ({
+      ...prev,
+      hotlist: [...newProspects, ...(prev.hotlist || [])],
+    }));
+    setBulkAddedCount(newProspects.length);
+    setBulkPreview(null);
+    setBulkSource(null);
+    setTimeout(() => setBulkAddedCount(0), 3000);
   };
 
   return (
@@ -381,6 +669,148 @@ export function Hotlist({ accountData, setAccountData }: ToolProps) {
             </button>
           </div>
         </div>
+      </div>
+
+      <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
+        <h4 className="font-semibold text-slate-800 mb-1 flex items-center gap-2 text-sm">
+          <Upload className="w-4 h-4 text-orange-500" /> Bulk Add
+        </h4>
+        <p className="text-xs text-slate-500 mb-4">
+          Upload a screenshot of a contact list (LinkedIn search, CRM table,
+          etc.) or a CSV. Review the extracted rows before committing.
+        </p>
+
+        {!bulkPreview && (
+          <div className="flex flex-wrap items-center gap-3">
+            <input
+              type="file"
+              accept="image/*"
+              id="hotlist-bulk-screenshot"
+              className="hidden"
+              disabled={bulkLoading}
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) handleBulkScreenshot(file);
+                e.target.value = "";
+              }}
+            />
+            <label
+              htmlFor="hotlist-bulk-screenshot"
+              className={`cursor-pointer bg-orange-50 hover:bg-orange-100 text-orange-700 border border-orange-200 px-3 py-2 rounded-md text-sm font-medium flex items-center gap-2 transition-colors ${bulkLoading ? "opacity-50 cursor-not-allowed" : ""}`}
+            >
+              <ImageIcon className="w-4 h-4" /> Upload Screenshot
+            </label>
+
+            <input
+              type="file"
+              accept=".csv,text/csv"
+              id="hotlist-bulk-csv"
+              className="hidden"
+              disabled={bulkLoading}
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) handleBulkCsv(file);
+                e.target.value = "";
+              }}
+            />
+            <label
+              htmlFor="hotlist-bulk-csv"
+              className={`cursor-pointer bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 px-3 py-2 rounded-md text-sm font-medium flex items-center gap-2 transition-colors ${bulkLoading ? "opacity-50 cursor-not-allowed" : ""}`}
+            >
+              <FileSpreadsheet className="w-4 h-4" /> Upload CSV
+            </label>
+
+            {bulkLoading && (
+              <span className="text-xs text-slate-600 flex items-center gap-1">
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                {bulkSource === "screenshot"
+                  ? "Extracting contacts from screenshot…"
+                  : "Parsing CSV…"}
+              </span>
+            )}
+            {bulkAddedCount > 0 && (
+              <span className="text-xs text-emerald-700 font-semibold">
+                ✓ Added {bulkAddedCount} to hotlist
+              </span>
+            )}
+          </div>
+        )}
+
+        {bulkError && (
+          <p className="text-red-500 text-sm mt-3">{bulkError}</p>
+        )}
+
+        {bulkPreview && (
+          <div className="space-y-3 mt-2">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <span className="text-xs font-semibold text-slate-700 uppercase tracking-wider">
+                Preview — {bulkPreview.filter((r) => r.selected).length} of{" "}
+                {bulkPreview.length} selected
+              </span>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setAllBulk(true)}
+                  className="text-[10px] font-semibold text-slate-600 hover:text-slate-900 uppercase tracking-wider"
+                >
+                  Select all
+                </button>
+                <span className="text-slate-300 text-xs">|</span>
+                <button
+                  onClick={() => setAllBulk(false)}
+                  className="text-[10px] font-semibold text-slate-600 hover:text-slate-900 uppercase tracking-wider"
+                >
+                  Deselect all
+                </button>
+              </div>
+            </div>
+            <ul className="max-h-72 overflow-y-auto custom-scrollbar space-y-1.5 pr-1">
+              {bulkPreview.map((r) => (
+                <li
+                  key={r.id}
+                  className={`flex items-start gap-2 border rounded-md px-3 py-2 ${r.selected ? "border-orange-200 bg-orange-50/40" : "border-slate-200 bg-white opacity-70"}`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={r.selected}
+                    onChange={() => toggleBulkRow(r.id)}
+                    className="mt-0.5 w-4 h-4 text-orange-600 rounded border-gray-300 focus:ring-orange-500 cursor-pointer shrink-0"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <span className="text-sm font-semibold text-slate-900">
+                      {r.firstName} {r.lastName}
+                    </span>
+                    <p className="text-xs text-slate-500">
+                      {r.title}
+                      {r.title && r.company ? " @ " : ""}
+                      {r.company}
+                    </p>
+                    {r.linkedinUrl && (
+                      <p className="text-[11px] text-blue-600 break-all">
+                        {r.linkedinUrl}
+                      </p>
+                    )}
+                  </div>
+                </li>
+              ))}
+            </ul>
+            <div className="flex justify-end gap-2 pt-1">
+              <button
+                onClick={clearBulkPreview}
+                className="text-xs font-semibold text-slate-600 hover:text-slate-900 bg-white hover:bg-slate-100 border border-slate-200 px-3 py-1.5 rounded-md transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={commitBulkPreview}
+                disabled={bulkPreview.filter((r) => r.selected).length === 0}
+                className="bg-orange-600 hover:bg-orange-700 text-white px-3 py-1.5 rounded-md text-xs font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5 shadow-sm"
+              >
+                <Plus className="w-3.5 h-3.5" /> Add{" "}
+                {bulkPreview.filter((r) => r.selected).length} to Hotlist
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="bg-slate-50 border border-slate-200 rounded-xl p-5 shadow-sm">

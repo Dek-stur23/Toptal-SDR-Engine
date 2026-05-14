@@ -919,7 +919,7 @@ function NextStepChatModal({
     if (initialRanRef.current) return;
     initialRanRef.current = true;
     sendTurn(
-      "Recommend the next outreach step to book a meeting with this prospect. Give me 2-3 ranked options grounded in the data above.",
+      "Walk me through your read of this prospect's situation, then give me the phased outreach plan to book a meeting. Include drafted messages I can send.",
       [],
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps

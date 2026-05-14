@@ -252,6 +252,7 @@ export interface HotlistProspect {
   notes: string;
   dateAdded: string;
   messages: HotlistMessage[];
+  image: string | null;
 }
 
 export interface SoftwareEngineContact {

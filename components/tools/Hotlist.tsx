@@ -150,6 +150,7 @@ export function Hotlist({ accountData, setAccountData }: ToolProps) {
         timeStyle: "short",
       }),
       messages: [],
+      image,
     };
     setAccountData((prev) => ({
       ...prev,
@@ -222,9 +223,9 @@ export function Hotlist({ accountData, setAccountData }: ToolProps) {
           <div>
             <div className="flex items-center justify-between mb-2">
               <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wider">
-                Screenshot Autofill{" "}
+                Screenshot{" "}
                 <span className="text-slate-400 font-normal normal-case">
-                  (LinkedIn, email signature, CRM card — optional)
+                  (optional — autofills fields and is saved to the prospect)
                 </span>
               </label>
               {image && (
@@ -461,6 +462,7 @@ function ProspectCard({
   const [draftBody, setDraftBody] = useState("");
   const [draftResponse, setDraftResponse] = useState("");
   const [expandedMsg, setExpandedMsg] = useState<Record<number, boolean>>({});
+  const [viewingImage, setViewingImage] = useState(false);
 
   const messages = prospect.messages || [];
 
@@ -493,6 +495,21 @@ function ProspectCard({
   return (
     <div className="bg-white p-4 rounded-lg border border-slate-200 shadow-sm space-y-3">
       <div className="flex items-start justify-between gap-3">
+        {prospect.image && (
+          <button
+            onClick={() => setViewingImage(true)}
+            className="shrink-0 w-12 h-12 rounded-md overflow-hidden border border-slate-200 hover:border-blue-400 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
+            title="View saved screenshot"
+            aria-label="View saved screenshot"
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={prospect.image}
+              alt={`Screenshot for ${prospect.firstName} ${prospect.lastName}`}
+              className="w-full h-full object-cover"
+            />
+          </button>
+        )}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap mb-0.5">
             <span className="font-bold text-sm text-slate-900">
@@ -706,6 +723,30 @@ function ProspectCard({
           </div>
         )}
       </div>
+
+      {viewingImage && prospect.image && (
+        <div
+          onClick={() => setViewingImage(false)}
+          className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 animate-in fade-in"
+          role="dialog"
+          aria-modal="true"
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={prospect.image}
+            alt={`Screenshot for ${prospect.firstName} ${prospect.lastName}`}
+            className="max-w-full max-h-full object-contain rounded shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          />
+          <button
+            onClick={() => setViewingImage(false)}
+            className="absolute top-4 right-4 text-white/80 hover:text-white bg-black/40 hover:bg-black/60 rounded-full w-10 h-10 flex items-center justify-center transition-colors text-xl"
+            aria-label="Close image preview"
+          >
+            ×
+          </button>
+        </div>
+      )}
     </div>
   );
 }

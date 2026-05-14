@@ -44,6 +44,7 @@ function cleanProspect(raw: unknown): HotlistProspect | null {
           (m) => m && typeof m === "object",
         ) as HotlistMessage[])
       : [],
+    image: typeof p.image === "string" ? p.image : null,
   };
 }
 

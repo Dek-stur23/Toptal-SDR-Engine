@@ -8,12 +8,15 @@ import {
   ChevronRight,
   Copy,
   Flame,
+  Image as ImageIcon,
+  Loader2,
   Mail,
   MessageCircle,
   Phone,
   Plus,
   Send,
   Trash2,
+  Wand2,
 } from "lucide-react";
 import type { ToolProps } from "@/components/types";
 import type {
@@ -22,6 +25,18 @@ import type {
   HotlistPriority,
   HotlistProspect,
 } from "@/lib/types";
+import { generateWithClaude } from "@/lib/api";
+import { DEFAULT_HOTLIST_AUTOFILL_GEM } from "@/lib/gems";
+
+interface ExtractedFields {
+  firstName: string;
+  lastName: string;
+  title: string;
+  company: string;
+  email: string;
+  phone: string;
+  linkedinUrl: string;
+}
 
 const PRIORITY_BADGE: Record<HotlistPriority, string> = {
   high: "bg-red-100 text-red-700 border-red-200",
@@ -58,8 +73,81 @@ export function Hotlist({ accountData, setAccountData }: ToolProps) {
   const [phone, setPhone] = useState("");
   const [priority, setPriority] = useState<HotlistPriority>("high");
   const [notes, setNotes] = useState("");
+  const [image, setImage] = useState<string | null>(null);
+  const [extracting, setExtracting] = useState(false);
+  const [extractError, setExtractError] = useState("");
 
   const hotlist = accountData.hotlist || [];
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      if (typeof reader.result === "string") {
+        setImage(reader.result);
+        setExtractError("");
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const removeImage = () => {
+    setImage(null);
+    setExtractError("");
+  };
+
+  const autofillFromImage = async () => {
+    if (!image) return;
+    setExtracting(true);
+    setExtractError("");
+    try {
+      const schema = {
+        type: "OBJECT",
+        properties: {
+          firstName: { type: "STRING" },
+          lastName: { type: "STRING" },
+          title: { type: "STRING" },
+          company: { type: "STRING" },
+          email: { type: "STRING" },
+          phone: { type: "STRING" },
+          linkedinUrl: { type: "STRING" },
+        },
+        required: [
+          "firstName",
+          "lastName",
+          "title",
+          "company",
+          "email",
+          "phone",
+          "linkedinUrl",
+        ],
+      };
+      const result = await generateWithClaude<ExtractedFields>({
+        prompt:
+          "Extract every contact detail you can read from this screenshot. Return empty string for any field you cannot read with confidence.",
+        system: DEFAULT_HOTLIST_AUTOFILL_GEM,
+        schema,
+        image,
+      });
+      if (result.firstName) setFirstName(result.firstName);
+      if (result.lastName) setLastName(result.lastName);
+      if (result.title) setTitle(result.title);
+      if (result.company) setCompany(result.company);
+      if (result.email) setEmail(result.email);
+      if (result.phone) setPhone(result.phone);
+      if (result.linkedinUrl) setLinkedinUrl(result.linkedinUrl);
+    } catch (err) {
+      console.error("Hotlist autofill error:", err);
+      setExtractError(
+        err instanceof Error
+          ? err.message
+          : "Failed to extract details from the screenshot.",
+      );
+    } finally {
+      setExtracting(false);
+    }
+  };
 
   const addProspect = () => {
     if (!firstName.trim() && !lastName.trim() && !company.trim()) return;
@@ -93,6 +181,8 @@ export function Hotlist({ accountData, setAccountData }: ToolProps) {
     setPhone("");
     setPriority("high");
     setNotes("");
+    setImage(null);
+    setExtractError("");
   };
 
   const updateProspect = (id: number, patch: Partial<HotlistProspect>) => {
@@ -148,6 +238,71 @@ export function Hotlist({ accountData, setAccountData }: ToolProps) {
           <Plus className="w-4 h-4 text-orange-500" /> Add Prospect
         </h4>
         <div className="space-y-4">
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wider">
+                Screenshot Autofill{" "}
+                <span className="text-slate-400 font-normal normal-case">
+                  (LinkedIn, email signature, CRM card — optional)
+                </span>
+              </label>
+              {image && (
+                <button
+                  onClick={autofillFromImage}
+                  disabled={extracting}
+                  className="text-[10px] font-bold uppercase tracking-wider bg-orange-100 hover:bg-orange-200 text-orange-700 px-2 py-1 rounded flex items-center gap-1 transition-colors disabled:opacity-50"
+                >
+                  {extracting ? (
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                  ) : (
+                    <Wand2 className="w-3 h-3" />
+                  )}
+                  {extracting ? "Extracting..." : "Autofill from image"}
+                </button>
+              )}
+            </div>
+            <div className="border-2 border-dashed border-orange-200 rounded-lg h-24 flex items-center justify-center bg-white relative overflow-hidden shadow-sm hover:bg-orange-50/30 transition-colors">
+              {image ? (
+                <div className="w-full h-full relative group">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={image}
+                    alt="Prospect screenshot"
+                    className="w-full h-full object-cover opacity-70"
+                  />
+                  <button
+                    onClick={removeImage}
+                    className="absolute inset-0 flex items-center justify-center text-sm font-semibold text-red-600 bg-white/80 hover:bg-white transition-all opacity-0 group-hover:opacity-100"
+                  >
+                    Remove image
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    id="hotlist-image-upload"
+                    className="hidden"
+                    onChange={handleImageUpload}
+                  />
+                  <label
+                    htmlFor="hotlist-image-upload"
+                    className="cursor-pointer flex flex-col items-center justify-center w-full h-full text-orange-500 hover:text-orange-700 transition-colors"
+                  >
+                    <ImageIcon className="w-5 h-5 mb-1 opacity-80" />
+                    <span className="text-[11px] font-medium">
+                      Click to upload a screenshot
+                    </span>
+                  </label>
+                </>
+              )}
+            </div>
+            {extractError && (
+              <p className="text-red-500 text-xs mt-2">{extractError}</p>
+            )}
+          </div>
+
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
             <input
               type="text"

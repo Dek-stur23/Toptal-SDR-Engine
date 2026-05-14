@@ -248,8 +248,6 @@ export interface HotlistProspect {
   title: string;
   company: string;
   linkedinUrl: string;
-  email: string;
-  phone: string;
   priority: HotlistPriority;
   notes: string;
   dateAdded: string;

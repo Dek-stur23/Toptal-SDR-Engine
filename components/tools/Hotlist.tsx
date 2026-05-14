@@ -33,8 +33,6 @@ interface ExtractedFields {
   lastName: string;
   title: string;
   company: string;
-  email: string;
-  phone: string;
   linkedinUrl: string;
 }
 
@@ -69,13 +67,12 @@ export function Hotlist({ accountData, setAccountData }: ToolProps) {
   const [title, setTitle] = useState("");
   const [company, setCompany] = useState(accountData.companyName || "");
   const [linkedinUrl, setLinkedinUrl] = useState("");
-  const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("");
   const [priority, setPriority] = useState<HotlistPriority>("high");
   const [notes, setNotes] = useState("");
   const [image, setImage] = useState<string | null>(null);
   const [extracting, setExtracting] = useState(false);
   const [extractError, setExtractError] = useState("");
+  const [booleanCopied, setBooleanCopied] = useState(false);
 
   const hotlist = accountData.hotlist || [];
 
@@ -109,23 +106,13 @@ export function Hotlist({ accountData, setAccountData }: ToolProps) {
           lastName: { type: "STRING" },
           title: { type: "STRING" },
           company: { type: "STRING" },
-          email: { type: "STRING" },
-          phone: { type: "STRING" },
           linkedinUrl: { type: "STRING" },
         },
-        required: [
-          "firstName",
-          "lastName",
-          "title",
-          "company",
-          "email",
-          "phone",
-          "linkedinUrl",
-        ],
+        required: ["firstName", "lastName", "title", "company", "linkedinUrl"],
       };
       const result = await generateWithClaude<ExtractedFields>({
         prompt:
-          "Extract every contact detail you can read from this screenshot. Return empty string for any field you cannot read with confidence.",
+          "Extract the visible name, title, company, and LinkedIn URL from this screenshot. Return empty string for any field you cannot read with confidence. Do NOT extract emails or phone numbers.",
         system: DEFAULT_HOTLIST_AUTOFILL_GEM,
         schema,
         image,
@@ -134,8 +121,6 @@ export function Hotlist({ accountData, setAccountData }: ToolProps) {
       if (result.lastName) setLastName(result.lastName);
       if (result.title) setTitle(result.title);
       if (result.company) setCompany(result.company);
-      if (result.email) setEmail(result.email);
-      if (result.phone) setPhone(result.phone);
       if (result.linkedinUrl) setLinkedinUrl(result.linkedinUrl);
     } catch (err) {
       console.error("Hotlist autofill error:", err);
@@ -158,8 +143,6 @@ export function Hotlist({ accountData, setAccountData }: ToolProps) {
       title: title.trim(),
       company: company.trim(),
       linkedinUrl: linkedinUrl.trim(),
-      email: email.trim(),
-      phone: phone.trim(),
       priority,
       notes: notes.trim(),
       dateAdded: new Date().toLocaleString([], {
@@ -177,8 +160,6 @@ export function Hotlist({ accountData, setAccountData }: ToolProps) {
     setTitle("");
     setCompany(accountData.companyName || "");
     setLinkedinUrl("");
-    setEmail("");
-    setPhone("");
     setPriority("high");
     setNotes("");
     setImage(null);
@@ -333,24 +314,10 @@ export function Hotlist({ accountData, setAccountData }: ToolProps) {
               onChange={(e) => setCompany(e.target.value)}
             />
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div>
             <input
               type="text"
-              className="rounded-lg border border-gray-300 px-3 py-2 focus:ring-2 focus:ring-orange-500 outline-none transition-all bg-gray-50 text-sm text-gray-800"
-              placeholder="Email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-            />
-            <input
-              type="text"
-              className="rounded-lg border border-gray-300 px-3 py-2 focus:ring-2 focus:ring-orange-500 outline-none transition-all bg-gray-50 text-sm text-gray-800"
-              placeholder="Phone"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-            />
-            <input
-              type="text"
-              className="rounded-lg border border-gray-300 px-3 py-2 focus:ring-2 focus:ring-orange-500 outline-none transition-all bg-gray-50 text-sm text-gray-800"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:ring-2 focus:ring-orange-500 outline-none transition-all bg-gray-50 text-sm text-gray-800"
               placeholder="LinkedIn URL"
               value={linkedinUrl}
               onChange={(e) => setLinkedinUrl(e.target.value)}
@@ -429,6 +396,48 @@ export function Hotlist({ accountData, setAccountData }: ToolProps) {
           </div>
         )}
       </div>
+
+      {(() => {
+        const fullNames = hotlist
+          .map((p) => `${p.firstName} ${p.lastName}`.trim())
+          .filter(Boolean);
+        if (fullNames.length === 0) return null;
+        const booleanString = fullNames.map((n) => `"${n}"`).join(" OR ");
+        const copy = () => {
+          if (typeof navigator !== "undefined" && navigator.clipboard) {
+            navigator.clipboard.writeText(booleanString);
+            setBooleanCopied(true);
+            setTimeout(() => setBooleanCopied(false), 2000);
+          }
+        };
+        return (
+          <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              <h4 className="font-semibold text-slate-800 flex items-center gap-2 text-sm">
+                <Flame className="w-4 h-4 text-orange-500" /> Boolean Name
+                String
+                <span className="bg-slate-100 text-slate-600 text-xs px-2 py-0.5 rounded-full ml-1">
+                  {fullNames.length}
+                </span>
+              </h4>
+              <button
+                onClick={copy}
+                className="text-xs font-semibold text-orange-700 hover:text-orange-900 flex items-center gap-1 bg-orange-50 hover:bg-orange-100 border border-orange-200 px-2.5 py-1 rounded-md transition-colors"
+              >
+                <Copy className="w-3 h-3" /> {booleanCopied ? "Copied" : "Copy"}
+              </button>
+            </div>
+            <p className="text-xs text-slate-500">
+              Paste into LinkedIn Sales Navigator or any search tool that
+              supports boolean operators to surface every hotlist prospect at
+              once.
+            </p>
+            <pre className="text-xs text-emerald-400 bg-[#0f172a] border border-slate-700 p-3 rounded-md whitespace-pre-wrap break-all font-mono leading-relaxed">
+              {booleanString}
+            </pre>
+          </div>
+        );
+      })()}
     </div>
   );
 }
@@ -502,43 +511,37 @@ function ProspectCard({
           </p>
         </div>
         <button
-          onClick={onRemove}
-          className="text-slate-400 hover:text-red-600 transition-colors p-1"
-          title="Remove prospect"
+          onClick={() => {
+            const fullName =
+              `${prospect.firstName} ${prospect.lastName}`.trim() ||
+              "this prospect";
+            if (
+              window.confirm(`Remove ${fullName} from the hotlist?`)
+            ) {
+              onRemove();
+            }
+          }}
+          className="shrink-0 inline-flex items-center gap-1 text-xs font-semibold text-slate-500 hover:text-red-600 bg-slate-50 hover:bg-red-50 border border-slate-200 hover:border-red-200 px-2 py-1 rounded-md transition-colors"
+          title="Remove prospect from the hotlist"
         >
-          <Trash2 className="w-4 h-4" />
+          <Trash2 className="w-3.5 h-3.5" /> Remove
         </button>
       </div>
 
-      {(prospect.email || prospect.phone || prospect.linkedinUrl) && (
+      {prospect.linkedinUrl && (
         <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-600 border-t border-slate-100 pt-2">
-          {prospect.email && (
-            <a
-              href={`mailto:${prospect.email}`}
-              className="flex items-center gap-1 hover:text-blue-600"
-            >
-              <Mail className="w-3 h-3" /> {prospect.email}
-            </a>
-          )}
-          {prospect.phone && (
-            <span className="flex items-center gap-1">
-              <Phone className="w-3 h-3" /> {prospect.phone}
-            </span>
-          )}
-          {prospect.linkedinUrl && (
-            <a
-              href={
-                prospect.linkedinUrl.startsWith("http")
-                  ? prospect.linkedinUrl
-                  : `https://${prospect.linkedinUrl}`
-              }
-              target="_blank"
-              rel="noreferrer"
-              className="flex items-center gap-1 text-blue-600 hover:text-blue-800"
-            >
-              <MessageCircle className="w-3 h-3" /> LinkedIn
-            </a>
-          )}
+          <a
+            href={
+              prospect.linkedinUrl.startsWith("http")
+                ? prospect.linkedinUrl
+                : `https://${prospect.linkedinUrl}`
+            }
+            target="_blank"
+            rel="noreferrer"
+            className="flex items-center gap-1 text-blue-600 hover:text-blue-800"
+          >
+            <MessageCircle className="w-3 h-3" /> LinkedIn
+          </a>
         </div>
       )}
 

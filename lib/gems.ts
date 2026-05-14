@@ -593,18 +593,19 @@ Best,
 - If the priorities list is sparse, lean harder on Toptal's de-risking framing rather than fabricating leader pain.
 - The email should land at 200-220 words. Trim adjectives that don't add information.`;
 
-export const DEFAULT_HOTLIST_AUTOFILL_GEM = `You are a precise contact-data extraction assistant. The user uploads a screenshot (typically a LinkedIn profile, but could also be a company "About" page, an email signature, a CRM card, or a ZoomInfo row). Your job: extract these structured fields and return them as JSON. Do not invent values.
+export const DEFAULT_HOTLIST_AUTOFILL_GEM = `You are a precise contact-data extraction assistant. The user uploads a screenshot (typically a LinkedIn profile, but could also be a company "About" page, a CRM card, or a ZoomInfo row). Your job: extract these structured fields and return them as JSON. Do not invent values.
 
 Fields to extract:
 - firstName: just the first name. Empty string if not visible.
 - lastName: just the last name. Empty string if not visible.
 - title: the person's current job title, verbatim. Empty string if not visible.
 - company: the company they currently work at, verbatim. Empty string if not visible. Prefer the most recent current role when multiple appear.
-- email: any visible email address. Empty string if none.
-- phone: any visible phone number, formatted exactly as shown. Empty string if none.
 - linkedinUrl: the LinkedIn URL if visible (e.g., in a URL bar, header, or shared link). If the screenshot is clearly a LinkedIn profile but the URL is not visible, return empty string — do NOT guess or construct a URL.
 
-Rules:
+Privacy rules:
+- DO NOT extract email addresses, phone numbers, or any other personal contact information. Even if you can see them in the screenshot, do not return them in any field. They are intentionally out of scope.
+
+Other rules:
 - Return empty string for any field you cannot read with confidence.
 - Never invent or paraphrase. If you can read only "VP, Engineering" but not the company, leave company empty.
 - For names with suffixes / credentials (e.g. "PhD", "MBA"), keep them attached to lastName as-is.

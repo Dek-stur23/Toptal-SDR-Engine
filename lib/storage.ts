@@ -1,6 +1,13 @@
 "use client";
 
-import type { Account, AccountData, AppState } from "./types";
+import type {
+  Account,
+  AccountData,
+  AppState,
+  HotlistMessage,
+  HotlistPriority,
+  HotlistProspect,
+} from "./types";
 import type { ProcurementEngineState, SoftwareEngineState } from "./types";
 
 const ROOT_KEY = "toptal-sdr-engine::app";
@@ -10,6 +17,41 @@ function newId(): string {
     return crypto.randomUUID();
   }
   return `acct_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+// Coerces a stored prospect into the current shape. Older entries may carry
+// "email" / "phone" — those are intentionally dropped here so the next save
+// removes them from localStorage.
+function cleanProspect(raw: unknown): HotlistProspect | null {
+  if (!raw || typeof raw !== "object") return null;
+  const p = raw as Record<string, unknown>;
+  const id = typeof p.id === "number" ? p.id : Date.now();
+  return {
+    id,
+    firstName: typeof p.firstName === "string" ? p.firstName : "",
+    lastName: typeof p.lastName === "string" ? p.lastName : "",
+    title: typeof p.title === "string" ? p.title : "",
+    company: typeof p.company === "string" ? p.company : "",
+    linkedinUrl: typeof p.linkedinUrl === "string" ? p.linkedinUrl : "",
+    priority:
+      p.priority === "high" || p.priority === "medium" || p.priority === "low"
+        ? (p.priority as HotlistPriority)
+        : "medium",
+    notes: typeof p.notes === "string" ? p.notes : "",
+    dateAdded: typeof p.dateAdded === "string" ? p.dateAdded : "",
+    messages: Array.isArray(p.messages)
+      ? (p.messages.filter(
+          (m) => m && typeof m === "object",
+        ) as HotlistMessage[])
+      : [],
+  };
+}
+
+function cleanHotlist(raw: unknown): HotlistProspect[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map(cleanProspect)
+    .filter((p): p is HotlistProspect => p !== null);
 }
 
 export function emptySoftwareEngine(): SoftwareEngineState {
@@ -129,9 +171,7 @@ export function loadAppState(): AppState {
           : Array.isArray(legacyAccountData.cadences)
             ? legacyAccountData.cadences
             : [];
-        const hotlist = Array.isArray(legacyAccountData.hotlist)
-          ? legacyAccountData.hotlist
-          : [];
+        const hotlist = cleanHotlist(legacyAccountData.hotlist);
         const baseProcurement = emptyProcurementEngine();
         const loadedProcurement = (legacyAccountData.procurementEngine ??
           {}) as Partial<ProcurementEngineState>;
@@ -273,9 +313,7 @@ export function parseImportedAppState(json: string): AppState {
       : Array.isArray(legacyAccountData.cadences)
         ? legacyAccountData.cadences
         : [];
-    const hotlist = Array.isArray(legacyAccountData.hotlist)
-      ? legacyAccountData.hotlist
-      : [];
+    const hotlist = cleanHotlist(legacyAccountData.hotlist);
     const baseProcurement = emptyProcurementEngine();
     const loadedProcurement = (legacyAccountData.procurementEngine ??
       {}) as Partial<ProcurementEngineState>;

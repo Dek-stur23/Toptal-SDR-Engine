@@ -340,6 +340,8 @@ export interface ProcurementEngineState {
 export interface ProductEngineState {
   activeSteps: number[];
   completedSteps: number[];
+  selectedProduct: string;
+  analysis: string;
 }
 
 export interface AccountData {

@@ -57,6 +57,7 @@ import { ContactMap } from "@/components/engines/procurement/ContactMap";
 import { LeaderProfile } from "@/components/engines/procurement/LeaderProfile";
 import { Priorities } from "@/components/engines/procurement/Priorities";
 import { ProcurementPitch } from "@/components/engines/procurement/ProcurementPitch";
+import { ProductAnalysis } from "@/components/engines/product/ProductAnalysis";
 import { exportAccountToPdf } from "@/lib/pdf";
 import {
   createAccount,
@@ -108,7 +109,9 @@ const procurementEngineSteps: StepDef[] = [
   { id: 4, title: "Procurement Pitch", icon: MessageSquare, Component: ProcurementPitch },
 ];
 
-const productEngineSteps: StepDef[] = [];
+const productEngineSteps: StepDef[] = [
+  { id: 1, title: "Product Analysis", icon: Layers, Component: ProductAnalysis },
+];
 
 function scrollAnchorIntoView(anchorId: string) {
   if (typeof window === "undefined") return;

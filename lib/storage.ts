@@ -102,6 +102,8 @@ export function emptyProductEngine(): ProductEngineState {
   return {
     activeSteps: [],
     completedSteps: [],
+    selectedProduct: "",
+    analysis: "",
   };
 }
 

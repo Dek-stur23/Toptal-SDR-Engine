@@ -65,9 +65,10 @@ import { exportAccountToPdf } from "@/lib/pdf";
 import {
   type BackupSlot,
   createAccount,
-  exportAppStateJson,
+  exportAppStateJsonAsync,
   loadAppState,
-  parseImportedAppState,
+  migrateInlineImagesInState,
+  parseImportedAppStateAsync,
   saveAppState,
 } from "@/lib/storage";
 import type { Account, AccountData, AppState, ToolId } from "@/lib/types";
@@ -157,7 +158,19 @@ export default function App() {
     ) {
       initial.currentAccountId = initial.accounts[0].id;
     }
-    setState(initial);
+    // Move any inline base64 images into IndexedDB before showing the UI.
+    // This is the migration path that gets the user out of localStorage
+    // quota trouble: after this runs, the on-disk state holds only refs
+    // and is small. For users with no inline images, this is a no-op.
+    migrateInlineImagesInState(initial)
+      .then((didMigrate) => {
+        setState(initial);
+        if (didMigrate) saveAppState(initial);
+      })
+      .catch((err) => {
+        console.warn("Image migration failed (non-fatal):", err);
+        setState(initial);
+      });
   }, []);
 
   useEffect(() => {
@@ -488,19 +501,29 @@ export default function App() {
     exportAccountToPdf(currentAccount.accountData);
   };
 
-  const handleExportState = () => {
+  const handleExportState = async () => {
     if (!state) return;
-    const json = exportAppStateJson(state);
-    const blob = new Blob([json], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    const stamp = new Date().toISOString().slice(0, 10);
-    a.href = url;
-    a.download = `toptal-sdr-engine-backup-${stamp}.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    try {
+      // Inline image bytes from IDB into the exported JSON so the file
+      // is portable: a user importing this on a different machine /
+      // browser / Codespace gets every screenshot back too.
+      const json = await exportAppStateJsonAsync(state);
+      const blob = new Blob([json], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      const stamp = new Date().toISOString().slice(0, 10);
+      a.href = url;
+      a.download = `toptal-sdr-engine-backup-${stamp}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("Export error:", err);
+      alert(
+        `Could not export state: ${err instanceof Error ? err.message : "Unknown error"}`,
+      );
+    }
   };
 
   const handleImportState = async (file: File) => {
@@ -510,7 +533,10 @@ export default function App() {
     if (!confirmed) return;
     try {
       const text = await file.text();
-      const imported = parseImportedAppState(text);
+      // Walks the imported state and writes any inline images into IDB,
+      // returning a state full of refs that's safe to drop into
+      // localStorage.
+      const imported = await parseImportedAppStateAsync(text);
       setState(imported);
     } catch (err) {
       console.error("Import error:", err);

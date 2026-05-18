@@ -6,6 +6,7 @@ import type { StepProps } from "@/components/types";
 import type { ActivityLog } from "@/lib/types";
 import { generateWithClaude } from "@/lib/api";
 import { DEFAULT_TECHNICAL_AUDITOR_GEM } from "@/lib/gems";
+import { loadImage } from "@/lib/imageStore";
 import { stackToText } from "@/lib/stack";
 
 const COMPANY_PLACEHOLDER = "the target company";
@@ -53,10 +54,13 @@ export function MessageCrafter({
     setLoading(true);
     setError("");
     try {
+      const imageBytes = contact.liImage
+        ? await loadImage(contact.liImage)
+        : null;
       const result = await generateWithClaude<string>({
         prompt: buildPrompt(),
         system: DEFAULT_TECHNICAL_AUDITOR_GEM,
-        image: contact.liImage,
+        image: imageBytes,
       });
       setAccountData((prev) => ({
         ...prev,

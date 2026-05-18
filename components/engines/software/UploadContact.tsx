@@ -13,6 +13,8 @@ import type { StepProps } from "@/components/types";
 import { generateWithClaude } from "@/lib/api";
 import { DEFAULT_SOFTWARE_CONTACT_EXTRACT_GEM } from "@/lib/gems";
 import { createProspect, prependProspects } from "@/lib/hotlist";
+import { loadImage, putImage } from "@/lib/imageStore";
+import { useImage } from "@/lib/useImage";
 
 interface ExtractedFields {
   firstName: string;
@@ -66,12 +68,20 @@ export function UploadContact({
     setTimeout(() => setAddedToHotlist(false), 2000);
   };
 
+  const liImageSrc = useImage(liImage);
+
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onloadend = () => {
-      if (typeof reader.result === "string") setLiImage(reader.result);
+    reader.onloadend = async () => {
+      if (typeof reader.result !== "string") return;
+      try {
+        const ref = await putImage(reader.result);
+        setLiImage(ref);
+      } catch {
+        setLiImage(reader.result);
+      }
     };
     reader.readAsDataURL(file);
   };
@@ -95,11 +105,13 @@ export function UploadContact({
         },
         required: ["firstName", "lastName", "title", "company"],
       };
+      // Resolve any IDB ref to a data URL before sending to Claude.
+      const imageBytes = liImage ? await loadImage(liImage) : null;
       const result = await generateWithClaude<ExtractedFields>({
         prompt,
         system: DEFAULT_SOFTWARE_CONTACT_EXTRACT_GEM,
         schema,
-        image: liImage,
+        image: imageBytes,
       });
       if (result.firstName) setFirstName(result.firstName);
       if (result.lastName) setLastName(result.lastName);
@@ -208,12 +220,14 @@ export function UploadContact({
           <div className="border-2 border-dashed border-blue-200 rounded-lg h-20 flex items-center justify-center bg-white relative overflow-hidden shadow-sm hover:bg-blue-50/50 transition-colors">
             {liImage ? (
               <div className="w-full h-full relative group">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={liImage}
-                  alt="LinkedIn Profile"
-                  className="w-full h-full object-cover opacity-60"
-                />
+                {liImageSrc && (
+                  /* eslint-disable-next-line @next/next/no-img-element */
+                  <img
+                    src={liImageSrc}
+                    alt="LinkedIn Profile"
+                    className="w-full h-full object-cover opacity-60"
+                  />
+                )}
                 <button
                   onClick={() => setLiImage(null)}
                   className="absolute inset-0 flex items-center justify-center text-sm font-semibold text-red-600 bg-white/80 hover:bg-white transition-all opacity-0 group-hover:opacity-100"

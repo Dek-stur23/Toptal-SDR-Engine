@@ -11,6 +11,8 @@ import type { StepProps } from "@/components/types";
 import type { LeaderProfile as LeaderProfileData } from "@/lib/types";
 import { generateWithClaude } from "@/lib/api";
 import { DEFAULT_PROCUREMENT_LEADER_PROFILE_GEM } from "@/lib/gems";
+import { loadImage, putImage } from "@/lib/imageStore";
+import { useImage } from "@/lib/useImage";
 
 export function LeaderProfile({
   accountData,
@@ -18,6 +20,7 @@ export function LeaderProfile({
   onComplete,
 }: StepProps) {
   const engine = accountData.procurementEngine;
+  const leaderImageSrc = useImage(engine.leaderImage);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -37,13 +40,19 @@ export function LeaderProfile({
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onloadend = () => {
+    reader.onloadend = async () => {
       if (typeof reader.result !== "string") return;
+      let ref: string;
+      try {
+        ref = await putImage(reader.result);
+      } catch {
+        ref = reader.result;
+      }
       setAccountData((prev) => ({
         ...prev,
         procurementEngine: {
           ...prev.procurementEngine,
-          leaderImage: reader.result as string,
+          leaderImage: ref,
         },
       }));
     };
@@ -85,12 +94,15 @@ export function LeaderProfile({
         },
         required: ["team", "scope", "reportingChain", "recentActivity"],
       };
+      const imageBytes = engine.leaderImage
+        ? await loadImage(engine.leaderImage)
+        : null;
       const result = await generateWithClaude<LeaderProfileData>({
         prompt,
         system: DEFAULT_PROCUREMENT_LEADER_PROFILE_GEM,
         schema,
         webSearch: true,
-        image: engine.leaderImage,
+        image: imageBytes,
       });
       setAccountData((prev) => ({
         ...prev,
@@ -132,12 +144,14 @@ export function LeaderProfile({
         <div className="border-2 border-dashed border-blue-200 rounded-lg h-24 flex items-center justify-center bg-white relative overflow-hidden shadow-sm hover:bg-blue-50/50 transition-colors">
           {engine.leaderImage ? (
             <div className="w-full h-full relative group">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={engine.leaderImage}
-                alt={`LinkedIn screenshot for ${selected.name}`}
-                className="w-full h-full object-cover opacity-60"
-              />
+              {leaderImageSrc && (
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img
+                  src={leaderImageSrc}
+                  alt={`LinkedIn screenshot for ${selected.name}`}
+                  className="w-full h-full object-cover opacity-60"
+                />
+              )}
               <button
                 onClick={removeImage}
                 className="absolute inset-0 flex items-center justify-center text-sm font-semibold text-red-600 bg-white/80 hover:bg-white transition-all opacity-0 group-hover:opacity-100"

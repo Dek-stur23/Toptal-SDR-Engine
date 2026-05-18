@@ -50,6 +50,8 @@ import {
   removeMessageById,
   removeProspectById,
 } from "@/lib/hotlist";
+import { deleteImage, loadImage, putImage } from "@/lib/imageStore";
+import { useImage } from "@/lib/useImage";
 
 interface ExtractedFields {
   firstName: string;
@@ -199,6 +201,7 @@ export function Hotlist({ accountData, setAccountData }: ToolProps) {
   const [priority, setPriority] = useState<HotlistPriority>("high");
   const [notes, setNotes] = useState("");
   const [image, setImage] = useState<string | null>(null);
+  const imageSrc = useImage(image);
   const [extracting, setExtracting] = useState(false);
   const [extractError, setExtractError] = useState("");
   const [booleanCopied, setBooleanCopied] = useState(false);
@@ -219,11 +222,18 @@ export function Hotlist({ accountData, setAccountData }: ToolProps) {
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onloadend = () => {
-      if (typeof reader.result === "string") {
+    reader.onloadend = async () => {
+      if (typeof reader.result !== "string") return;
+      // Store bytes in IDB, keep only the ref in component state. Falls
+      // back to the inline data URL if IDB is unavailable so the upload
+      // still works.
+      try {
+        const ref = await putImage(reader.result);
+        setImage(ref);
+      } catch {
         setImage(reader.result);
-        setExtractError("");
       }
+      setExtractError("");
     };
     reader.readAsDataURL(file);
   };
@@ -238,6 +248,13 @@ export function Hotlist({ accountData, setAccountData }: ToolProps) {
     setExtracting(true);
     setExtractError("");
     try {
+      // The Claude vision API needs the actual bytes; image state might
+      // hold an IDB ref, so resolve it first.
+      const imageData = await loadImage(image);
+      if (!imageData) {
+        setExtractError("Could not read the uploaded image.");
+        return;
+      }
       const schema = {
         type: "OBJECT",
         properties: {
@@ -254,7 +271,7 @@ export function Hotlist({ accountData, setAccountData }: ToolProps) {
           "Extract the visible name, title, company, and LinkedIn URL from this screenshot. Return empty string for any field you cannot read with confidence. Do NOT extract emails or phone numbers.",
         system: DEFAULT_HOTLIST_AUTOFILL_GEM,
         schema,
-        image,
+        image: imageData,
       });
       if (result.firstName) setFirstName(result.firstName);
       if (result.lastName) setLastName(result.lastName);
@@ -552,12 +569,14 @@ export function Hotlist({ accountData, setAccountData }: ToolProps) {
             <div className="border-2 border-dashed border-orange-200 rounded-lg h-24 flex items-center justify-center bg-white relative overflow-hidden shadow-sm hover:bg-orange-50/30 transition-colors">
               {image ? (
                 <div className="w-full h-full relative group">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={image}
-                    alt="Prospect screenshot"
-                    className="w-full h-full object-cover opacity-70"
-                  />
+                  {imageSrc && (
+                    /* eslint-disable-next-line @next/next/no-img-element */
+                    <img
+                      src={imageSrc}
+                      alt="Prospect screenshot"
+                      className="w-full h-full object-cover opacity-70"
+                    />
+                  )}
                   <button
                     onClick={removeImage}
                     className="absolute inset-0 flex items-center justify-center text-sm font-semibold text-red-600 bg-white/80 hover:bg-white transition-all opacity-0 group-hover:opacity-100"
@@ -952,6 +971,10 @@ function ProspectCard({
   const [viewingImage, setViewingImage] = useState(false);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<HotlistProspect>(prospect);
+  // Resolve image refs to data URLs for display. IDB refs flip in
+  // asynchronously after the first render; inline data URLs return synchronously.
+  const prospectImageSrc = useImage(prospect.image);
+  const draftImageSrc = useImage(draft.image);
 
   // Keep draft in sync with the prospect when not actively editing.
   // (Prevents stale draft if the prospect changes underneath, e.g. via
@@ -1044,8 +1067,12 @@ function ProspectCard({
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onloadend = () => {
-      if (typeof reader.result === "string") {
+    reader.onloadend = async () => {
+      if (typeof reader.result !== "string") return;
+      try {
+        const ref = await putImage(reader.result);
+        setDraft((prev) => ({ ...prev, image: ref }));
+      } catch {
         setDraft((prev) => ({ ...prev, image: reader.result as string }));
       }
     };
@@ -1102,16 +1129,18 @@ function ProspectCard({
         {prospect.image && (
           <button
             onClick={() => setViewingImage(true)}
-            className="shrink-0 w-12 h-12 rounded-md overflow-hidden border border-slate-200 hover:border-blue-400 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="shrink-0 w-12 h-12 rounded-md overflow-hidden border border-slate-200 hover:border-blue-400 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 bg-slate-100"
             title="View saved screenshot"
             aria-label="View saved screenshot"
           >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={prospect.image}
-              alt={`Screenshot for ${prospect.firstName} ${prospect.lastName}`}
-              className="w-full h-full object-cover"
-            />
+            {prospectImageSrc && (
+              /* eslint-disable-next-line @next/next/no-img-element */
+              <img
+                src={prospectImageSrc}
+                alt={`Screenshot for ${prospect.firstName} ${prospect.lastName}`}
+                className="w-full h-full object-cover"
+              />
+            )}
           </button>
         )}
         <div className="flex-1 min-w-0">
@@ -1268,13 +1297,15 @@ function ProspectCard({
               </label>
               <div className="flex items-center gap-2">
                 {draft.image && (
-                  <div className="w-10 h-10 rounded-md overflow-hidden border border-slate-200 shrink-0">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={draft.image}
-                      alt="Current screenshot"
-                      className="w-full h-full object-cover"
-                    />
+                  <div className="w-10 h-10 rounded-md overflow-hidden border border-slate-200 shrink-0 bg-slate-100">
+                    {draftImageSrc && (
+                      /* eslint-disable-next-line @next/next/no-img-element */
+                      <img
+                        src={draftImageSrc}
+                        alt="Current screenshot"
+                        className="w-full h-full object-cover"
+                      />
+                    )}
                   </div>
                 )}
                 <input
@@ -1437,13 +1468,15 @@ function ProspectCard({
           role="dialog"
           aria-modal="true"
         >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={prospect.image}
-            alt={`Screenshot for ${prospect.firstName} ${prospect.lastName}`}
-            className="max-w-full max-h-full object-contain rounded shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          />
+          {prospectImageSrc && (
+            /* eslint-disable-next-line @next/next/no-img-element */
+            <img
+              src={prospectImageSrc}
+              alt={`Screenshot for ${prospect.firstName} ${prospect.lastName}`}
+              className="max-w-full max-h-full object-contain rounded shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            />
+          )}
           <button
             onClick={() => setViewingImage(false)}
             className="absolute top-4 right-4 text-white/80 hover:text-white bg-black/40 hover:bg-black/60 rounded-full w-10 h-10 flex items-center justify-center transition-colors text-xl"

@@ -15,6 +15,13 @@ import type {
   SoftwareEngineState,
 } from "./types";
 import { genId } from "./ids";
+import {
+  inlineFromIdb,
+  isIdbRef,
+  isInlineDataUrl,
+  migrateInlineToIdb,
+  putImage,
+} from "./imageStore";
 
 const ROOT_KEY = "toptal-sdr-engine::app";
 const BACKUP_KEY_PREFIX = "toptal-sdr-engine::backup::";
@@ -706,4 +713,183 @@ export function parseImportedAppState(json: string): AppState {
       product: candidate.engineCollapsed?.product ?? false,
     },
   };
+}
+
+// ============================================================
+// Image migration: inline base64 <-> IDB refs
+// ============================================================
+//
+// On boot we walk every image field in app state and move any inline
+// base64 data URLs into IndexedDB, replacing them with `idb:<id>` refs.
+// This frees up localStorage for the small text-only state, while images
+// live in IDB's much larger quota.
+//
+// On export we do the inverse: walk every ref and inline the bytes, so
+// the exported JSON file is self-contained and portable.
+//
+// On import we walk inline data URLs and put them into IDB, returning a
+// state full of refs ready for localStorage.
+
+async function migrateImageField(
+  current: string | null | undefined,
+): Promise<{ next: string | null; changed: boolean }> {
+  if (!current) return { next: null, changed: false };
+  if (isIdbRef(current)) return { next: current, changed: false };
+  if (!isInlineDataUrl(current)) return { next: current, changed: false };
+  const next = await migrateInlineToIdb(current);
+  return { next, changed: next !== current };
+}
+
+// Walks `state` and migrates every inline base64 image to IDB. Returns
+// true if any field was changed so the caller can re-save.
+export async function migrateInlineImagesInState(
+  state: AppState,
+): Promise<boolean> {
+  let any = false;
+  for (const account of state.accounts) {
+    const ad = account.accountData;
+    if (!ad) continue;
+    if (Array.isArray(ad.hotlist)) {
+      for (const p of ad.hotlist) {
+        const r = await migrateImageField(p.image);
+        if (r.changed) {
+          p.image = r.next;
+          any = true;
+        }
+      }
+    }
+    if (ad.softwareEngine?.contact) {
+      const r = await migrateImageField(ad.softwareEngine.contact.liImage);
+      if (r.changed) {
+        ad.softwareEngine.contact.liImage = r.next;
+        any = true;
+      }
+    }
+    if (ad.procurementEngine) {
+      const r = await migrateImageField(ad.procurementEngine.leaderImage);
+      if (r.changed) {
+        ad.procurementEngine.leaderImage = r.next;
+        any = true;
+      }
+    }
+    if (ad.productEngine?.contact) {
+      const r = await migrateImageField(ad.productEngine.contact.image);
+      if (r.changed) {
+        ad.productEngine.contact.image = r.next;
+        any = true;
+      }
+    }
+    const r = await migrateImageField(ad.messagingLiImage);
+    if (r.changed) {
+      ad.messagingLiImage = r.next;
+      any = true;
+    }
+  }
+  return any;
+}
+
+async function inlineImageField(
+  ref: string | null | undefined,
+): Promise<string | null> {
+  return inlineFromIdb(ref);
+}
+
+// Returns a deep clone of `state` with every IDB ref expanded back into
+// an inline data URL. Used by the export path so the resulting JSON
+// file is portable.
+async function inlineImagesInState(state: AppState): Promise<AppState> {
+  const cloned = JSON.parse(JSON.stringify(state)) as AppState;
+  for (const account of cloned.accounts) {
+    const ad = account.accountData;
+    if (!ad) continue;
+    if (Array.isArray(ad.hotlist)) {
+      for (const p of ad.hotlist) {
+        p.image = await inlineImageField(p.image);
+      }
+    }
+    if (ad.softwareEngine?.contact) {
+      ad.softwareEngine.contact.liImage = await inlineImageField(
+        ad.softwareEngine.contact.liImage,
+      );
+    }
+    if (ad.procurementEngine) {
+      ad.procurementEngine.leaderImage = await inlineImageField(
+        ad.procurementEngine.leaderImage,
+      );
+    }
+    if (ad.productEngine?.contact) {
+      ad.productEngine.contact.image = await inlineImageField(
+        ad.productEngine.contact.image,
+      );
+    }
+    ad.messagingLiImage = await inlineImageField(ad.messagingLiImage);
+  }
+  return cloned;
+}
+
+// Async export: inline all images first, then serialize.
+export async function exportAppStateJsonAsync(
+  state: AppState,
+): Promise<string> {
+  const inlined = await inlineImagesInState(state);
+  return exportAppStateJson(inlined);
+}
+
+// Async import: parse, then walk every image field and put inline data
+// URLs into IDB. The returned state holds refs and is safe to drop
+// straight into localStorage.
+export async function parseImportedAppStateAsync(
+  json: string,
+): Promise<AppState> {
+  const state = parseImportedAppState(json);
+  for (const account of state.accounts) {
+    const ad = account.accountData;
+    if (!ad) continue;
+    if (Array.isArray(ad.hotlist)) {
+      for (const p of ad.hotlist) {
+        if (p.image && isInlineDataUrl(p.image)) {
+          try {
+            p.image = await putImage(p.image);
+          } catch {
+            // keep inline if put fails — better that than dropping the image
+          }
+        }
+      }
+    }
+    if (ad.softwareEngine?.contact && isInlineDataUrl(ad.softwareEngine.contact.liImage)) {
+      try {
+        ad.softwareEngine.contact.liImage = await putImage(
+          ad.softwareEngine.contact.liImage as string,
+        );
+      } catch {
+        // keep inline
+      }
+    }
+    if (ad.procurementEngine && isInlineDataUrl(ad.procurementEngine.leaderImage)) {
+      try {
+        ad.procurementEngine.leaderImage = await putImage(
+          ad.procurementEngine.leaderImage as string,
+        );
+      } catch {
+        // keep inline
+      }
+    }
+    if (ad.productEngine?.contact && isInlineDataUrl(ad.productEngine.contact.image)) {
+      try {
+        ad.productEngine.contact.image = await putImage(
+          ad.productEngine.contact.image as string,
+        );
+      } catch {
+        // keep inline
+      }
+    }
+    if (isInlineDataUrl(ad.messagingLiImage)) {
+      try {
+        ad.messagingLiImage = await putImage(ad.messagingLiImage as string);
+      } catch {
+        // keep inline
+      }
+    }
+  }
+  return state;
 }

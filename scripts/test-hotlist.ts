@@ -1,13 +1,16 @@
 // Hotlist hardening test suite.
 //
-// Runs the actual lib/hotlist, lib/ids, and lib/storage code (no mocks of
-// the unit-under-test) and asserts invariants that protect against silent
-// data loss. Polyfills a minimal window + localStorage so storage.ts can
-// run in Node.
+// Runs the actual lib/hotlist, lib/ids, lib/storage, and lib/imageStore
+// code (no mocks of the unit-under-test) and asserts invariants that
+// protect against silent data loss. Polyfills window + localStorage and
+// uses fake-indexeddb so the IDB-backed image store can run in Node.
 //
-// Run with: node --experimental-strip-types scripts/test-hotlist.ts
+// Run with: npm run test:hotlist
 //
 // Exits non-zero on the first failing assertion.
+
+// Polyfill IndexedDB before importing anything that uses it.
+import "fake-indexeddb/auto";
 
 // ---- Polyfills (must run before importing storage.ts) ----
 
@@ -842,6 +845,284 @@ section("Storage: saveAppState surfaces failure when even cleared backups don't 
 }
 
 // ============================================================
+// Image store (IndexedDB) — async tests run inside main()
+// ============================================================
+
+import {
+  _resetImageCacheForTests,
+  deleteImage,
+  IDB_PREFIX,
+  inlineFromIdb,
+  isIdbRef,
+  isInlineDataUrl,
+  loadImage,
+  migrateInlineToIdb,
+  putImage,
+} from "../lib/imageStore.ts";
+import {
+  exportAppStateJsonAsync,
+  migrateInlineImagesInState,
+  parseImportedAppStateAsync,
+} from "../lib/storage.ts";
+
+const SAMPLE_DATA_URL =
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR4nGNgAAIAAAUAAeImBZsAAAAASUVORK5CYII=";
+
+async function runAsyncImageTests() {
+
+section("imageStore: putImage returns a ref string and loadImage retrieves it");
+
+{
+  _resetImageCacheForTests();
+  const ref = await putImage(SAMPLE_DATA_URL);
+  ok(ref.startsWith(IDB_PREFIX), "ref has idb: prefix");
+  ok(isIdbRef(ref), "isIdbRef accepts the new ref");
+  const loaded = await loadImage(ref);
+  eq(loaded, SAMPLE_DATA_URL, "loadImage returns the original data URL");
+}
+
+section("imageStore: putImage produces unique refs for repeat calls");
+
+{
+  const refs = new Set<string>();
+  for (let i = 0; i < 50; i++) {
+    refs.add(await putImage(SAMPLE_DATA_URL));
+  }
+  eq(refs.size, 50, "50 puts produce 50 distinct refs");
+}
+
+section("imageStore: loadImage passes inline data URLs through unchanged");
+
+{
+  const result = await loadImage(SAMPLE_DATA_URL);
+  eq(result, SAMPLE_DATA_URL, "inline data URL returned as-is");
+  ok(isInlineDataUrl(SAMPLE_DATA_URL), "isInlineDataUrl recognizes it");
+}
+
+section("imageStore: loadImage returns null for missing refs");
+
+{
+  const missing = `${IDB_PREFIX}does-not-exist`;
+  const result = await loadImage(missing);
+  eq(result, null, "missing ref returns null, not a thrown error");
+}
+
+section("imageStore: deleteImage removes from store");
+
+{
+  const ref = await putImage(SAMPLE_DATA_URL);
+  await deleteImage(ref);
+  const after = await loadImage(ref);
+  eq(after, null, "image is gone after delete");
+}
+
+section("imageStore: migrateInlineToIdb moves data URL into IDB");
+
+{
+  const ref = await migrateInlineToIdb(SAMPLE_DATA_URL);
+  ok(ref !== null, "migration returned a non-null ref");
+  ok(isIdbRef(ref!), "result is an idb: ref");
+  const loaded = await loadImage(ref);
+  eq(loaded, SAMPLE_DATA_URL, "bytes preserved through migration");
+}
+
+section("imageStore: migrateInlineToIdb is idempotent for existing refs");
+
+{
+  const ref = await putImage(SAMPLE_DATA_URL);
+  const same = await migrateInlineToIdb(ref);
+  eq(same, ref, "an existing ref passes through unchanged");
+}
+
+section("imageStore: inlineFromIdb expands a ref back to a data URL");
+
+{
+  const ref = await putImage(SAMPLE_DATA_URL);
+  const inlined = await inlineFromIdb(ref);
+  eq(inlined, SAMPLE_DATA_URL, "data URL recovered from ref");
+}
+
+// ============================================================
+// State-level image migration
+// ============================================================
+
+section("State migration: inline images on hotlist prospects move to IDB");
+
+{
+  memStorage.clear();
+  const account = createAccount();
+  const prospect = createProspect({ firstName: "Alice" });
+  prospect.image = SAMPLE_DATA_URL;
+  const state: AppState = {
+    accounts: [
+      {
+        ...account,
+        accountData: { ...account.accountData, hotlist: [prospect] },
+      },
+    ],
+    currentAccountId: account.id,
+    isSidebarOpen: true,
+    isArchivedSectionOpen: false,
+    engineCollapsed: { software: false, procurement: false, product: false },
+  };
+  const didMigrate = await migrateInlineImagesInState(state);
+  ok(didMigrate, "migration reports that something changed");
+  const finalImage = state.accounts[0].accountData.hotlist[0].image;
+  ok(isIdbRef(finalImage), "hotlist prospect now holds an IDB ref");
+  const recovered = await loadImage(finalImage);
+  eq(recovered, SAMPLE_DATA_URL, "bytes preserved end-to-end");
+}
+
+section("State migration: every engine image field moves to IDB");
+
+{
+  memStorage.clear();
+  const account = createAccount();
+  account.accountData.softwareEngine.contact.liImage = SAMPLE_DATA_URL;
+  account.accountData.procurementEngine.leaderImage = SAMPLE_DATA_URL;
+  account.accountData.productEngine.contact.image = SAMPLE_DATA_URL;
+  account.accountData.messagingLiImage = SAMPLE_DATA_URL;
+  const state: AppState = {
+    accounts: [account],
+    currentAccountId: account.id,
+    isSidebarOpen: true,
+    isArchivedSectionOpen: false,
+    engineCollapsed: { software: false, procurement: false, product: false },
+  };
+  const didMigrate = await migrateInlineImagesInState(state);
+  ok(didMigrate, "migration reports changes across engines");
+  const ad = state.accounts[0].accountData;
+  ok(isIdbRef(ad.softwareEngine.contact.liImage), "software engine migrated");
+  ok(isIdbRef(ad.procurementEngine.leaderImage), "procurement engine migrated");
+  ok(isIdbRef(ad.productEngine.contact.image), "product engine migrated");
+  ok(isIdbRef(ad.messagingLiImage), "messagingLiImage migrated");
+}
+
+section("State migration: idempotent — running twice migrates nothing the second time");
+
+{
+  memStorage.clear();
+  const account = createAccount();
+  const prospect = createProspect({ firstName: "Alice" });
+  prospect.image = SAMPLE_DATA_URL;
+  const state: AppState = {
+    accounts: [
+      {
+        ...account,
+        accountData: { ...account.accountData, hotlist: [prospect] },
+      },
+    ],
+    currentAccountId: account.id,
+    isSidebarOpen: true,
+    isArchivedSectionOpen: false,
+    engineCollapsed: { software: false, procurement: false, product: false },
+  };
+  const first = await migrateInlineImagesInState(state);
+  ok(first, "first run migrated");
+  const second = await migrateInlineImagesInState(state);
+  ok(!second, "second run found nothing to migrate (idempotent)");
+}
+
+// ============================================================
+// Export / Import async paths
+// ============================================================
+
+section("Export async: inlines IDB-backed images into the JSON file");
+
+{
+  const ref = await putImage(SAMPLE_DATA_URL);
+  const account = createAccount();
+  const prospect = createProspect({ firstName: "Alice" });
+  prospect.image = ref;
+  const state: AppState = {
+    accounts: [
+      {
+        ...account,
+        accountData: { ...account.accountData, hotlist: [prospect] },
+      },
+    ],
+    currentAccountId: account.id,
+    isSidebarOpen: true,
+    isArchivedSectionOpen: false,
+    engineCollapsed: { software: false, procurement: false, product: false },
+  };
+  const json = await exportAppStateJsonAsync(state);
+  // The exported JSON must contain the inline bytes, not the ref, so the
+  // file is portable to a machine that doesn't have this IDB.
+  ok(json.includes(SAMPLE_DATA_URL), "exported JSON contains inline data URL");
+  ok(!json.includes(ref), "exported JSON does not contain the IDB ref");
+}
+
+section("Import async: inline images in JSON land in IDB on import");
+
+{
+  // Build a portable export envelope manually with an inline image.
+  const account = createAccount();
+  const prospect = createProspect({ firstName: "Bob" });
+  prospect.image = SAMPLE_DATA_URL;
+  const state: AppState = {
+    accounts: [
+      {
+        ...account,
+        accountData: { ...account.accountData, hotlist: [prospect] },
+      },
+    ],
+    currentAccountId: account.id,
+    isSidebarOpen: true,
+    isArchivedSectionOpen: false,
+    engineCollapsed: { software: false, procurement: false, product: false },
+  };
+  const envelope = {
+    app: "toptal-sdr-engine",
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    state,
+  };
+  const imported = await parseImportedAppStateAsync(JSON.stringify(envelope));
+  const importedImage = imported.accounts[0].accountData.hotlist[0].image;
+  ok(isIdbRef(importedImage), "imported state holds an IDB ref, not bytes");
+  const recovered = await loadImage(importedImage);
+  eq(recovered, SAMPLE_DATA_URL, "bytes are in IDB and load back correctly");
+}
+
+section("Round-trip: export then import preserves images exactly");
+
+{
+  const ref = await putImage(SAMPLE_DATA_URL);
+  const account = createAccount();
+  const prospect = createProspect({ firstName: "Carol" });
+  prospect.image = ref;
+  const state: AppState = {
+    accounts: [
+      {
+        ...account,
+        accountData: { ...account.accountData, hotlist: [prospect] },
+      },
+    ],
+    currentAccountId: account.id,
+    isSidebarOpen: true,
+    isArchivedSectionOpen: false,
+    engineCollapsed: { software: false, procurement: false, product: false },
+  };
+  const json = await exportAppStateJsonAsync(state);
+  const imported = await parseImportedAppStateAsync(json);
+  const importedImage = imported.accounts[0].accountData.hotlist[0].image;
+  const recovered = await loadImage(importedImage);
+  eq(recovered, SAMPLE_DATA_URL, "image survived export -> import round-trip");
+}
+
+}
+
+// Run async tests, then emit the final report.
+runAsyncImageTests()
+  .then(() => emitReport())
+  .catch((err) => {
+    console.error("Async test run failed:", err);
+    process.exit(1);
+  });
+
+function emitReport() {
+// ============================================================
 // Final report
 // ============================================================
 
@@ -854,3 +1135,4 @@ if (failed > 0) {
   process.exit(1);
 }
 process.exit(0);
+}

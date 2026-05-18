@@ -29,7 +29,10 @@ function newId(): string {
 function cleanProspect(raw: unknown): HotlistProspect | null {
   if (!raw || typeof raw !== "object") return null;
   const p = raw as Record<string, unknown>;
-  const id = typeof p.id === "number" ? p.id : Date.now();
+  const id =
+    typeof p.id === "number" && Number.isFinite(p.id)
+      ? p.id
+      : Date.now() + Math.floor(Math.random() * 1_000_000);
   return {
     id,
     firstName: typeof p.firstName === "string" ? p.firstName : "",
@@ -54,9 +57,19 @@ function cleanProspect(raw: unknown): HotlistProspect | null {
 
 function cleanHotlist(raw: unknown): HotlistProspect[] {
   if (!Array.isArray(raw)) return [];
-  return raw
+  const cleaned = raw
     .map(cleanProspect)
     .filter((p): p is HotlistProspect => p !== null);
+  const seen = new Set<number>();
+  return cleaned.map((p) => {
+    if (seen.has(p.id)) {
+      let next = Date.now() + Math.floor(Math.random() * 1_000_000);
+      while (seen.has(next)) next++;
+      p = { ...p, id: next };
+    }
+    seen.add(p.id);
+    return p;
+  });
 }
 
 export function emptySoftwareEngine(): SoftwareEngineState {

@@ -373,6 +373,91 @@ function notifySaveFailure(err: unknown) {
   }
 }
 
+function notifySaveRecovered(detail: { droppedBackups: number }) {
+  console.warn(
+    `Save recovered by dropping ${detail.droppedBackups} backup slot(s) to free space.`,
+  );
+  if (typeof window !== "undefined") {
+    try {
+      window.dispatchEvent(
+        new CustomEvent("toptal-sdr-engine:save-recovered", { detail }),
+      );
+    } catch {
+      // ignore
+    }
+  }
+}
+
+function isQuotaError(err: unknown): boolean {
+  if (!err || typeof err !== "object") return false;
+  const name = (err as { name?: string }).name;
+  if (
+    name === "QuotaExceededError" ||
+    name === "NS_ERROR_DOM_QUOTA_REACHED"
+  ) {
+    return true;
+  }
+  const msg = (err as { message?: string }).message ?? "";
+  return /quota/i.test(msg) || /exceeded/i.test(msg);
+}
+
+// Clears the OLDEST backup slot (the highest occupied index). Returns true
+// if a slot was actually cleared, false if no backups exist.
+function dropOldestBackup(): boolean {
+  if (typeof window === "undefined") return false;
+  for (let i = BACKUP_SLOTS - 1; i >= 0; i--) {
+    const key = `${BACKUP_KEY_PREFIX}${i}`;
+    try {
+      if (window.localStorage.getItem(key) !== null) {
+        window.localStorage.removeItem(key);
+        return true;
+      }
+    } catch {
+      // Try the next one if this slot read failed
+    }
+  }
+  return false;
+}
+
+export function clearAllBackups(): number {
+  if (typeof window === "undefined") return 0;
+  let cleared = 0;
+  for (let i = 0; i < BACKUP_SLOTS; i++) {
+    const key = `${BACKUP_KEY_PREFIX}${i}`;
+    try {
+      if (window.localStorage.getItem(key) !== null) {
+        window.localStorage.removeItem(key);
+        cleared++;
+      }
+    } catch {
+      // skip
+    }
+  }
+  return cleared;
+}
+
+// Best-effort estimate of total localStorage bytes used by this app.
+// Returns undefined if storage is unavailable.
+export function estimateAppStorageBytes(): number | undefined {
+  if (typeof window === "undefined") return undefined;
+  let total = 0;
+  try {
+    for (let i = 0; i < window.localStorage.length; i++) {
+      const k = window.localStorage.key(i);
+      if (!k) continue;
+      if (k === ROOT_KEY || k.startsWith(BACKUP_KEY_PREFIX)) {
+        const v = window.localStorage.getItem(k) ?? "";
+        // Approx: each char in a JS string is 2 bytes (UTF-16) in memory.
+        // localStorage quotas are also typically measured in UTF-16 code units.
+        total += (k.length + v.length) * 2;
+      }
+    }
+  } catch {
+    return undefined;
+  }
+  return total;
+}
+
 export function saveAppState(state: AppState): void {
   if (typeof window === "undefined") return;
   let serialized: string;
@@ -389,14 +474,31 @@ export function saveAppState(state: AppState): void {
       return null;
     }
   })();
-  try {
-    window.localStorage.setItem(ROOT_KEY, serialized);
-  } catch (err) {
-    // Primary write failed (quota exceeded, private mode, etc). Surface it
-    // — the previous state still sits on disk and in backup slots, but the
-    // user's last edit is unsaved and they need to know.
-    notifySaveFailure(err);
+  // Try the primary write. If we hit a quota error, free space one backup
+  // slot at a time (oldest first) and retry. Backups exist precisely so we
+  // have something to sacrifice when storage gets tight — losing them is
+  // strictly preferable to losing the user's actual work.
+  let droppedBackups = 0;
+  let lastErr: unknown = null;
+  for (let attempt = 0; attempt < BACKUP_SLOTS + 1; attempt++) {
+    try {
+      window.localStorage.setItem(ROOT_KEY, serialized);
+      lastErr = null;
+      break;
+    } catch (err) {
+      lastErr = err;
+      if (!isQuotaError(err)) break;
+      // Quota: drop one backup and try again.
+      if (!dropOldestBackup()) break;
+      droppedBackups++;
+    }
+  }
+  if (lastErr !== null) {
+    notifySaveFailure(lastErr);
     return;
+  }
+  if (droppedBackups > 0) {
+    notifySaveRecovered({ droppedBackups });
   }
   rotateBackups(prev);
 }

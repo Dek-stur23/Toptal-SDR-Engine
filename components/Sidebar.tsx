@@ -17,7 +17,18 @@ import {
   X,
 } from "lucide-react";
 import type { Account } from "@/lib/types";
-import { listBackups, type BackupSlot } from "@/lib/storage";
+import {
+  clearAllBackups,
+  estimateAppStorageBytes,
+  listBackups,
+  type BackupSlot,
+} from "@/lib/storage";
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(2)} MB`;
+}
 
 interface Props {
   accounts: Account[];
@@ -57,11 +68,32 @@ export function Sidebar({
   const [editingName, setEditingName] = useState("");
   const [showBackups, setShowBackups] = useState(false);
   const [backups, setBackups] = useState<BackupSlot[]>([]);
+  const [storageBytes, setStorageBytes] = useState<number | undefined>(
+    undefined,
+  );
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  const openBackups = () => {
+  const refreshBackupModal = () => {
     setBackups(listBackups());
+    setStorageBytes(estimateAppStorageBytes());
+  };
+
+  const openBackups = () => {
+    refreshBackupModal();
     setShowBackups(true);
+  };
+
+  const handleClearAllBackups = () => {
+    if (
+      !window.confirm(
+        "Clear all snapshot slots? This frees space in your browser so a large state import can succeed, but you'll lose the rollback history.",
+      )
+    ) {
+      return;
+    }
+    const cleared = clearAllBackups();
+    refreshBackupModal();
+    window.alert(`Cleared ${cleared} snapshot slot${cleared === 1 ? "" : "s"}.`);
   };
 
   const activeAccounts = accounts.filter((a) => !a.isArchived);
@@ -316,6 +348,26 @@ export function Sidebar({
               0 is the state just before the most recent save. Restoring
               replaces your current accounts and state.
             </p>
+            {storageBytes !== undefined && (
+              <div className="text-xs bg-slate-50 border border-slate-200 rounded-md p-2 flex items-center justify-between">
+                <div>
+                  <span className="text-slate-500">Storage used: </span>
+                  <span className="font-semibold text-slate-700">
+                    {formatBytes(storageBytes)}
+                  </span>
+                  <span className="text-slate-400"> of ~5 MB browser quota</span>
+                </div>
+                {backups.length > 0 && (
+                  <button
+                    onClick={handleClearAllBackups}
+                    className="text-[11px] font-semibold text-red-600 hover:text-white hover:bg-red-600 border border-red-200 hover:border-red-600 px-2 py-1 rounded transition-colors"
+                    title="Free up local storage by removing all snapshot slots"
+                  >
+                    Clear all to free space
+                  </button>
+                )}
+              </div>
+            )}
             {backups.length === 0 ? (
               <p className="text-sm text-slate-500 italic">
                 No snapshots yet. They are created automatically as you work.

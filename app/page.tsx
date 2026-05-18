@@ -165,21 +165,44 @@ export default function App() {
   }, [state]);
 
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveRecoveredNote, setSaveRecoveredNote] = useState<string | null>(
+    null,
+  );
 
   useEffect(() => {
-    const handler = (e: Event) => {
+    const failHandler = (e: Event) => {
       const detail = (e as CustomEvent<{ message: string }>).detail;
       setSaveError(detail?.message || "Local save failed.");
+      setSaveRecoveredNote(null);
+    };
+    const recoveredHandler = (e: Event) => {
+      const detail = (e as CustomEvent<{ droppedBackups: number }>).detail;
+      const n = detail?.droppedBackups ?? 0;
+      setSaveError(null);
+      setSaveRecoveredNote(
+        `Storage was nearly full — dropped ${n} snapshot slot${n === 1 ? "" : "s"} to save your latest change.`,
+      );
+      // Auto-dismiss after 8s so it doesn't linger forever.
+      window.setTimeout(() => setSaveRecoveredNote(null), 8000);
     };
     window.addEventListener(
       "toptal-sdr-engine:save-failed",
-      handler as EventListener,
+      failHandler as EventListener,
     );
-    return () =>
+    window.addEventListener(
+      "toptal-sdr-engine:save-recovered",
+      recoveredHandler as EventListener,
+    );
+    return () => {
       window.removeEventListener(
         "toptal-sdr-engine:save-failed",
-        handler as EventListener,
+        failHandler as EventListener,
       );
+      window.removeEventListener(
+        "toptal-sdr-engine:save-recovered",
+        recoveredHandler as EventListener,
+      );
+    };
   }, []);
 
   const currentAccount = useMemo<Account | null>(() => {
@@ -528,11 +551,26 @@ export default function App() {
           <div className="bg-red-600 text-white text-sm px-4 py-2 flex items-center justify-between shadow-md">
             <span>
               <strong>Local save failed.</strong> Your last change could not
-              be written to browser storage ({saveError}). Export your state
-              now via the sidebar so nothing is lost.
+              be written to browser storage ({saveError}). Open{" "}
+              <em>Restore Snapshot → Clear all to free space</em> in the sidebar
+              and try again, or export your state now so nothing is lost.
             </span>
             <button
               onClick={() => setSaveError(null)}
+              className="text-white/80 hover:text-white text-xs font-bold uppercase tracking-wider ml-4 shrink-0"
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
+        {saveRecoveredNote && (
+          <div className="bg-amber-500 text-white text-sm px-4 py-2 flex items-center justify-between shadow-md">
+            <span>
+              <strong>Storage tight.</strong> {saveRecoveredNote} Consider
+              exporting your state and pruning large screenshots.
+            </span>
+            <button
+              onClick={() => setSaveRecoveredNote(null)}
               className="text-white/80 hover:text-white text-xs font-bold uppercase tracking-wider ml-4 shrink-0"
             >
               Dismiss

@@ -92,6 +92,7 @@ import {
   removeProspectById,
 } from "../lib/hotlist.ts";
 import {
+  clearAllBackups,
   createAccount,
   emptyAccountData,
   exportAppStateJson,
@@ -729,6 +730,115 @@ section("pendingDraft: survives a save -> backup -> restore round-trip");
     "Long draft worth preserving",
     "draft body recovered from backup",
   );
+}
+
+// ============================================================
+// Quota recovery
+// ============================================================
+
+section("Storage: saveAppState drops backup slots and retries on quota error");
+
+{
+  memStorage.clear();
+  const baseState: AppState = {
+    accounts: [createAccount()],
+    currentAccountId: null,
+    isSidebarOpen: true,
+    isArchivedSectionOpen: false,
+    engineCollapsed: { software: false, procurement: false, product: false },
+  };
+  // Seed all 3 backup slots with something to sacrifice.
+  memStorage.setItem("toptal-sdr-engine::backup::0", JSON.stringify(baseState));
+  memStorage.setItem("toptal-sdr-engine::backup::1", JSON.stringify(baseState));
+  memStorage.setItem("toptal-sdr-engine::backup::2", JSON.stringify(baseState));
+
+  // Wrap setItem to throw QuotaExceededError on the primary key until we've
+  // dropped enough backups. We declare success after 2 drops.
+  const realSetItem = memStorage.setItem.bind(memStorage);
+  let attemptsBeforeAccept = 2;
+  memStorage.setItem = (k: string, v: string) => {
+    if (k === "toptal-sdr-engine::app" && attemptsBeforeAccept > 0) {
+      attemptsBeforeAccept--;
+      const err = new Error("quota exceeded (simulated)");
+      err.name = "QuotaExceededError";
+      throw err;
+    }
+    realSetItem(k, v);
+  };
+
+  // Track which events fire.
+  let recoveredDroppedCount = -1;
+  let failedFired = false;
+  const origDispatch = globalThis.window.dispatchEvent;
+  // @ts-expect-error polyfill stub
+  globalThis.window.dispatchEvent = (e: Event) => {
+    if (e.type === "toptal-sdr-engine:save-recovered") {
+      recoveredDroppedCount =
+        (e as CustomEvent<{ droppedBackups: number }>).detail
+          ?.droppedBackups ?? -1;
+    }
+    if (e.type === "toptal-sdr-engine:save-failed") failedFired = true;
+    return true;
+  };
+
+  saveAppState(baseState);
+
+  // Restore.
+  memStorage.setItem = realSetItem;
+  globalThis.window.dispatchEvent = origDispatch;
+
+  ok(!failedFired, "save did not surface as failed (recovery succeeded)");
+  eq(recoveredDroppedCount, 2, "exactly 2 backups dropped to make room");
+  ok(
+    memStorage.getItem("toptal-sdr-engine::app") !== null,
+    "primary state was actually saved",
+  );
+}
+
+section("Storage: clearAllBackups removes every backup slot");
+
+{
+  memStorage.clear();
+  memStorage.setItem("toptal-sdr-engine::backup::0", "{}");
+  memStorage.setItem("toptal-sdr-engine::backup::1", "{}");
+  const cleared = clearAllBackups();
+  ok(cleared >= 2, "at least 2 backup slots cleared");
+  eq(memStorage.getItem("toptal-sdr-engine::backup::0"), null, "slot 0 gone");
+  eq(memStorage.getItem("toptal-sdr-engine::backup::1"), null, "slot 1 gone");
+}
+
+section("Storage: saveAppState surfaces failure when even cleared backups don't help");
+
+{
+  memStorage.clear();
+  const baseState: AppState = {
+    accounts: [createAccount()],
+    currentAccountId: null,
+    isSidebarOpen: true,
+    isArchivedSectionOpen: false,
+    engineCollapsed: { software: false, procurement: false, product: false },
+  };
+  // No backups exist, and setItem always rejects with quota.
+  const realSetItem = memStorage.setItem.bind(memStorage);
+  memStorage.setItem = (k: string) => {
+    if (k === "toptal-sdr-engine::app") {
+      const err = new Error("quota exceeded (always)");
+      err.name = "QuotaExceededError";
+      throw err;
+    }
+    // allow other writes
+  };
+  let failedFired = false;
+  const origDispatch = globalThis.window.dispatchEvent;
+  // @ts-expect-error polyfill
+  globalThis.window.dispatchEvent = (e: Event) => {
+    if (e.type === "toptal-sdr-engine:save-failed") failedFired = true;
+    return true;
+  };
+  saveAppState(baseState);
+  memStorage.setItem = realSetItem;
+  globalThis.window.dispatchEvent = origDispatch;
+  ok(failedFired, "save-failed event fired when no recovery was possible");
 }
 
 // ============================================================

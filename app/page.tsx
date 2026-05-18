@@ -507,7 +507,7 @@ export default function App() {
         />
 
         <main className="flex-1 max-w-4xl w-full mx-auto px-6 py-10">
-          <div className="space-y-16">
+          <div key={currentAccount.id} className="space-y-16">
             <section>
               <div className="flex items-center justify-between mb-8 pl-1">
                 <div className="flex items-center gap-4">

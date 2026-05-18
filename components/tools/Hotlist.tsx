@@ -41,6 +41,15 @@ import {
   DEFAULT_HOTLIST_BULK_AUTOFILL_GEM,
   DEFAULT_HOTLIST_NEXT_STEP_GEM,
 } from "@/lib/gems";
+import {
+  createMessage,
+  createProspect,
+  patchMessageById,
+  patchProspectById,
+  prependProspects,
+  removeMessageById,
+  removeProspectById,
+} from "@/lib/hotlist";
 
 interface ExtractedFields {
   firstName: string;
@@ -180,9 +189,6 @@ const CHANNEL_ICON = (channel: HotlistChannel) => {
   }
 };
 
-function genId(): number {
-  return Date.now() + Math.floor(Math.random() * 1000);
-}
 
 export function Hotlist({ accountData, setAccountData }: ToolProps) {
   const [firstName, setFirstName] = useState("");
@@ -269,25 +275,19 @@ export function Hotlist({ accountData, setAccountData }: ToolProps) {
 
   const addProspect = () => {
     if (!firstName.trim() && !lastName.trim() && !company.trim()) return;
-    const prospect: HotlistProspect = {
-      id: genId(),
-      firstName: firstName.trim(),
-      lastName: lastName.trim(),
-      title: title.trim(),
-      company: company.trim(),
-      linkedinUrl: linkedinUrl.trim(),
+    const prospect = createProspect({
+      firstName,
+      lastName,
+      title,
+      company,
+      linkedinUrl,
       priority,
-      notes: notes.trim(),
-      dateAdded: new Date().toLocaleString([], {
-        dateStyle: "short",
-        timeStyle: "short",
-      }),
-      messages: [],
+      notes,
       image,
-    };
+    });
     setAccountData((prev) => ({
       ...prev,
-      hotlist: [prospect, ...(prev.hotlist || [])],
+      hotlist: prependProspects(prev.hotlist ?? [], [prospect]),
     }));
     setFirstName("");
     setLastName("");
@@ -303,25 +303,23 @@ export function Hotlist({ accountData, setAccountData }: ToolProps) {
   const updateProspect = (id: number, patch: Partial<HotlistProspect>) => {
     setAccountData((prev) => ({
       ...prev,
-      hotlist: (prev.hotlist || []).map((p) =>
-        p.id === id ? { ...p, ...patch } : p,
-      ),
+      hotlist: patchProspectById(prev.hotlist ?? [], id, patch),
     }));
   };
 
   const removeProspect = (id: number) => {
     setAccountData((prev) => ({
       ...prev,
-      hotlist: (prev.hotlist || []).filter((p) => p.id !== id),
+      hotlist: removeProspectById(prev.hotlist ?? [], id),
     }));
   };
 
   const addMessage = (prospectId: number, msg: HotlistMessage) => {
     setAccountData((prev) => ({
       ...prev,
-      hotlist: (prev.hotlist || []).map((p) =>
+      hotlist: (prev.hotlist ?? []).map((p) =>
         p.id === prospectId
-          ? { ...p, messages: [msg, ...(p.messages || [])] }
+          ? { ...p, messages: [msg, ...(p.messages ?? [])] }
           : p,
       ),
     }));
@@ -330,12 +328,9 @@ export function Hotlist({ accountData, setAccountData }: ToolProps) {
   const removeMessage = (prospectId: number, messageId: number) => {
     setAccountData((prev) => ({
       ...prev,
-      hotlist: (prev.hotlist || []).map((p) =>
+      hotlist: (prev.hotlist ?? []).map((p) =>
         p.id === prospectId
-          ? {
-              ...p,
-              messages: (p.messages || []).filter((m) => m.id !== messageId),
-            }
+          ? { ...p, messages: removeMessageById(p.messages ?? [], messageId) }
           : p,
       ),
     }));
@@ -348,16 +343,7 @@ export function Hotlist({ accountData, setAccountData }: ToolProps) {
   ) => {
     setAccountData((prev) => ({
       ...prev,
-      hotlist: (prev.hotlist || []).map((p) =>
-        p.id === prospectId
-          ? {
-              ...p,
-              messages: (p.messages || []).map((m) =>
-                m.id === messageId ? { ...m, ...patch } : m,
-              ),
-            }
-          : p,
-      ),
+      hotlist: patchMessageById(prev.hotlist ?? [], prospectId, messageId, patch),
     }));
   };
 
@@ -506,22 +492,21 @@ export function Hotlist({ accountData, setAccountData }: ToolProps) {
       dateStyle: "short",
       timeStyle: "short",
     });
-    const newProspects: HotlistProspect[] = selectedRows.map((r, i) => ({
-      id: Date.now() + i + Math.floor(Math.random() * 1000),
-      firstName: r.firstName,
-      lastName: r.lastName,
-      title: r.title,
-      company: r.company || accountData.companyName || "",
-      linkedinUrl: r.linkedinUrl,
-      priority: "high",
-      notes: `Added via ${sourceTag}.`,
-      dateAdded,
-      messages: [],
-      image: null,
-    }));
+    const newProspects = selectedRows.map((r) =>
+      createProspect({
+        firstName: r.firstName,
+        lastName: r.lastName,
+        title: r.title,
+        company: r.company || accountData.companyName || "",
+        linkedinUrl: r.linkedinUrl,
+        priority: "high",
+        notes: `Added via ${sourceTag}.`,
+        dateAdded,
+      }),
+    );
     setAccountData((prev) => ({
       ...prev,
-      hotlist: [...newProspects, ...(prev.hotlist || [])],
+      hotlist: prependProspects(prev.hotlist ?? [], newProspects),
     }));
     setBulkAddedCount(newProspects.length);
     setBulkPreview(null);
@@ -913,17 +898,14 @@ export function Hotlist({ accountData, setAccountData }: ToolProps) {
           accountData={accountData}
           onClose={() => setChatProspectId(null)}
           onSaveAsDraft={(body) =>
-            addMessage(chatProspect.id, {
-              id: genId(),
-              channel: "Other",
-              subject: "AI-recommended draft",
-              body,
-              date: new Date().toLocaleString([], {
-                dateStyle: "short",
-                timeStyle: "short",
+            addMessage(
+              chatProspect.id,
+              createMessage({
+                channel: "Other",
+                subject: "AI-recommended draft",
+                body,
               }),
-              response: "",
-            })
+            )
           }
         />
       )}
@@ -1002,17 +984,12 @@ function ProspectCard({
 
   const submitMessage = () => {
     if (!draftBody.trim()) return;
-    const msg: HotlistMessage = {
-      id: genId(),
+    const msg = createMessage({
       channel: draftChannel,
-      subject: draftSubject.trim(),
+      subject: draftSubject,
       body: draftBody.trim(),
-      date: new Date().toLocaleString([], {
-        dateStyle: "short",
-        timeStyle: "short",
-      }),
-      response: draftResponse.trim(),
-    };
+      response: draftResponse,
+    });
     onAddMessage(msg);
     setDraftChannel("Email");
     setDraftSubject("");

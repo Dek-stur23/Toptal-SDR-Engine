@@ -63,6 +63,7 @@ import { UploadContact as ProductUploadContact } from "@/components/engines/prod
 import { MessageComposer } from "@/components/engines/product/MessageComposer";
 import { exportAccountToPdf } from "@/lib/pdf";
 import {
+  type BackupSlot,
   createAccount,
   exportAppStateJson,
   loadAppState,
@@ -162,6 +163,24 @@ export default function App() {
   useEffect(() => {
     if (state) saveAppState(state);
   }, [state]);
+
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent<{ message: string }>).detail;
+      setSaveError(detail?.message || "Local save failed.");
+    };
+    window.addEventListener(
+      "toptal-sdr-engine:save-failed",
+      handler as EventListener,
+    );
+    return () =>
+      window.removeEventListener(
+        "toptal-sdr-engine:save-failed",
+        handler as EventListener,
+      );
+  }, []);
 
   const currentAccount = useMemo<Account | null>(() => {
     if (!state) return null;
@@ -478,6 +497,10 @@ export default function App() {
     }
   };
 
+  const handleRestoreBackup = (slot: BackupSlot) => {
+    setState(slot.state);
+  };
+
   const phase1Steps = steps.slice(0, 5);
   const phase2Steps = steps.slice(5);
 
@@ -497,9 +520,25 @@ export default function App() {
         onToggleArchivedSection={handleToggleArchivedSection}
         onExportState={handleExportState}
         onImportState={handleImportState}
+        onRestoreBackup={handleRestoreBackup}
       />
 
       <div className="flex-1 flex flex-col h-full overflow-y-auto relative bg-[#F9FAFB]">
+        {saveError && (
+          <div className="bg-red-600 text-white text-sm px-4 py-2 flex items-center justify-between shadow-md">
+            <span>
+              <strong>Local save failed.</strong> Your last change could not
+              be written to browser storage ({saveError}). Export your state
+              now via the sidebar so nothing is lost.
+            </span>
+            <button
+              onClick={() => setSaveError(null)}
+              className="text-white/80 hover:text-white text-xs font-bold uppercase tracking-wider ml-4 shrink-0"
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
         <Header
           isSidebarOpen={state.isSidebarOpen}
           onOpenSidebar={() => handleToggleSidebar(true)}

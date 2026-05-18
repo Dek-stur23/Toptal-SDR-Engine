@@ -3,9 +3,10 @@
 import { useState } from "react";
 import { CheckCircle2, Copy, Flame, Loader2, Save, Sparkles } from "lucide-react";
 import type { StepProps } from "@/components/types";
-import type { ActivityLog, HotlistProspect } from "@/lib/types";
+import type { ActivityLog } from "@/lib/types";
 import { generateWithClaude } from "@/lib/api";
 import { DEFAULT_PROCUREMENT_PITCH_GEM } from "@/lib/gems";
+import { createProspect, prependProspects } from "@/lib/hotlist";
 
 function splitName(name: string): { firstName: string; lastName: string } {
   const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -133,25 +134,18 @@ Draft the personalized procurement-leader email per the strict format.`;
   const addToHotlist = () => {
     if (!selected) return;
     const { firstName, lastName } = splitName(selected.name);
-    const prospect: HotlistProspect = {
-      id: Date.now() + Math.floor(Math.random() * 1000),
+    const prospect = createProspect({
       firstName,
       lastName,
       title: selected.title,
       company: accountData.companyName || "",
-      linkedinUrl: "",
       priority: "high",
       notes: `Added from Procurement Engine (${selected.function}).`,
-      dateAdded: new Date().toLocaleString([], {
-        dateStyle: "short",
-        timeStyle: "short",
-      }),
-      messages: [],
       image: engine.leaderImage,
-    };
+    });
     setAccountData((prev) => ({
       ...prev,
-      hotlist: [prospect, ...(prev.hotlist || [])],
+      hotlist: prependProspects(prev.hotlist ?? [], [prospect]),
     }));
     setAddedToHotlist(true);
     setTimeout(() => setAddedToHotlist(false), 2000);

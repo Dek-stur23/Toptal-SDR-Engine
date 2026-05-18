@@ -9,6 +9,7 @@ import {
   ChevronRight,
   Download,
   Edit2,
+  History,
   MoreVertical,
   Plus,
   Trash2,
@@ -16,6 +17,7 @@ import {
   X,
 } from "lucide-react";
 import type { Account } from "@/lib/types";
+import { listBackups, type BackupSlot } from "@/lib/storage";
 
 interface Props {
   accounts: Account[];
@@ -31,6 +33,7 @@ interface Props {
   onToggleArchivedSection: () => void;
   onExportState: () => void;
   onImportState: (file: File) => void;
+  onRestoreBackup: (slot: BackupSlot) => void;
 }
 
 export function Sidebar({
@@ -47,11 +50,19 @@ export function Sidebar({
   onToggleArchivedSection,
   onExportState,
   onImportState,
+  onRestoreBackup,
 }: Props) {
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
+  const [showBackups, setShowBackups] = useState(false);
+  const [backups, setBackups] = useState<BackupSlot[]>([]);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const openBackups = () => {
+    setBackups(listBackups());
+    setShowBackups(true);
+  };
 
   const activeAccounts = accounts.filter((a) => !a.isArchived);
   const archivedAccounts = accounts.filter((a) => a.isArchived);
@@ -273,7 +284,87 @@ export function Sidebar({
             }}
           />
         </div>
+        <button
+          onClick={openBackups}
+          className="w-full text-xs text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 px-3 py-2 rounded-md flex items-center justify-center gap-1.5 transition-colors"
+          title="Restore from an automatic local snapshot"
+        >
+          <History className="w-3.5 h-3.5" /> Restore Snapshot
+        </button>
       </div>
+
+      {showBackups && (
+        <div
+          className="fixed inset-0 z-50 bg-slate-900/80 flex items-center justify-center p-4"
+          onClick={() => setShowBackups(false)}
+        >
+          <div
+            className="bg-white rounded-lg shadow-xl max-w-md w-full p-5 space-y-3 text-slate-800"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-base">Local snapshots</h3>
+              <button
+                onClick={() => setShowBackups(false)}
+                className="text-slate-400 hover:text-slate-700"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <p className="text-xs text-slate-500">
+              The app keeps the last {3} saved snapshots in your browser. Slot
+              0 is the state just before the most recent save. Restoring
+              replaces your current accounts and state.
+            </p>
+            {backups.length === 0 ? (
+              <p className="text-sm text-slate-500 italic">
+                No snapshots yet. They are created automatically as you work.
+              </p>
+            ) : (
+              <ul className="space-y-2">
+                {backups.map((b) => {
+                  const total = b.state.accounts.reduce(
+                    (sum, a) => sum + (a.accountData?.hotlist?.length ?? 0),
+                    0,
+                  );
+                  return (
+                    <li
+                      key={b.index}
+                      className="border border-slate-200 rounded-md p-3 flex items-center justify-between"
+                    >
+                      <div>
+                        <p className="text-sm font-semibold">
+                          Slot {b.index}
+                        </p>
+                        <p className="text-xs text-slate-500">
+                          {b.state.accounts.length} account
+                          {b.state.accounts.length === 1 ? "" : "s"} ·{" "}
+                          {total} hotlist prospect{total === 1 ? "" : "s"}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => {
+                          if (
+                            window.confirm(
+                              `Restore snapshot ${b.index}? This will replace your current state. (Your current state will not be backed up beyond what's already in the snapshot slots.)`,
+                            )
+                          ) {
+                            onRestoreBackup(b);
+                            setShowBackups(false);
+                          }
+                        }}
+                        className="text-xs font-semibold text-orange-700 hover:text-white bg-orange-50 hover:bg-orange-600 border border-orange-200 hover:border-orange-600 px-3 py-1.5 rounded-md transition-colors"
+                      >
+                        Restore
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

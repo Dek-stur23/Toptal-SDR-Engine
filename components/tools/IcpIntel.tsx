@@ -20,9 +20,10 @@ import {
   Zap,
 } from "lucide-react";
 import type { ToolProps } from "@/components/types";
-import type { HotlistProspect, IcpIntelData } from "@/lib/types";
+import type { IcpIntelData } from "@/lib/types";
 import { generateWithClaude } from "@/lib/api";
 import { DEFAULT_ICP_INTEL_GEM } from "@/lib/gems";
+import { createProspect, prependProspects } from "@/lib/hotlist";
 
 interface ExtractedFields {
   firstName: string;
@@ -52,25 +53,17 @@ export function IcpIntel({
 
   const addLatestToHotlist = () => {
     if (!latestResult) return;
-    const prospect: HotlistProspect = {
-      id: Date.now() + Math.floor(Math.random() * 1000),
+    const prospect = createProspect({
       firstName: latestResult.firstName,
       lastName: latestResult.lastName,
       title: latestResult.title,
       company: latestResult.company || accountData.companyName || "",
-      linkedinUrl: "",
       priority: "high",
       notes: `Added from ICP Intel research. Primary focus: ${latestResult.result.executiveSummary.primaryFocus}`,
-      dateAdded: new Date().toLocaleString([], {
-        dateStyle: "short",
-        timeStyle: "short",
-      }),
-      messages: [],
-      image: null,
-    };
+    });
     setAccountData((prev) => ({
       ...prev,
-      hotlist: [prospect, ...(prev.hotlist || [])],
+      hotlist: prependProspects(prev.hotlist ?? [], [prospect]),
     }));
     setAddedToHotlist(true);
     setTimeout(() => setAddedToHotlist(false), 2000);

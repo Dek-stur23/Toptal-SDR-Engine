@@ -13,8 +13,12 @@ import type {
   ProductEngineState,
   SoftwareEngineState,
 } from "./types";
+import { genId } from "./ids";
 
 const ROOT_KEY = "toptal-sdr-engine::app";
+const BACKUP_KEY_PREFIX = "toptal-sdr-engine::backup::";
+const BACKUP_SLOTS = 3;
+const EXPORT_FORMAT_VERSION = 1;
 
 function newId(): string {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
@@ -30,9 +34,7 @@ function cleanProspect(raw: unknown): HotlistProspect | null {
   if (!raw || typeof raw !== "object") return null;
   const p = raw as Record<string, unknown>;
   const id =
-    typeof p.id === "number" && Number.isFinite(p.id)
-      ? p.id
-      : Date.now() + Math.floor(Math.random() * 1_000_000);
+    typeof p.id === "number" && Number.isFinite(p.id) ? p.id : genId();
   return {
     id,
     firstName: typeof p.firstName === "string" ? p.firstName : "",
@@ -63,9 +65,9 @@ function cleanHotlist(raw: unknown): HotlistProspect[] {
   const seen = new Set<number>();
   return cleaned.map((p) => {
     if (seen.has(p.id)) {
-      let next = Date.now() + Math.floor(Math.random() * 1_000_000);
-      while (seen.has(next)) next++;
-      p = { ...p, id: next };
+      // genId() is monotonic across the session, so it's guaranteed to not
+      // collide with anything we've seen so far.
+      p = { ...p, id: genId() };
     }
     seen.add(p.id);
     return p;
@@ -299,16 +301,114 @@ export function loadAppState(): AppState {
   }
 }
 
-export function saveAppState(state: AppState): void {
-  if (typeof window === "undefined") return;
+function rotateBackups(prevSerialized: string | null) {
+  if (typeof window === "undefined" || prevSerialized === null) return;
   try {
-    window.localStorage.setItem(ROOT_KEY, JSON.stringify(state));
+    // Shift backup slot N-2 -> N-1, ..., 0 -> 1, then write the previous
+    // serialized state into slot 0. Old slot 2 falls off.
+    for (let i = BACKUP_SLOTS - 1; i > 0; i--) {
+      const older = window.localStorage.getItem(
+        `${BACKUP_KEY_PREFIX}${i - 1}`,
+      );
+      if (older !== null) {
+        window.localStorage.setItem(`${BACKUP_KEY_PREFIX}${i}`, older);
+      } else {
+        window.localStorage.removeItem(`${BACKUP_KEY_PREFIX}${i}`);
+      }
+    }
+    window.localStorage.setItem(`${BACKUP_KEY_PREFIX}0`, prevSerialized);
   } catch (err) {
-    console.error("Failed to save app state:", err);
+    // Backup failure is non-fatal; the primary save still happens.
+    console.warn("Backup rotation failed (non-fatal):", err);
   }
 }
 
-const EXPORT_FORMAT_VERSION = 1;
+function notifySaveFailure(err: unknown) {
+  console.error("Failed to save app state:", err);
+  if (typeof window !== "undefined") {
+    try {
+      window.dispatchEvent(
+        new CustomEvent("toptal-sdr-engine:save-failed", {
+          detail: { message: err instanceof Error ? err.message : String(err) },
+        }),
+      );
+    } catch {
+      // ignore: CustomEvent isn't available in some environments
+    }
+  }
+}
+
+export function saveAppState(state: AppState): void {
+  if (typeof window === "undefined") return;
+  let serialized: string;
+  try {
+    serialized = JSON.stringify(state);
+  } catch (err) {
+    notifySaveFailure(err);
+    return;
+  }
+  const prev = (() => {
+    try {
+      return window.localStorage.getItem(ROOT_KEY);
+    } catch {
+      return null;
+    }
+  })();
+  try {
+    window.localStorage.setItem(ROOT_KEY, serialized);
+  } catch (err) {
+    // Primary write failed (quota exceeded, private mode, etc). Surface it
+    // — the previous state still sits on disk and in backup slots, but the
+    // user's last edit is unsaved and they need to know.
+    notifySaveFailure(err);
+    return;
+  }
+  rotateBackups(prev);
+}
+
+export interface BackupSlot {
+  index: number;
+  state: AppState;
+}
+
+// Returns available backup slots, newest first. Slot 0 is the snapshot taken
+// just before the most recent save; slot 1 is the one before that; etc.
+export function listBackups(): BackupSlot[] {
+  if (typeof window === "undefined") return [];
+  const slots: BackupSlot[] = [];
+  for (let i = 0; i < BACKUP_SLOTS; i++) {
+    try {
+      const raw = window.localStorage.getItem(`${BACKUP_KEY_PREFIX}${i}`);
+      if (!raw) continue;
+      const parsed = JSON.parse(raw) as AppState;
+      slots.push({ index: i, state: parsed });
+    } catch {
+      // Skip corrupt slots silently — they'll be overwritten on next rotate.
+    }
+  }
+  return slots;
+}
+
+export function restoreBackup(index: number): AppState | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(`${BACKUP_KEY_PREFIX}${index}`);
+    if (!raw) return null;
+    // Run through parseImportedAppState so cleanHotlist + per-account
+    // migration defenses kick in on the recovered snapshot.
+    return parseImportedAppState(
+      JSON.stringify({
+        app: "toptal-sdr-engine",
+        version: EXPORT_FORMAT_VERSION,
+        exportedAt: new Date().toISOString(),
+        state: JSON.parse(raw),
+      }),
+    );
+  } catch (err) {
+    console.error("Failed to restore backup:", err);
+    return null;
+  }
+}
 
 interface ExportEnvelope {
   app: "toptal-sdr-engine";

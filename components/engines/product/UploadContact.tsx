@@ -10,9 +10,9 @@ import {
   Wand2,
 } from "lucide-react";
 import type { StepProps } from "@/components/types";
-import type { HotlistProspect } from "@/lib/types";
 import { generateWithClaude } from "@/lib/api";
 import { DEFAULT_HOTLIST_AUTOFILL_GEM } from "@/lib/gems";
+import { createProspect, prependProspects } from "@/lib/hotlist";
 
 interface ExtractedFields {
   firstName: string;
@@ -142,8 +142,7 @@ export function UploadContact({
     }
     setError("");
     persistContact();
-    const prospect: HotlistProspect = {
-      id: Date.now() + Math.floor(Math.random() * 1000),
+    const prospect = createProspect({
       firstName: fn,
       lastName: ln,
       title: ttl,
@@ -151,16 +150,11 @@ export function UploadContact({
       linkedinUrl: linkedinUrl.trim(),
       priority: "high",
       notes: `Added from Product Engine - Upload Contact (${engine.selectedProduct || "no product"}).`,
-      dateAdded: new Date().toLocaleString([], {
-        dateStyle: "short",
-        timeStyle: "short",
-      }),
-      messages: [],
       image,
-    };
+    });
     setAccountData((prev) => ({
       ...prev,
-      hotlist: [prospect, ...(prev.hotlist || [])],
+      hotlist: prependProspects(prev.hotlist ?? [], [prospect]),
     }));
     setAddedToHotlist(true);
     setTimeout(() => setAddedToHotlist(false), 2000);

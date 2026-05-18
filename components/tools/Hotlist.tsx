@@ -930,11 +930,24 @@ function ProspectCard({
   onUpdateMessage: (id: number, patch: Partial<HotlistMessage>) => void;
   onOpenChat: () => void;
 }) {
-  const [showMessages, setShowMessages] = useState(false);
-  const [draftChannel, setDraftChannel] = useState<HotlistChannel>("Email");
-  const [draftSubject, setDraftSubject] = useState("");
-  const [draftBody, setDraftBody] = useState("");
-  const [draftResponse, setDraftResponse] = useState("");
+  // Compose form is auto-persisted into prospect.pendingDraft so an
+  // in-flight message survives unmount, account switch, and refresh.
+  // Local React state is the source of truth while typing (fast); a
+  // debounced effect flushes to accountData every ~400ms and on unmount.
+  const persistedDraft = prospect.pendingDraft;
+  const [showMessages, setShowMessages] = useState(
+    !!persistedDraft?.body?.trim() || !!persistedDraft?.subject?.trim(),
+  );
+  const [draftChannel, setDraftChannel] = useState<HotlistChannel>(
+    persistedDraft?.channel ?? "Email",
+  );
+  const [draftSubject, setDraftSubject] = useState(
+    persistedDraft?.subject ?? "",
+  );
+  const [draftBody, setDraftBody] = useState(persistedDraft?.body ?? "");
+  const [draftResponse, setDraftResponse] = useState(
+    persistedDraft?.response ?? "",
+  );
   const [expandedMsg, setExpandedMsg] = useState<Record<number, boolean>>({});
   const [viewingImage, setViewingImage] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -946,6 +959,48 @@ function ProspectCard({
   useEffect(() => {
     if (!editing) setDraft(prospect);
   }, [prospect, editing]);
+
+  // Debounced autosave of the compose draft to accountData. Flushes any
+  // pending save on unmount so closing the card, switching accounts, or
+  // refreshing the page never loses an in-progress message body.
+  const onUpdateRef = useRef(onUpdate);
+  useEffect(() => {
+    onUpdateRef.current = onUpdate;
+  }, [onUpdate]);
+  const autosaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const writeDraftRef = useRef<() => void>(() => {});
+  writeDraftRef.current = () => {
+    const hasContent =
+      draftBody.trim() !== "" ||
+      draftSubject.trim() !== "" ||
+      draftResponse.trim() !== "";
+    onUpdateRef.current({
+      pendingDraft: hasContent
+        ? {
+            channel: draftChannel,
+            subject: draftSubject,
+            body: draftBody,
+            response: draftResponse,
+          }
+        : undefined,
+    });
+  };
+  useEffect(() => {
+    if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
+    autosaveTimer.current = setTimeout(() => {
+      writeDraftRef.current();
+    }, 400);
+    return () => {
+      if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
+    };
+  }, [draftChannel, draftSubject, draftBody, draftResponse]);
+  // Flush on unmount: ensures the latest in-flight keystroke gets persisted
+  // even if the component is torn down before the debounce fires.
+  useEffect(() => {
+    return () => {
+      writeDraftRef.current();
+    };
+  }, []);
 
   const startEdit = () => {
     setDraft(prospect);
@@ -1007,11 +1062,32 @@ function ProspectCard({
       body: draftBody.trim(),
       response: draftResponse,
     });
+    // Cancel any pending autosave so it doesn't re-write the now-empty draft
+    // back into pendingDraft after we clear it.
+    if (autosaveTimer.current) {
+      clearTimeout(autosaveTimer.current);
+      autosaveTimer.current = null;
+    }
     onAddMessage(msg);
+    // Clear the persisted draft together with local state, in a single
+    // setAccountData call, so the freshly-added message and the cleared
+    // draft land in the same render.
+    onUpdate({ pendingDraft: undefined });
     setDraftChannel("Email");
     setDraftSubject("");
     setDraftBody("");
     setDraftResponse("");
+  };
+
+  const confirmRemoveMessage = (msgId: number, body: string) => {
+    const preview = body.length > 80 ? `${body.slice(0, 80)}…` : body;
+    if (
+      window.confirm(
+        `Delete this saved message? This cannot be undone except via the Restore Snapshot menu.\n\nPreview: ${preview}`,
+      )
+    ) {
+      onRemoveMessage(msgId);
+    }
   };
 
   const copyBody = (body: string) => {
@@ -1332,89 +1408,22 @@ function ProspectCard({
 
             {messages.length > 0 && (
               <ul className="space-y-2">
-                {messages.map((m) => {
-                  const open = !!expandedMsg[m.id];
-                  return (
-                    <li
-                      key={m.id}
-                      className="border border-slate-200 rounded-md p-3 bg-white"
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-1 flex-wrap">
-                            {CHANNEL_ICON(m.channel)}
-                            <span className="text-xs font-semibold text-slate-800">
-                              {m.channel}
-                            </span>
-                            {m.subject && (
-                              <span className="text-xs text-slate-600 truncate">
-                                — {m.subject}
-                              </span>
-                            )}
-                            <span className="text-[10px] text-slate-400 ml-auto">
-                              {m.date}
-                            </span>
-                          </div>
-                          <button
-                            onClick={() =>
-                              setExpandedMsg((prev) => ({
-                                ...prev,
-                                [m.id]: !prev[m.id],
-                              }))
-                            }
-                            className="text-[11px] font-semibold text-slate-600 hover:text-slate-900 flex items-center gap-1"
-                          >
-                            {open ? (
-                              <ChevronDown className="w-3 h-3" />
-                            ) : (
-                              <ChevronRight className="w-3 h-3" />
-                            )}
-                            {open ? "Hide message" : "Show message"}
-                          </button>
-                          {open && (
-                            <div className="mt-2 space-y-2">
-                              <div className="flex justify-between items-start gap-2">
-                                <pre className="flex-1 text-sm text-slate-800 whitespace-pre-wrap font-sans leading-relaxed bg-slate-50 border border-slate-200 p-2 rounded">
-                                  {m.body}
-                                </pre>
-                                <button
-                                  onClick={() => copyBody(m.body)}
-                                  className="shrink-0 text-[10px] text-slate-500 hover:text-slate-800 flex items-center gap-0.5"
-                                  title="Copy message"
-                                >
-                                  <Copy className="w-3 h-3" />
-                                </button>
-                              </div>
-                              <div>
-                                <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider block mb-1">
-                                  Response
-                                </span>
-                                <textarea
-                                  value={m.response}
-                                  onChange={(e) =>
-                                    onUpdateMessage(m.id, {
-                                      response: e.target.value,
-                                    })
-                                  }
-                                  placeholder="Add or update the response received from this contact..."
-                                  className="w-full text-sm text-slate-700 bg-emerald-50/40 border border-emerald-100 focus:border-emerald-300 focus:ring-2 focus:ring-emerald-200 outline-none p-2 rounded resize-y custom-scrollbar shadow-sm"
-                                  rows={2}
-                                />
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                        <button
-                          onClick={() => onRemoveMessage(m.id)}
-                          className="shrink-0 text-slate-400 hover:text-red-600 transition-colors p-1"
-                          title="Delete message"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </li>
-                  );
-                })}
+                {messages.map((m) => (
+                  <MessageItem
+                    key={m.id}
+                    message={m}
+                    open={!!expandedMsg[m.id]}
+                    onToggleOpen={() =>
+                      setExpandedMsg((prev) => ({
+                        ...prev,
+                        [m.id]: !prev[m.id],
+                      }))
+                    }
+                    onCopyBody={() => copyBody(m.body)}
+                    onUpdateMessage={onUpdateMessage}
+                    onRemove={() => confirmRemoveMessage(m.id, m.body)}
+                  />
+                ))}
               </ul>
             )}
           </div>
@@ -1445,6 +1454,143 @@ function ProspectCard({
         </div>
       )}
     </div>
+  );
+}
+
+function MessageItem({
+  message,
+  open,
+  onToggleOpen,
+  onCopyBody,
+  onUpdateMessage,
+  onRemove,
+}: {
+  message: HotlistMessage;
+  open: boolean;
+  onToggleOpen: () => void;
+  onCopyBody: () => void;
+  onUpdateMessage: (id: number, patch: Partial<HotlistMessage>) => void;
+  onRemove: () => void;
+}) {
+  // Local state for the response textarea. Persists to the message only on
+  // blur (not on every keystroke) so an accidental select-all-delete or
+  // paste-over can be aborted before it commits. If the user is blurring
+  // away from a now-empty response that previously held content, we
+  // confirm before overwriting.
+  const [draftResponse, setDraftResponse] = useState(message.response);
+
+  // Re-sync the textarea when the underlying message updates from outside
+  // this component (e.g., import, restore, or a separate edit elsewhere).
+  // We only resync when the textarea doesn't already have unsaved changes
+  // so live typing isn't interrupted.
+  const dirtyRef = useRef(false);
+  useEffect(() => {
+    if (!dirtyRef.current) setDraftResponse(message.response);
+  }, [message.response]);
+
+  const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    dirtyRef.current = true;
+    setDraftResponse(e.target.value);
+  };
+
+  const handleBlur = () => {
+    if (draftResponse === message.response) {
+      dirtyRef.current = false;
+      return;
+    }
+    const clearingNonEmpty =
+      message.response.trim() !== "" && draftResponse.trim() === "";
+    if (clearingNonEmpty) {
+      const ok = window.confirm(
+        "You're about to clear a saved response. This cannot be undone except via the Restore Snapshot menu. Continue?",
+      );
+      if (!ok) {
+        setDraftResponse(message.response);
+        dirtyRef.current = false;
+        return;
+      }
+    }
+    onUpdateMessage(message.id, { response: draftResponse });
+    dirtyRef.current = false;
+  };
+
+  const isDirty = draftResponse !== message.response;
+
+  return (
+    <li className="border border-slate-200 rounded-md p-3 bg-white">
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-1 flex-wrap">
+            {CHANNEL_ICON(message.channel)}
+            <span className="text-xs font-semibold text-slate-800">
+              {message.channel}
+            </span>
+            {message.subject && (
+              <span className="text-xs text-slate-600 truncate">
+                — {message.subject}
+              </span>
+            )}
+            <span className="text-[10px] text-slate-400 ml-auto">
+              {message.date}
+            </span>
+          </div>
+          <button
+            onClick={onToggleOpen}
+            className="text-[11px] font-semibold text-slate-600 hover:text-slate-900 flex items-center gap-1"
+          >
+            {open ? (
+              <ChevronDown className="w-3 h-3" />
+            ) : (
+              <ChevronRight className="w-3 h-3" />
+            )}
+            {open ? "Hide message" : "Show message"}
+          </button>
+          {open && (
+            <div className="mt-2 space-y-2">
+              <div className="flex justify-between items-start gap-2">
+                <pre className="flex-1 text-sm text-slate-800 whitespace-pre-wrap font-sans leading-relaxed bg-slate-50 border border-slate-200 p-2 rounded">
+                  {message.body}
+                </pre>
+                <button
+                  onClick={onCopyBody}
+                  className="shrink-0 text-[10px] text-slate-500 hover:text-slate-800 flex items-center gap-0.5"
+                  title="Copy message"
+                >
+                  <Copy className="w-3 h-3" />
+                </button>
+              </div>
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">
+                    Response
+                  </span>
+                  {isDirty && (
+                    <span className="text-[10px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded">
+                      Unsaved — click outside to save
+                    </span>
+                  )}
+                </div>
+                <textarea
+                  value={draftResponse}
+                  onChange={handleChange}
+                  onBlur={handleBlur}
+                  placeholder="Add or update the response received from this contact..."
+                  className="w-full text-sm text-slate-700 bg-emerald-50/40 border border-emerald-100 focus:border-emerald-300 focus:ring-2 focus:ring-emerald-200 outline-none p-2 rounded resize-y custom-scrollbar shadow-sm"
+                  rows={2}
+                />
+              </div>
+            </div>
+          )}
+        </div>
+        <button
+          onClick={onRemove}
+          className="shrink-0 text-slate-400 hover:text-red-600 transition-colors p-1"
+          title="Delete message"
+        >
+          <Trash2 className="w-3.5 h-3.5" />
+        </button>
+      </div>
+    </li>
   );
 }
 

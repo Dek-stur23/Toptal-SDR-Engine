@@ -515,6 +515,223 @@ section("Stress: 5000 prepends preserve every prospect with unique ids");
 }
 
 // ============================================================
+// Message save flow
+// ============================================================
+
+section("Messages: createMessage assigns unique ids in tight loops");
+
+{
+  const ids = new Set<number>();
+  for (let i = 0; i < 1000; i++) {
+    const m = createMessage({ channel: "Email", body: `body-${i}` });
+    ids.add(m.id);
+  }
+  eq(ids.size, 1000, "1000 messages get unique ids");
+}
+
+section("Messages: addMessage preserves existing messages and prepends");
+
+{
+  const m1 = createMessage({ channel: "Email", body: "first" });
+  const m2 = createMessage({ channel: "Email", body: "second" });
+  const a = { ...createProspect({ firstName: "Alice" }), messages: [m1] };
+  // Simulate parent addMessage: prepend new message
+  const next = [a].map((p) =>
+    p.id === a.id ? { ...p, messages: [m2, ...p.messages] } : p,
+  );
+  eq(next[0].messages.length, 2, "both messages present");
+  eq(next[0].messages[0].body, "second", "newest first");
+  eq(next[0].messages[1].body, "first", "older preserved");
+}
+
+section("Messages: patchMessageById preserves siblings and other prospects");
+
+{
+  const m1 = createMessage({ channel: "Email", body: "one" });
+  const m2 = createMessage({ channel: "Email", body: "two" });
+  const m3 = createMessage({ channel: "LinkedIn", body: "three" });
+  const a = { ...createProspect({ firstName: "Alice" }), messages: [m1, m2] };
+  const b = { ...createProspect({ firstName: "Bob" }), messages: [m3] };
+  const after = patchMessageById([a, b], a.id, m1.id, { response: "Got it" });
+  const aAfter = after.find((p) => p.id === a.id)!;
+  const bAfter = after.find((p) => p.id === b.id)!;
+  eq(aAfter.messages.length, 2, "Alice's message count unchanged");
+  eq(
+    aAfter.messages.find((m) => m.id === m1.id)?.response,
+    "Got it",
+    "patch applied",
+  );
+  eq(
+    aAfter.messages.find((m) => m.id === m2.id)?.body,
+    "two",
+    "sibling message preserved",
+  );
+  eq(bAfter.messages.length, 1, "Bob's messages preserved");
+  eq(bAfter.messages[0].body, "three", "other prospect's message intact");
+}
+
+section("Messages: removeMessageById no-ops on missing id");
+
+{
+  const m1 = createMessage({ channel: "Email", body: "keep me" });
+  const origConsoleWarn = console.warn;
+  console.warn = () => {};
+  const after = removeMessageById([m1], 999999);
+  console.warn = origConsoleWarn;
+  eq(after.length, 1, "list unchanged on missing id");
+  eq(after[0].body, "keep me", "message intact");
+}
+
+// ============================================================
+// Pending compose draft (autosave)
+// ============================================================
+
+section("pendingDraft: round-trips through save + load with content");
+
+{
+  memStorage.clear();
+  const account = createAccount();
+  const prospect = createProspect({ firstName: "Alice" });
+  prospect.pendingDraft = {
+    channel: "Email",
+    subject: "Re: Q3 plans",
+    body: "Hey Alice, following up on our chat —",
+    response: "",
+  };
+  const state: AppState = {
+    accounts: [
+      {
+        ...account,
+        accountData: { ...account.accountData, hotlist: [prospect] },
+      },
+    ],
+    currentAccountId: account.id,
+    isSidebarOpen: true,
+    isArchivedSectionOpen: false,
+    engineCollapsed: { software: false, procurement: false, product: false },
+  };
+  saveAppState(state);
+  const loaded = loadAppState();
+  const loadedProspect = loaded.accounts[0].accountData.hotlist[0];
+  ok(loadedProspect.pendingDraft !== undefined, "pendingDraft preserved");
+  eq(
+    loadedProspect.pendingDraft?.body,
+    "Hey Alice, following up on our chat —",
+    "draft body preserved",
+  );
+  eq(
+    loadedProspect.pendingDraft?.subject,
+    "Re: Q3 plans",
+    "draft subject preserved",
+  );
+  eq(loadedProspect.pendingDraft?.channel, "Email", "draft channel preserved");
+}
+
+section("pendingDraft: empty draft is dropped on load to avoid storage clutter");
+
+{
+  memStorage.clear();
+  const account = createAccount();
+  const prospect = createProspect({ firstName: "Alice" });
+  // @ts-expect-error testing legacy-style empty draft
+  prospect.pendingDraft = { channel: "Email", subject: "", body: "", response: "" };
+  const state: AppState = {
+    accounts: [
+      {
+        ...account,
+        accountData: { ...account.accountData, hotlist: [prospect] },
+      },
+    ],
+    currentAccountId: account.id,
+    isSidebarOpen: true,
+    isArchivedSectionOpen: false,
+    engineCollapsed: { software: false, procurement: false, product: false },
+  };
+  saveAppState(state);
+  const loaded = loadAppState();
+  const loadedProspect = loaded.accounts[0].accountData.hotlist[0];
+  eq(
+    loadedProspect.pendingDraft,
+    undefined,
+    "empty draft cleared on load",
+  );
+}
+
+section("pendingDraft: invalid channel coerces to Email on load");
+
+{
+  memStorage.clear();
+  const account = createAccount();
+  const prospect = createProspect({ firstName: "Alice" });
+  // Force an invalid channel through the wire
+  prospect.pendingDraft = {
+    // @ts-expect-error testing coercion
+    channel: "NotAValidChannel",
+    subject: "",
+    body: "Something",
+    response: "",
+  };
+  const state: AppState = {
+    accounts: [
+      {
+        ...account,
+        accountData: { ...account.accountData, hotlist: [prospect] },
+      },
+    ],
+    currentAccountId: account.id,
+    isSidebarOpen: true,
+    isArchivedSectionOpen: false,
+    engineCollapsed: { software: false, procurement: false, product: false },
+  };
+  saveAppState(state);
+  const loaded = loadAppState();
+  const draft = loaded.accounts[0].accountData.hotlist[0].pendingDraft;
+  eq(draft?.channel, "Email", "invalid channel coerced to Email");
+  eq(draft?.body, "Something", "body content preserved");
+}
+
+section("pendingDraft: survives a save -> backup -> restore round-trip");
+
+{
+  memStorage.clear();
+  const account = createAccount();
+  const prospect = createProspect({ firstName: "Alice" });
+  prospect.pendingDraft = {
+    channel: "LinkedIn",
+    subject: "",
+    body: "Long draft worth preserving",
+    response: "",
+  };
+  const state: AppState = {
+    accounts: [
+      {
+        ...account,
+        accountData: { ...account.accountData, hotlist: [prospect] },
+      },
+    ],
+    currentAccountId: account.id,
+    isSidebarOpen: true,
+    isArchivedSectionOpen: false,
+    engineCollapsed: { software: false, procurement: false, product: false },
+  };
+  saveAppState(state);
+
+  // Save a second time with the draft erased -> the draft state goes into
+  // backup slot 0.
+  const stateV2 = JSON.parse(JSON.stringify(state)) as AppState;
+  delete stateV2.accounts[0].accountData.hotlist[0].pendingDraft;
+  saveAppState(stateV2);
+
+  const restored = restoreBackup(0);
+  ok(restored !== null, "backup slot 0 restorable");
+  eq(
+    restored?.accounts[0].accountData.hotlist[0].pendingDraft?.body,
+    "Long draft worth preserving",
+    "draft body recovered from backup",
+  );
+}
+
+// ============================================================
 // Final report
 // ============================================================
 

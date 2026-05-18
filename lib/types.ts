@@ -241,6 +241,16 @@ export interface HotlistMessage {
   response: string;
 }
 
+// Persisted compose draft. The Hotlist compose form autosaves into this
+// so an in-progress message survives account switch, browser refresh,
+// or any unmount before the user clicks "Save Message".
+export interface HotlistMessageDraft {
+  channel: HotlistChannel;
+  subject: string;
+  body: string;
+  response: string;
+}
+
 export interface HotlistProspect {
   id: number;
   firstName: string;
@@ -253,6 +263,8 @@ export interface HotlistProspect {
   dateAdded: string;
   messages: HotlistMessage[];
   image: string | null;
+  // Optional autosaved compose draft. Cleared on successful Save Message.
+  pendingDraft?: HotlistMessageDraft;
 }
 
 export interface SoftwareEngineContact {

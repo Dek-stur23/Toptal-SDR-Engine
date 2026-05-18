@@ -4,6 +4,7 @@ import type {
   Account,
   AccountData,
   AppState,
+  HotlistChannel,
   HotlistMessage,
   HotlistPriority,
   HotlistProspect,
@@ -30,11 +31,44 @@ function newId(): string {
 // Coerces a stored prospect into the current shape. Older entries may carry
 // "email" / "phone" — those are intentionally dropped here so the next save
 // removes them from localStorage.
+function cleanChannel(raw: unknown): HotlistChannel {
+  if (
+    raw === "Email" ||
+    raw === "LinkedIn" ||
+    raw === "Phone" ||
+    raw === "Meeting" ||
+    raw === "Other"
+  ) {
+    return raw;
+  }
+  return "Email";
+}
+
+function cleanPendingDraft(
+  raw: unknown,
+): HotlistProspect["pendingDraft"] | undefined {
+  if (!raw || typeof raw !== "object") return undefined;
+  const d = raw as Record<string, unknown>;
+  const body = typeof d.body === "string" ? d.body : "";
+  const subject = typeof d.subject === "string" ? d.subject : "";
+  const response = typeof d.response === "string" ? d.response : "";
+  // Only persist drafts with at least some content — strips empty-shell
+  // drafts that would otherwise clutter storage forever.
+  if (!body.trim() && !subject.trim() && !response.trim()) return undefined;
+  return {
+    channel: cleanChannel(d.channel),
+    subject,
+    body,
+    response,
+  };
+}
+
 function cleanProspect(raw: unknown): HotlistProspect | null {
   if (!raw || typeof raw !== "object") return null;
   const p = raw as Record<string, unknown>;
   const id =
     typeof p.id === "number" && Number.isFinite(p.id) ? p.id : genId();
+  const pendingDraft = cleanPendingDraft(p.pendingDraft);
   return {
     id,
     firstName: typeof p.firstName === "string" ? p.firstName : "",
@@ -54,6 +88,7 @@ function cleanProspect(raw: unknown): HotlistProspect | null {
         ) as HotlistMessage[])
       : [],
     image: typeof p.image === "string" ? p.image : null,
+    ...(pendingDraft ? { pendingDraft } : {}),
   };
 }
 

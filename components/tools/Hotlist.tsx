@@ -956,14 +956,31 @@ function ProspectCard({
     setEditing(false);
   };
   const saveEdit = () => {
+    const nextLinkedinUrl = draft.linkedinUrl.trim();
+    const nextImage = draft.image;
+    // Guard: don't silently overwrite a populated linkedinUrl/screenshot with
+    // empty unless the user explicitly confirms. These are expensive to
+    // recover (LinkedIn screenshots in particular), so a misclick on the
+    // image "Remove" button or an accidental select-all-delete in the URL
+    // field should not silently destroy data.
+    const clearingLinkedin =
+      !!prospect.linkedinUrl.trim() && nextLinkedinUrl === "";
+    const clearingImage = !!prospect.image && nextImage === null;
+    if (clearingLinkedin || clearingImage) {
+      const losing: string[] = [];
+      if (clearingLinkedin) losing.push("LinkedIn URL");
+      if (clearingImage) losing.push("LinkedIn screenshot");
+      const msg = `You're about to clear the ${losing.join(" and ")} on this prospect. This cannot be undone except via the Restore Snapshot menu. Continue?`;
+      if (!window.confirm(msg)) return;
+    }
     onUpdate({
       firstName: draft.firstName.trim(),
       lastName: draft.lastName.trim(),
       title: draft.title.trim(),
       company: draft.company.trim(),
-      linkedinUrl: draft.linkedinUrl.trim(),
+      linkedinUrl: nextLinkedinUrl,
       priority: draft.priority,
-      image: draft.image,
+      image: nextImage,
     });
     setEditing(false);
   };

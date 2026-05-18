@@ -924,6 +924,21 @@ section("CSV: pickLinkedinUrl finds 'Person Linkedin Url' (Sales Nav style)");
   eq(url, "https://linkedin.com/in/carol", "any header containing 'linkedin' matches");
 }
 
+section("CSV: pickLinkedinUrl finds 'LinkedIn Contact Profile URL'");
+
+{
+  const url = pickLinkedinUrl({
+    "first name": "Pat",
+    "linkedin contact profile url": "https://linkedin.com/in/pat",
+    company: "Acme",
+  });
+  eq(
+    url,
+    "https://linkedin.com/in/pat",
+    "verbose 'linkedin contact profile url' header matches",
+  );
+}
+
 section("CSV: pickLinkedinUrl finds 'Profile URL' header");
 
 {

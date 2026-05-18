@@ -868,6 +868,118 @@ import {
 const SAMPLE_DATA_URL =
   "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR4nGNgAAIAAAUAAeImBZsAAAAASUVORK5CYII=";
 
+// ============================================================
+// CSV: permissive LinkedIn URL column matching
+// ============================================================
+
+import {
+  mapCsvRowsToPreview as csvMap,
+  parseCsv as csvParse,
+  pickLinkedinUrl,
+} from "../lib/csv.ts";
+
+section("CSV: parseCsv lowercases headers and parses quoted commas");
+
+{
+  const csv = `First Name,Last Name,Title,Company,"LinkedIn Link"
+Alice,Smith,CTO,"Acme, Inc.",https://linkedin.com/in/alicesmith
+Bob,Jones,VP Eng,"Globex",https://linkedin.com/in/bobjones`;
+  const rows = csvParse(csv);
+  eq(rows.length, 2, "two rows parsed");
+  eq(rows[0]["first name"], "Alice", "header lowercased");
+  eq(rows[0]["company"], "Acme, Inc.", "quoted commas preserved");
+  eq(
+    rows[0]["linkedin link"],
+    "https://linkedin.com/in/alicesmith",
+    "header normalized",
+  );
+}
+
+section("CSV: pickLinkedinUrl finds 'LinkedIn Link' header");
+
+{
+  const url = pickLinkedinUrl({
+    "first name": "Alice",
+    "linkedin link": "https://linkedin.com/in/alice",
+  });
+  eq(url, "https://linkedin.com/in/alice", "header containing 'linkedin' is picked");
+}
+
+section("CSV: pickLinkedinUrl finds 'LinkedIn URL' header");
+
+{
+  const url = pickLinkedinUrl({
+    "linkedin url": "https://linkedin.com/in/bob",
+  });
+  eq(url, "https://linkedin.com/in/bob", "exact 'linkedin url' header is picked");
+}
+
+section("CSV: pickLinkedinUrl finds 'Person Linkedin Url' (Sales Nav style)");
+
+{
+  const url = pickLinkedinUrl({
+    "person linkedin url": "https://linkedin.com/in/carol",
+    company: "Acme",
+  });
+  eq(url, "https://linkedin.com/in/carol", "any header containing 'linkedin' matches");
+}
+
+section("CSV: pickLinkedinUrl finds 'Profile URL' header");
+
+{
+  const url = pickLinkedinUrl({
+    "profile url": "https://linkedin.com/in/dan",
+  });
+  eq(url, "https://linkedin.com/in/dan", "profile url fallback matches");
+}
+
+section("CSV: pickLinkedinUrl falls back to value scan when header is unknown");
+
+{
+  const url = pickLinkedinUrl({
+    name: "Eve",
+    other: "https://linkedin.com/in/eve",
+    note: "Met at conference",
+  });
+  eq(
+    url,
+    "https://linkedin.com/in/eve",
+    "last-resort: scan cells for a linkedin.com URL",
+  );
+}
+
+section("CSV: pickLinkedinUrl returns empty when nothing matches");
+
+{
+  const url = pickLinkedinUrl({
+    name: "Frank",
+    title: "Engineer",
+    company: "Globex",
+  });
+  eq(url, "", "no linkedin column or URL anywhere -> empty string");
+}
+
+section("CSV: end-to-end mapCsvRowsToPreview captures LinkedIn link");
+
+{
+  const csv = `First Name,Last Name,Title,Company,LinkedIn Link
+Alice,Smith,CTO,Acme,https://linkedin.com/in/alicesmith
+Bob,Jones,VP,Globex,https://linkedin.com/in/bobjones`;
+  const rows = csvParse(csv);
+  const preview = csvMap(rows);
+  eq(preview.length, 2, "both rows turn into preview entries");
+  eq(
+    preview[0].linkedinUrl,
+    "https://linkedin.com/in/alicesmith",
+    "Alice's LinkedIn link captured",
+  );
+  eq(
+    preview[1].linkedinUrl,
+    "https://linkedin.com/in/bobjones",
+    "Bob's LinkedIn link captured",
+  );
+}
+
 async function runAsyncImageTests() {
 
 section("imageStore: putImage returns a ref string and loadImage retrieves it");

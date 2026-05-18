@@ -70,104 +70,16 @@ interface BulkPreviewRow extends ExtractedFields {
   selected: boolean;
 }
 
-function parseCsv(text: string): Record<string, string>[] {
-  const lines = text.split(/\r?\n/).filter((l) => l.trim().length > 0);
-  if (lines.length < 2) return [];
-  const parseLine = (line: string): string[] => {
-    const out: string[] = [];
-    let curr = "";
-    let inQuotes = false;
-    for (let i = 0; i < line.length; i++) {
-      const ch = line[i];
-      if (ch === '"') {
-        if (inQuotes && line[i + 1] === '"') {
-          curr += '"';
-          i++;
-        } else {
-          inQuotes = !inQuotes;
-        }
-      } else if (ch === "," && !inQuotes) {
-        out.push(curr);
-        curr = "";
-      } else {
-        curr += ch;
-      }
-    }
-    out.push(curr);
-    return out.map((s) => s.trim());
-  };
-  const headers = parseLine(lines[0]).map((h) => h.toLowerCase());
-  return lines.slice(1).map((line) => {
-    const values = parseLine(line);
-    const row: Record<string, string> = {};
-    headers.forEach((h, i) => {
-      row[h] = (values[i] ?? "").trim();
-    });
-    return row;
-  });
-}
+// CSV parsing + LinkedIn URL detection lives in lib/csv.ts so it can be
+// reused and unit-tested without pulling in this client component.
+import { mapCsvRowsToPreview as mapCsvRowsToPreviewLib, parseCsv } from "@/lib/csv";
 
 function mapCsvRowsToPreview(
   rows: Record<string, string>[],
 ): BulkPreviewRow[] {
-  const firstNameKeys = ["first name", "firstname", "first", "given name"];
-  const lastNameKeys = [
-    "last name",
-    "lastname",
-    "last",
-    "family name",
-    "surname",
-  ];
-  const fullNameKeys = ["name", "full name", "contact name", "contact"];
-  const titleKeys = ["title", "job title", "position", "role"];
-  const companyKeys = [
-    "company",
-    "company name",
-    "organization",
-    "employer",
-    "account",
-  ];
-  const linkedinKeys = [
-    "linkedin",
-    "linkedin url",
-    "linkedin profile",
-    "profile url",
-    "li url",
-  ];
-
-  const pick = (row: Record<string, string>, keys: string[]): string => {
-    for (const k of keys) {
-      const v = row[k];
-      if (v) return v;
-    }
-    return "";
-  };
-
-  const out: BulkPreviewRow[] = [];
-  rows.forEach((row, i) => {
-    let firstName = pick(row, firstNameKeys);
-    let lastName = pick(row, lastNameKeys);
-    const fullName = pick(row, fullNameKeys);
-    if (!firstName && !lastName && fullName) {
-      const parts = fullName.split(/\s+/).filter(Boolean);
-      firstName = parts[0] || "";
-      lastName = parts.slice(1).join(" ");
-    }
-    const title = pick(row, titleKeys);
-    const company = pick(row, companyKeys);
-    const linkedinUrl = pick(row, linkedinKeys);
-    if (!firstName && !lastName && !company) return; // skip empty rows
-    out.push({
-      id: `csv-${i}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-      firstName,
-      lastName,
-      title,
-      company,
-      linkedinUrl,
-      selected: true,
-    });
-  });
-  return out;
+  // CsvPreviewRow and BulkPreviewRow have the same shape; this thin wrapper
+  // keeps the local type alias clean.
+  return mapCsvRowsToPreviewLib(rows) as BulkPreviewRow[];
 }
 
 const PRIORITY_BADGE: Record<HotlistPriority, string> = {

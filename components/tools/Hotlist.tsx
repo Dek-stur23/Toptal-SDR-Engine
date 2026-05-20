@@ -88,6 +88,24 @@ const PRIORITY_BADGE: Record<HotlistPriority, string> = {
   low: "bg-slate-100 text-slate-600 border-slate-200",
 };
 
+// Hard scrub of em-dashes and en-dashes from the drafted message body.
+// Only lines inside a Markdown blockquote (the part the user will copy and
+// send) get scrubbed; surrounding commentary (Situation read, Why this
+// works, Pro-Tip) is left untouched and can use em-dashes for emphasis.
+// Belt-and-suspenders with the gem rule: even if the model slips one
+// through, we strip it before display and before saving.
+function stripEmDashesInBlockquotes(text: string): string {
+  return text
+    .split("\n")
+    .map((line) => {
+      if (line.trimStart().startsWith(">")) {
+        return line.replace(/\s*[—–]\s*/g, ", ");
+      }
+      return line;
+    })
+    .join("\n");
+}
+
 const CHANNEL_ICON = (channel: HotlistChannel) => {
   switch (channel) {
     case "Email":
@@ -1647,7 +1665,10 @@ function NextStepChatModal({
           setStreamingText((prev) => prev + delta);
         },
       });
-      setMessages([...next, { role: "assistant", content: fullText }]);
+      setMessages([
+        ...next,
+        { role: "assistant", content: stripEmDashesInBlockquotes(fullText) },
+      ]);
       setStreamingText("");
     } catch (err) {
       console.error("Next-step chat error:", err);
@@ -1754,7 +1775,11 @@ function NextStepChatModal({
             />
           ))}
           {streaming && (
-            <ChatBubble role="assistant" content={streamingText} streaming />
+            <ChatBubble
+              role="assistant"
+              content={stripEmDashesInBlockquotes(streamingText)}
+              streaming
+            />
           )}
           {error && (
             <div className="text-red-600 text-sm bg-red-50 border border-red-200 rounded-md p-2">

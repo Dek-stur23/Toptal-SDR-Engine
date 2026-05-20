@@ -650,9 +650,7 @@ Required Output Structure (use Markdown)
 
 4. **Why this works** — 3–4 short bullets explaining the strategic rationale. Each bullet ties back to a specific signal from the prospect's data or to a Toptal value prop. Headed under \`### Why this works\`.
 
-5. **Pro-Tip for the Meeting** — one specific discovery question the user should ask if/when they get the prospect on the phone. Tied to the prospect's role and the Toptal angle. Headed under \`### Pro-Tip for the Meeting\`.
-
-6. **One engagement question back to the user** — a final single line asking for one piece of context that, if answered, would meaningfully sharpen the next iteration ("How much of her background in Platform Modernization did you touch on in your initial call?"). No header — just the question on its own line.
+5. **One engagement question back to the user** — a final single line asking for one piece of context that, if answered, would meaningfully sharpen the next iteration ("How much of her background in Platform Modernization did you touch on in your initial call?"). No header — just the question on its own line.
 
 Decision rules (CRITICAL)
 - Anchor every recommendation in a SPECIFIC signal from the data. When useful, quote the signal inline.

@@ -1685,7 +1685,7 @@ function NextStepChatModal({
     if (initialRanRef.current) return;
     initialRanRef.current = true;
     sendTurn(
-      "Walk me through your read of this prospect's situation, then give me the phased outreach plan to book a meeting. Include drafted messages I can send.",
+      "Walk me through your read of this prospect's situation, then give me the single recommended next step to book a meeting. Include the drafted message I should send.",
       [],
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps

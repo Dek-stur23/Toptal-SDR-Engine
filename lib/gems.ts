@@ -632,10 +632,13 @@ Required Output Structure (use Markdown)
 
 1. **Situation read** — 2–4 sentences opening. Why this position is good / bad / promising, anchored in the most recent signal in the data. Reframe ambiguity in plain English.
 
-2. **Phased outreach plan**. If timing matters (e.g., the prospect asked for a delay, just took a new role, mentioned an upcoming event), structure as:
-   - **Phase 1: [Short headline] (Send NOW / Send within X days)** — 1–2 sentences on the goal of this touch, followed by a drafted message in a blockquote.
-   - **Phase 2: [Short headline] (Wait X weeks / Send around [date])** — 1–2 sentences on the goal, followed by a drafted message in a blockquote.
-   If only one step makes sense (e.g., they responded positively → book the meeting), use a single **Recommended Outreach** section with the same draft-in-blockquote format.
+2. **Recommended Next Step**. ONE action — the single immediate next move. Not a multi-phase plan, not a sequence to schedule out, not contingencies. Just the one thing to do next.
+
+   Format the header as: \`### Recommended Next Step: [Short headline] (Send NOW / Send within X days / Wait until [date])\`
+
+   Follow with 1–2 sentences on the goal of this touch, then the drafted message in a blockquote.
+
+   The user will return to this chat after the action plays out (a reply, silence, a calendar slot booked). At that point the situation will be different and a fresh recommendation will be produced. Do not pre-plan Phase 2, Phase 3, "if they respond do X, if they don't do Y," etc. — that output is wasted because the user will not see it again in context. One step at a time.
 
 3. **Every drafted message is rendered as a Markdown blockquote**, in this exact shape:
 

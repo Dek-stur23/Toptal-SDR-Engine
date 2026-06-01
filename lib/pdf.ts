@@ -1,6 +1,6 @@
 "use client";
 
-import type { AccountData } from "./types";
+import type { AccountData, IcpIntelResult } from "./types";
 
 function escapeHtml(unsafe: unknown): string {
   if (typeof unsafe !== "string") return String(unsafe ?? "");
@@ -326,6 +326,126 @@ export function exportAccountToPdf(data: AccountData): void {
       <h1>Account R&amp;D Report: ${escapeHtml(data.companyName)}</h1>
       <p><strong>Relationship Status:</strong> ${escapeHtml(data.accountStatus || "Not defined")}</p>
       ${sections.join("\n")}
+    </body>
+    </html>
+  `;
+
+  printWindow.document.write(html);
+  printWindow.document.close();
+  setTimeout(() => printWindow.print(), 500);
+}
+
+// Dedicated ICP Intel export — full output (executive summary, evidence,
+// inferences, priorities, talking points). Same print-window approach as
+// exportAccountToPdf so the user gets the browser's Save-as-PDF dialog.
+export function exportIcpIntelToPdf(result: IcpIntelResult): void {
+  const printWindow = window.open("", "_blank");
+  if (!printWindow) {
+    alert("Please allow popups to export the PDF.");
+    return;
+  }
+
+  const r = result.result;
+  const fullName = `${result.firstName} ${result.lastName}`.trim() || "Unknown";
+  const sourceLink = (src: string): string => {
+    if (!src || !/^https?:\/\//i.test(src)) return escapeHtml(src);
+    return `<a href="${escapeHtml(src)}" target="_blank" rel="noreferrer">${escapeHtml(src)}</a>`;
+  };
+
+  const html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>ICP Intel - ${escapeHtml(fullName)}</title>
+      <style>
+        body { font-family: system-ui, -apple-system, sans-serif; color: #334155; line-height: 1.6; padding: 40px; max-width: 900px; margin: 0 auto; }
+        h1 { color: #0f172a; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px; margin-bottom: 8px; }
+        .subtitle { color: #64748b; font-size: 0.95rem; margin-bottom: 24px; }
+        h2 { color: #1d4ed8; border-bottom: 1px solid #bfdbfe; padding-bottom: 8px; margin-top: 32px; margin-bottom: 16px; font-size: 1.15rem; }
+        h3 { color: #0f172a; margin-top: 16px; margin-bottom: 8px; font-size: 1rem; }
+        p { margin-top: 0; margin-bottom: 12px; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+        .card { background: #f8fafc; border: 1px solid #e2e8f0; padding: 16px; border-radius: 8px; margin-bottom: 12px; page-break-inside: avoid; }
+        .card .label { display: block; font-size: 0.7rem; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; }
+        ul { margin-top: 0; padding-left: 20px; margin-bottom: 12px; }
+        li { margin-bottom: 8px; }
+        .item { background: #f8fafc; border: 1px solid #e2e8f0; padding: 12px 14px; border-radius: 8px; margin-bottom: 10px; page-break-inside: avoid; }
+        .item .heading { font-weight: 600; color: #0f172a; margin-bottom: 4px; }
+        .item .body { color: #475569; font-size: 0.95rem; }
+        .item .source { font-size: 0.8rem; color: #64748b; margin-top: 6px; word-break: break-all; }
+        .item .source a { color: #2563eb; }
+        .meta { color: #64748b; font-size: 0.85rem; }
+        @media print { body { padding: 0; } @page { margin: 1cm; } }
+      </style>
+    </head>
+    <body>
+      <h1>ICP Intel: ${escapeHtml(fullName)}</h1>
+      <p class="subtitle">${escapeHtml(result.title)}${result.title && result.company ? " @ " : ""}${escapeHtml(result.company)}</p>
+      <p class="meta">Generated ${escapeHtml(result.date)}</p>
+
+      <h2>Executive Summary</h2>
+      <div class="grid">
+        <div class="card">
+          <span class="label">Primary Focus</span>
+          <p>${escapeHtml(r.executiveSummary.primaryFocus)}</p>
+        </div>
+        <div class="card">
+          <span class="label">Likely KPIs</span>
+          <p>${escapeHtml(r.executiveSummary.likelyKPIs)}</p>
+        </div>
+      </div>
+
+      ${
+        r.evidenceBackedInvolvement.length > 0
+          ? `
+        <h2>Evidence-Backed Involvement</h2>
+        ${r.evidenceBackedInvolvement
+          .map(
+            (e) => `
+          <div class="item">
+            <div class="heading">${escapeHtml(e.confirmedProject)}</div>
+            <div class="source">Source: ${sourceLink(e.verifiedSource)}</div>
+          </div>`,
+          )
+          .join("")}
+      `
+          : ""
+      }
+
+      ${
+        r.logicalInferences.length > 0
+          ? `
+        <h2>Logical Inferences</h2>
+        ${r.logicalInferences
+          .map(
+            (i) => `
+          <div class="item">
+            <div class="heading">${escapeHtml(i.inferredPriority)}</div>
+            <div class="body">${escapeHtml(i.reasoning)}</div>
+          </div>`,
+          )
+          .join("")}
+      `
+          : ""
+      }
+
+      ${
+        r.strategicPriorities.length > 0
+          ? `
+        <h2>Strategic Priorities</h2>
+        <ul>${r.strategicPriorities.map((p) => `<li>${escapeHtml(p)}</li>`).join("")}</ul>
+      `
+          : ""
+      }
+
+      ${
+        r.recommendedTalkingPoints.length > 0
+          ? `
+        <h2>Recommended Talking Points</h2>
+        <ul>${r.recommendedTalkingPoints.map((p) => `<li>${escapeHtml(p)}</li>`).join("")}</ul>
+      `
+          : ""
+      }
     </body>
     </html>
   `;

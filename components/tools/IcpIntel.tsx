@@ -6,6 +6,7 @@ import {
   Briefcase,
   CheckCircle2,
   Circle,
+  Download,
   Flame,
   Image as ImageIcon,
   Layers,
@@ -25,6 +26,7 @@ import { generateWithClaude } from "@/lib/api";
 import { DEFAULT_ICP_INTEL_GEM } from "@/lib/gems";
 import { createProspect, prependProspects } from "@/lib/hotlist";
 import { loadImage, putImage } from "@/lib/imageStore";
+import { exportIcpIntelToPdf } from "@/lib/pdf";
 import { useImage } from "@/lib/useImage";
 
 interface ExtractedFields {
@@ -640,6 +642,13 @@ export function IcpIntel({
                       <Flame className="w-3.5 h-3.5" /> Add to Hotlist
                     </>
                   )}
+                </button>
+                <button
+                  onClick={() => exportIcpIntelToPdf(latestResult)}
+                  className="text-xs font-semibold text-slate-700 hover:text-slate-900 flex items-center gap-1.5 transition-colors bg-slate-50 hover:bg-slate-100 border border-slate-200 px-3 py-2 rounded-lg w-fit shadow-sm"
+                  title="Open a print-ready view; use your browser's Save as PDF in the print dialog"
+                >
+                  <Download className="w-3.5 h-3.5" /> Export to PDF
                 </button>
                 {setActiveActionTool && (
                   <button

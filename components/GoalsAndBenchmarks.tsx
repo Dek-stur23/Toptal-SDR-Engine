@@ -23,6 +23,8 @@ import type {
 } from "@/lib/types";
 import {
   appendLog,
+  bucketLogsForChart,
+  chartGranularityFor,
   createLog,
   defaultQuarterlyGoals,
   findQuarterlyGoals,
@@ -43,6 +45,7 @@ import {
   type ViewPeriodKind,
   type WeeklyBucket,
 } from "@/lib/goals";
+import { PacingChart } from "@/components/PacingChart";
 
 interface Props {
   state: AppState;
@@ -208,6 +211,15 @@ export function GoalsAndBenchmarks({ state, setGoals }: Props) {
         </div>
       </section>
 
+      {/* Pacing */}
+      {periodKind !== "today" && (
+        <PacingSection
+          logs={goals.logs}
+          period={period}
+          quarterly={currentQuarterGoals}
+        />
+      )}
+
       {/* Weekly archive */}
       <section className="space-y-3">
         <h2 className="text-sm font-bold text-slate-700 uppercase tracking-wider">
@@ -244,6 +256,81 @@ export function GoalsAndBenchmarks({ state, setGoals }: Props) {
         />
       )}
     </div>
+  );
+}
+
+function PacingSection({
+  logs,
+  period,
+  quarterly,
+}: {
+  logs: import("@/lib/types").GoalLogEntry[];
+  period: ReturnType<typeof resolveViewPeriod>;
+  quarterly: QuarterlyGoals;
+}) {
+  const now = new Date();
+  const dialBuckets = useMemo(
+    () => bucketLogsForChart(logs, period, "dial", now),
+    [logs, period, now.getTime()],
+  );
+  const prospectBuckets = useMemo(
+    () => bucketLogsForChart(logs, period, "prospect-added", now),
+    [logs, period, now.getTime()],
+  );
+  // Reference-line values in the same unit as the bars. Bars are per-day
+  // for week views, per-week for quarter/all-time views.
+  const granularity = chartGranularityFor(period.kind);
+  const dialsGoalPerBucket =
+    granularity === "day"
+      ? quarterly.dailyDialsGoal
+      : quarterly.weeklyDialsGoal;
+  const dialsBenchmarkPerBucket =
+    granularity === "day"
+      ? quarterly.dailyDialsBenchmark
+      : quarterly.weeklyDialsBenchmark;
+  // No dedicated daily prospect goal — approximate as weekly / 7 for daily views.
+  const prospectsGoalPerBucket =
+    granularity === "day"
+      ? Math.round(quarterly.weeklyProspectsGoal / 7)
+      : quarterly.weeklyProspectsGoal;
+  const prospectsBenchmarkPerBucket =
+    granularity === "day"
+      ? Math.round(quarterly.weeklyProspectsBenchmark / 7)
+      : quarterly.weeklyProspectsBenchmark;
+
+  const subtitle =
+    granularity === "day" ? "Per day" : "Per week";
+
+  return (
+    <section className="space-y-3">
+      <h2 className="text-sm font-bold text-slate-700 uppercase tracking-wider">
+        Pacing · {period.label}
+      </h2>
+      <div className="space-y-3">
+        <PacingChart
+          title="Dials"
+          subtitle={subtitle}
+          buckets={dialBuckets}
+          goal={dialsGoalPerBucket}
+          benchmark={dialsBenchmarkPerBucket}
+          barColorClass="fill-blue-500"
+          currentBarColorClass="fill-blue-700"
+          goalStrokeClass="stroke-blue-700"
+          benchmarkStrokeClass="stroke-blue-300"
+        />
+        <PacingChart
+          title="Prospects added"
+          subtitle={subtitle}
+          buckets={prospectBuckets}
+          goal={prospectsGoalPerBucket}
+          benchmark={prospectsBenchmarkPerBucket}
+          barColorClass="fill-emerald-500"
+          currentBarColorClass="fill-emerald-700"
+          goalStrokeClass="stroke-emerald-700"
+          benchmarkStrokeClass="stroke-emerald-300"
+        />
+      </div>
+    </section>
   );
 }
 

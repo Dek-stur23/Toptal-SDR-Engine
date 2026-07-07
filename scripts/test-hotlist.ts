@@ -874,6 +874,8 @@ const SAMPLE_DATA_URL =
 
 import {
   appendLog,
+  bucketLogsForChart,
+  chartGranularityFor,
   createLog,
   defaultQuarterlyGoals,
   emptyGoalsState,
@@ -1180,6 +1182,102 @@ section("goals: saveWeek clears any explicit unlock override");
   g = saveWeek(g, now);
   eq(g.unlockedWeekStarts.length, 0, "saveWeek clears the unlock override");
   ok(isWeekLocked(g, now, now), "week is now locked");
+}
+
+section("goals: chartGranularityFor picks per-day for weekly views, per-week for larger ranges");
+
+{
+  eq(chartGranularityFor("today"), "week", "today (unused) defaults to week");
+  eq(chartGranularityFor("this-week"), "day", "this-week -> day");
+  eq(chartGranularityFor("last-week"), "day", "last-week -> day");
+  eq(chartGranularityFor("this-quarter"), "week", "this-quarter -> week");
+  eq(chartGranularityFor("all-time"), "week", "all-time -> week");
+}
+
+section("goals: bucketLogsForChart week views produce 7 daily buckets");
+
+{
+  const now = new Date(2026, 0, 14, 12); // Wed
+  const period = resolveViewPeriod("this-week", now);
+  const logs = [
+    // Mon
+    { id: 1, kind: "dial" as const, timestamp: new Date(2026, 0, 12, 10).getTime(), count: 5 },
+    // Tue
+    { id: 2, kind: "dial" as const, timestamp: new Date(2026, 0, 13, 11).getTime(), count: 3 },
+    // Wed (current)
+    { id: 3, kind: "dial" as const, timestamp: new Date(2026, 0, 14, 9).getTime(), count: 7 },
+    // Prospect on Mon — should not affect dial bucketing
+    { id: 4, kind: "prospect-added" as const, timestamp: new Date(2026, 0, 12, 10).getTime(), count: 2 },
+  ];
+  const dialBuckets = bucketLogsForChart(logs, period, "dial", now);
+  eq(dialBuckets.length, 7, "7 daily bars");
+  eq(dialBuckets[0].count, 5, "Mon dial count");
+  eq(dialBuckets[1].count, 3, "Tue dial count");
+  eq(dialBuckets[2].count, 7, "Wed dial count");
+  eq(dialBuckets[3].count, 0, "Thu empty");
+  eq(dialBuckets[6].count, 0, "Sun empty");
+  ok(dialBuckets[2].isCurrent, "Wednesday marked as current bucket");
+  ok(!dialBuckets[0].isCurrent, "Monday not marked as current");
+}
+
+section("goals: bucketLogsForChart filters by kind");
+
+{
+  const now = new Date(2026, 0, 14, 12);
+  const period = resolveViewPeriod("this-week", now);
+  const logs = [
+    { id: 1, kind: "dial" as const, timestamp: new Date(2026, 0, 12, 10).getTime(), count: 5 },
+    { id: 2, kind: "prospect-added" as const, timestamp: new Date(2026, 0, 12, 10).getTime(), count: 8 },
+  ];
+  const dials = bucketLogsForChart(logs, period, "dial", now);
+  const prospects = bucketLogsForChart(logs, period, "prospect-added", now);
+  eq(dials[0].count, 5, "dial bucket only counts dials");
+  eq(prospects[0].count, 8, "prospect bucket only counts prospects");
+}
+
+section("goals: bucketLogsForChart this-quarter uses weekly bars from quarter start");
+
+{
+  // Wed 2026-02-04 -> Q1 (started 2026-01-01)
+  const now = new Date(2026, 1, 4, 12);
+  const period = resolveViewPeriod("this-quarter", now);
+  const buckets = bucketLogsForChart([], period, "dial", now);
+  ok(buckets.length >= 5, "several weekly buckets from Jan through Feb 4");
+  ok(
+    buckets[buckets.length - 1].isCurrent,
+    "final bucket contains 'now'",
+  );
+}
+
+section("goals: bucketLogsForChart all-time renders last 12 weekly buckets");
+
+{
+  const now = new Date(2026, 0, 14);
+  const period = resolveViewPeriod("all-time", now);
+  const buckets = bucketLogsForChart([], period, "dial", now);
+  eq(buckets.length, 12, "12 weekly buckets");
+  ok(
+    buckets[buckets.length - 1].isCurrent,
+    "last bucket contains 'now' (current week)",
+  );
+}
+
+section("goals: bucketLogsForChart labels are natural for each granularity");
+
+{
+  const now = new Date(2026, 0, 14);
+  const week = resolveViewPeriod("this-week", now);
+  const dayBuckets = bucketLogsForChart([], week, "dial", now);
+  ok(
+    /^[A-Za-z]{3}/.test(dayBuckets[0].label),
+    `daily label looks like weekday abbrev (${dayBuckets[0].label})`,
+  );
+  const quarter = resolveViewPeriod("this-quarter", now);
+  const weekBuckets = bucketLogsForChart([], quarter, "dial", now);
+  ok(
+    /[A-Za-z]/.test(weekBuckets[0].label),
+    `weekly label contains a month name (${weekBuckets[0].label})`,
+  );
 }
 
 // ============================================================

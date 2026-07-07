@@ -315,6 +315,105 @@ export function groupLogsByWeek(
   );
 }
 
+// ---- Chart bucketing ----------------------------------------------
+
+export type ChartGranularity = "day" | "week";
+
+export interface ChartBucket {
+  label: string;        // "Mon", "Oct 6", ...
+  startMs: number;
+  endMs: number;
+  count: number;        // total for this kind in this bucket
+  isCurrent: boolean;   // now falls inside this bucket
+}
+
+// Choose day-vs-week bars based on the selected view. Weekly views get
+// per-day resolution; quarter and all-time views get per-week resolution.
+export function chartGranularityFor(
+  kind: ViewPeriodKind,
+): ChartGranularity {
+  return kind === "this-week" || kind === "last-week" ? "day" : "week";
+}
+
+// Groups all logs of a given kind into fixed buckets appropriate for the
+// current view period. Buckets always cover the full period even when no
+// logs fall into them (empty bars are the "you didn't work that day" signal).
+// - Week views: 7 daily buckets.
+// - This quarter: every week from the quarter start through now.
+// - All time: last 12 weekly buckets ending at the current week.
+// - Today: single-day bucket. The dashboard skips rendering the chart in
+//   that case, but returning a valid array keeps the function total.
+export function bucketLogsForChart(
+  logs: GoalLogEntry[],
+  period: ViewPeriod,
+  kind: GoalMetricKind,
+  now: Date = new Date(),
+): ChartBucket[] {
+  const granularity = chartGranularityFor(period.kind);
+  const ranges: { start: Date; end: Date }[] = [];
+
+  if (granularity === "day") {
+    if (period.kind === "today") {
+      const s = dayStartFor(now);
+      const e = dayEndFor(now);
+      ranges.push({ start: s, end: e });
+    } else {
+      // this-week / last-week: 7 buckets starting from period.fromMs
+      const start = new Date(period.fromMs);
+      for (let i = 0; i < 7; i++) {
+        const bStart = new Date(start);
+        bStart.setDate(start.getDate() + i);
+        bStart.setHours(0, 0, 0, 0);
+        const bEnd = new Date(bStart);
+        bEnd.setHours(23, 59, 59, 999);
+        ranges.push({ start: bStart, end: bEnd });
+      }
+    }
+  } else if (period.kind === "this-quarter") {
+    // Every week from quarter start through now.
+    let cursor = weekStartFor(new Date(period.fromMs));
+    const endMs = period.toMs;
+    while (cursor.getTime() <= endMs) {
+      const s = new Date(cursor);
+      const e = weekEndFor(s);
+      ranges.push({ start: s, end: e });
+      cursor = new Date(cursor);
+      cursor.setDate(cursor.getDate() + 7);
+    }
+  } else {
+    // all-time / custom (default): last 12 weekly buckets ending at
+    // the week containing `now`.
+    const currentWeekStart = weekStartFor(now);
+    for (let i = 11; i >= 0; i--) {
+      const s = new Date(currentWeekStart);
+      s.setDate(currentWeekStart.getDate() - i * 7);
+      ranges.push({ start: s, end: weekEndFor(s) });
+    }
+  }
+
+  const nowMs = now.getTime();
+  return ranges.map((r) => {
+    let count = 0;
+    for (const l of logs) {
+      if (l.kind !== kind) continue;
+      if (l.timestamp >= r.start.getTime() && l.timestamp <= r.end.getTime()) {
+        count += l.count;
+      }
+    }
+    const label =
+      granularity === "day"
+        ? r.start.toLocaleString(undefined, { weekday: "short" })
+        : r.start.toLocaleString(undefined, { month: "short", day: "numeric" });
+    return {
+      label,
+      startMs: r.start.getTime(),
+      endMs: r.end.getTime(),
+      count,
+      isCurrent: nowMs >= r.start.getTime() && nowMs <= r.end.getTime(),
+    };
+  });
+}
+
 // ---- View filter periods ------------------------------------------
 
 export type ViewPeriodKind =

@@ -10,13 +10,20 @@ import {
   ChevronRight,
   Edit2,
   ExternalLink,
+  Image as ImageIcon,
+  Loader2,
   Plus,
   RotateCcw,
   Trash2,
+  Wand2,
   X,
 } from "lucide-react";
 import type { Account, AppState, Meeting } from "@/lib/types";
 import { genId } from "@/lib/ids";
+import { generateWithClaude } from "@/lib/api";
+import { DEFAULT_HOTLIST_AUTOFILL_GEM } from "@/lib/gems";
+import { loadImage, putImage } from "@/lib/imageStore";
+import { useImage } from "@/lib/useImage";
 
 interface Props {
   state: AppState;
@@ -269,10 +276,29 @@ function MeetingCard({
     ? accountNameById[meeting.accountId] ?? "(deleted account)"
     : null;
   const pastDue = meeting.status === "booked" && isPastDue(meeting.scheduledFor);
+  const imageSrc = useImage(meeting.image);
+  const [viewingImage, setViewingImage] = useState(false);
 
   return (
     <li className="bg-white border border-slate-200 rounded-lg shadow-sm p-4 space-y-2.5">
       <div className="flex items-start justify-between gap-3">
+        {meeting.image && (
+          <button
+            onClick={() => setViewingImage(true)}
+            className="shrink-0 w-12 h-12 rounded-md overflow-hidden border border-slate-200 hover:border-blue-400 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 bg-slate-100"
+            title="View saved screenshot"
+            aria-label="View saved screenshot"
+          >
+            {imageSrc && (
+              /* eslint-disable-next-line @next/next/no-img-element */
+              <img
+                src={imageSrc}
+                alt={`Screenshot for ${fullName}`}
+                className="w-full h-full object-cover"
+              />
+            )}
+          </button>
+        )}
         <div className="min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="font-semibold text-sm text-slate-900 truncate">
@@ -366,6 +392,32 @@ function MeetingCard({
           <Trash2 className="w-3 h-3" /> Delete
         </button>
       </div>
+
+      {viewingImage && meeting.image && (
+        <div
+          onClick={() => setViewingImage(false)}
+          className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 animate-in fade-in"
+          role="dialog"
+          aria-modal="true"
+        >
+          {imageSrc && (
+            /* eslint-disable-next-line @next/next/no-img-element */
+            <img
+              src={imageSrc}
+              alt={`Screenshot for ${fullName}`}
+              className="max-w-full max-h-full object-contain rounded shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            />
+          )}
+          <button
+            onClick={() => setViewingImage(false)}
+            className="absolute top-4 right-4 text-white/80 hover:text-white bg-black/40 hover:bg-black/60 rounded-full w-10 h-10 flex items-center justify-center transition-colors text-xl"
+            aria-label="Close image preview"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+      )}
     </li>
   );
 }
@@ -391,7 +443,108 @@ function MeetingModal({
   const [accountId, setAccountId] = useState(source?.accountId ?? "");
   const [scheduledFor, setScheduledFor] = useState(source?.scheduledFor ?? "");
   const [notes, setNotes] = useState(source?.notes ?? "");
+  const [image, setImage] = useState<string | null>(source?.image ?? null);
+  const imageSrc = useImage(image);
+  const [extracting, setExtracting] = useState(false);
+  const [extractError, setExtractError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onloadend = async () => {
+      if (typeof reader.result !== "string") return;
+      try {
+        const ref = await putImage(reader.result);
+        setImage(ref);
+      } catch {
+        setImage(reader.result);
+      }
+      setExtractError(null);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const removeImage = () => {
+    setImage(null);
+    setExtractError(null);
+  };
+
+  // Attempt to auto-select an account by matching the extracted company
+  // name against known account names (case-insensitive, trimmed).
+  const matchAccountByCompany = (company: string): string | null => {
+    const target = company.trim().toLowerCase();
+    if (!target) return null;
+    for (const a of accounts) {
+      const candidates = [
+        a.name,
+        a.accountData.companyName,
+      ]
+        .filter((s): s is string => typeof s === "string" && s.length > 0)
+        .map((s) => s.toLowerCase());
+      if (candidates.some((c) => c === target || c.includes(target) || target.includes(c))) {
+        return a.id;
+      }
+    }
+    return null;
+  };
+
+  const autofillFromImage = async () => {
+    if (!image) return;
+    setExtracting(true);
+    setExtractError(null);
+    try {
+      const imageData = await loadImage(image);
+      if (!imageData) {
+        setExtractError("Could not read the uploaded image.");
+        return;
+      }
+      const schema = {
+        type: "OBJECT",
+        properties: {
+          firstName: { type: "STRING" },
+          lastName: { type: "STRING" },
+          title: { type: "STRING" },
+          company: { type: "STRING" },
+          linkedinUrl: { type: "STRING" },
+        },
+        required: ["firstName", "lastName", "title", "company", "linkedinUrl"],
+      };
+      const result = await generateWithClaude<{
+        firstName: string;
+        lastName: string;
+        title: string;
+        company: string;
+        linkedinUrl: string;
+      }>({
+        prompt:
+          "Extract the visible name, title, company, and LinkedIn URL from this screenshot. Return empty string for any field you cannot read with confidence. Do NOT extract emails or phone numbers.",
+        system: DEFAULT_HOTLIST_AUTOFILL_GEM,
+        schema,
+        image: imageData,
+      });
+      if (result.firstName) setFirstName(result.firstName);
+      if (result.lastName) setLastName(result.lastName);
+      if (result.title) setTitle(result.title);
+      if (result.linkedinUrl) setLinkedinUrl(result.linkedinUrl);
+      // Only overwrite the account picker if the extracted company matches
+      // an existing account. Otherwise leave whatever the user already picked.
+      if (result.company && !accountId) {
+        const matched = matchAccountByCompany(result.company);
+        if (matched) setAccountId(matched);
+      }
+    } catch (err) {
+      console.error("Meeting autofill error:", err);
+      setExtractError(
+        err instanceof Error
+          ? err.message
+          : "Failed to extract details from the screenshot.",
+      );
+    } finally {
+      setExtracting(false);
+    }
+  };
 
   const submit = () => {
     if (
@@ -417,6 +570,7 @@ function MeetingModal({
     };
     if (accountId) meeting.accountId = accountId;
     if (source?.heldAt) meeting.heldAt = source.heldAt;
+    if (image) meeting.image = image;
     onSave(meeting);
   };
 
@@ -452,6 +606,71 @@ function MeetingModal({
           >
             <X className="w-4 h-4" />
           </button>
+        </div>
+
+        {/* Screenshot upload with AI autofill */}
+        <div>
+          <div className="flex items-center justify-between mb-1">
+            <span className="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider">
+              LinkedIn screenshot (optional)
+            </span>
+            {image && (
+              <button
+                onClick={autofillFromImage}
+                disabled={extracting}
+                className="text-[10px] font-bold uppercase tracking-wider bg-blue-100 hover:bg-blue-200 text-blue-700 px-2 py-1 rounded flex items-center gap-1 transition-colors disabled:opacity-50"
+              >
+                {extracting ? (
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                ) : (
+                  <Wand2 className="w-3 h-3" />
+                )}
+                {extracting ? "Extracting..." : "Autofill from image"}
+              </button>
+            )}
+          </div>
+          <div className="border-2 border-dashed border-blue-200 rounded-lg h-24 flex items-center justify-center bg-white relative overflow-hidden shadow-sm hover:bg-blue-50/30 transition-colors">
+            {image ? (
+              <div className="w-full h-full relative group">
+                {imageSrc && (
+                  /* eslint-disable-next-line @next/next/no-img-element */
+                  <img
+                    src={imageSrc}
+                    alt="LinkedIn screenshot"
+                    className="w-full h-full object-cover opacity-70"
+                  />
+                )}
+                <button
+                  onClick={removeImage}
+                  className="absolute inset-0 flex items-center justify-center text-sm font-semibold text-red-600 bg-white/80 hover:bg-white transition-all opacity-0 group-hover:opacity-100"
+                >
+                  Remove image
+                </button>
+              </div>
+            ) : (
+              <>
+                <input
+                  type="file"
+                  accept="image/*"
+                  id={`meeting-image-upload-${source?.id ?? "new"}`}
+                  className="hidden"
+                  onChange={handleImageUpload}
+                />
+                <label
+                  htmlFor={`meeting-image-upload-${source?.id ?? "new"}`}
+                  className="cursor-pointer flex flex-col items-center justify-center w-full h-full text-blue-500 hover:text-blue-700 transition-colors"
+                >
+                  <ImageIcon className="w-5 h-5 mb-1 opacity-80" />
+                  <span className="text-[11px] font-medium">
+                    Click to upload LinkedIn screenshot
+                  </span>
+                </label>
+              </>
+            )}
+          </div>
+          {extractError && (
+            <p className="text-xs text-red-600 mt-1">{extractError}</p>
+          )}
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

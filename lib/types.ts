@@ -450,6 +450,9 @@ export interface Meeting {
   status: MeetingStatus;
   createdAt: number;    // ms epoch
   heldAt?: number;      // ms epoch, populated on convert-to-held
+  // Opaque image ref (idb:<uuid> or legacy inline data: URL). Used for
+  // the LinkedIn screenshot uploaded in the modal.
+  image?: string | null;
 }
 
 // ============================================================

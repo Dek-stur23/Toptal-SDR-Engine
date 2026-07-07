@@ -275,6 +275,7 @@ function cleanMeetings(raw: unknown): Meeting[] {
         Number.isFinite(m.heldAt)
       )
         clean.heldAt = m.heldAt;
+      if (typeof m.image === "string" && m.image) clean.image = m.image;
       return clean;
     });
 }
@@ -914,6 +915,15 @@ export async function migrateInlineImagesInState(
       any = true;
     }
   }
+  if (Array.isArray(state.meetings)) {
+    for (const m of state.meetings) {
+      const r = await migrateImageField(m.image);
+      if (r.changed) {
+        m.image = r.next;
+        any = true;
+      }
+    }
+  }
   return any;
 }
 
@@ -952,6 +962,11 @@ async function inlineImagesInState(state: AppState): Promise<AppState> {
       );
     }
     ad.messagingLiImage = await inlineImageField(ad.messagingLiImage);
+  }
+  if (Array.isArray(cloned.meetings)) {
+    for (const m of cloned.meetings) {
+      m.image = await inlineImageField(m.image);
+    }
   }
   return cloned;
 }
@@ -1017,6 +1032,17 @@ export async function parseImportedAppStateAsync(
         ad.messagingLiImage = await putImage(ad.messagingLiImage as string);
       } catch {
         // keep inline
+      }
+    }
+  }
+  if (Array.isArray(state.meetings)) {
+    for (const m of state.meetings) {
+      if (m.image && isInlineDataUrl(m.image)) {
+        try {
+          m.image = await putImage(m.image);
+        } catch {
+          // keep inline
+        }
       }
     }
   }

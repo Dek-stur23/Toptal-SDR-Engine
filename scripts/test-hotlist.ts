@@ -1346,6 +1346,44 @@ section("meetings: cleanMeetings drops malformed entries and unknown statuses");
   eq(loaded.meetings[1].status, "held", "valid held preserved");
 }
 
+section("meetings: cleanMeetings preserves image ref when present");
+
+{
+  memStorage.clear();
+  const raw = {
+    meetings: [
+      {
+        id: 5,
+        firstName: "A",
+        lastName: "B",
+        title: "",
+        linkedinUrl: "",
+        scheduledFor: "",
+        notes: "",
+        status: "booked",
+        createdAt: 1,
+        image: "idb:abc-123",
+      },
+      {
+        id: 6,
+        firstName: "C",
+        lastName: "D",
+        title: "",
+        linkedinUrl: "",
+        scheduledFor: "",
+        notes: "",
+        status: "booked",
+        createdAt: 2,
+        image: "",
+      },
+    ],
+  };
+  memStorage.setItem("toptal-sdr-engine::app", JSON.stringify(raw));
+  const loaded = loadAppState();
+  eq(loaded.meetings[0].image, "idb:abc-123", "image ref preserved");
+  ok(loaded.meetings[1].image === undefined, "empty image dropped");
+}
+
 section("meetings: cleanMeetings drops accountId when it's not a non-empty string");
 
 {

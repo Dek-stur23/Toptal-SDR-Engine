@@ -276,6 +276,13 @@ function cleanMeetings(raw: unknown): Meeting[] {
       )
         clean.heldAt = m.heldAt;
       if (typeof m.image === "string" && m.image) clean.image = m.image;
+      if (
+        m.prospectResponse === "accepted" ||
+        m.prospectResponse === "declined" ||
+        m.prospectResponse === "no-response"
+      ) {
+        clean.prospectResponse = m.prospectResponse;
+      }
       return clean;
     });
 }

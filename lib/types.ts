@@ -434,6 +434,11 @@ export type AppView = "account" | "goals" | "meetings";
 
 export type MeetingStatus = "booked" | "held";
 
+// Whether the prospect has replied to the booked meeting invite. Only
+// meaningful while status === "booked"; the field is preserved on held
+// meetings for history.
+export type ProspectResponse = "no-response" | "accepted" | "declined";
+
 export interface Meeting {
   id: number;
   firstName: string;
@@ -453,6 +458,8 @@ export interface Meeting {
   // Opaque image ref (idb:<uuid> or legacy inline data: URL). Used for
   // the LinkedIn screenshot uploaded in the modal.
   image?: string | null;
+  // Prospect's response to the booked invite. Defaults to "no-response".
+  prospectResponse?: ProspectResponse;
 }
 
 // ============================================================

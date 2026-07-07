@@ -68,6 +68,26 @@ function isPastDue(iso: string, now: Date = new Date()): boolean {
   return d.getTime() < now.getTime();
 }
 
+const PROSPECT_RESPONSE_LABEL: Record<
+  import("@/lib/types").ProspectResponse,
+  string
+> = {
+  accepted: "Prospect accepted",
+  declined: "Prospect declined",
+  "no-response": "No response yet",
+};
+
+// Chip color classes per response — matches the platform's existing
+// green/red/slate accent palette.
+const PROSPECT_RESPONSE_BADGE: Record<
+  import("@/lib/types").ProspectResponse,
+  string
+> = {
+  accepted: "bg-emerald-50 text-emerald-700 border-emerald-200",
+  declined: "bg-red-50 text-red-700 border-red-200",
+  "no-response": "bg-slate-50 text-slate-600 border-slate-200",
+};
+
 export function MeetingsTracker({
   state,
   onMutateMeetings,
@@ -140,6 +160,15 @@ export function MeetingsTracker({
     );
   };
 
+  const setProspectResponse = (
+    id: number,
+    response: import("@/lib/types").ProspectResponse,
+  ) => {
+    onMutateMeetings((prev) =>
+      prev.map((m) => (m.id === id ? { ...m, prospectResponse: response } : m)),
+    );
+  };
+
   const moveBackToBooked = (id: number) => {
     onMutateMeetings((prev) =>
       prev.map((m) =>
@@ -201,6 +230,7 @@ export function MeetingsTracker({
                 onConvert={() => convertToHeld(m.id)}
                 onMoveBack={() => moveBackToBooked(m.id)}
                 onDelete={() => deleteMeeting(m.id)}
+                onSetProspectResponse={(r) => setProspectResponse(m.id, r)}
               />
             ))}
           </ul>
@@ -236,6 +266,7 @@ export function MeetingsTracker({
                   onConvert={() => convertToHeld(m.id)}
                   onMoveBack={() => moveBackToBooked(m.id)}
                   onDelete={() => deleteMeeting(m.id)}
+                  onSetProspectResponse={(r) => setProspectResponse(m.id, r)}
                 />
               ))}
             </ul>
@@ -262,6 +293,7 @@ function MeetingCard({
   onConvert,
   onMoveBack,
   onDelete,
+  onSetProspectResponse,
 }: {
   meeting: Meeting;
   accountNameById: Record<string, string>;
@@ -269,6 +301,9 @@ function MeetingCard({
   onConvert: () => void;
   onMoveBack: () => void;
   onDelete: () => void;
+  onSetProspectResponse: (
+    r: import("@/lib/types").ProspectResponse,
+  ) => void;
 }) {
   const fullName =
     `${meeting.firstName} ${meeting.lastName}`.trim() || "(unnamed contact)";
@@ -341,6 +376,23 @@ function MeetingCard({
               <span className="text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200 px-1.5 py-0.5 rounded">
                 Past due — mark held?
               </span>
+            )}
+            {meeting.status === "booked" ? (
+              <ProspectResponsePicker
+                value={meeting.prospectResponse ?? "no-response"}
+                onChange={onSetProspectResponse}
+              />
+            ) : (
+              meeting.prospectResponse &&
+              meeting.prospectResponse !== "no-response" && (
+                <span
+                  className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border ${
+                    PROSPECT_RESPONSE_BADGE[meeting.prospectResponse]
+                  }`}
+                >
+                  {PROSPECT_RESPONSE_LABEL[meeting.prospectResponse]}
+                </span>
+              )
             )}
             {meeting.linkedinUrl && (
               <a
@@ -771,6 +823,34 @@ function MeetingModal({
         </div>
       </div>
     </div>
+  );
+}
+
+function ProspectResponsePicker({
+  value,
+  onChange,
+}: {
+  value: import("@/lib/types").ProspectResponse;
+  onChange: (r: import("@/lib/types").ProspectResponse) => void;
+}) {
+  return (
+    <label
+      className={`inline-flex items-center text-[10px] font-semibold border rounded px-1 py-0.5 gap-1 focus-within:ring-2 focus-within:ring-blue-400 ${PROSPECT_RESPONSE_BADGE[value]}`}
+      title="Prospect's response to the invite"
+    >
+      <span className="uppercase tracking-wider opacity-70">Response:</span>
+      <select
+        value={value}
+        onChange={(e) =>
+          onChange(e.target.value as import("@/lib/types").ProspectResponse)
+        }
+        className="bg-transparent border-0 outline-none font-semibold pr-1 cursor-pointer"
+      >
+        <option value="no-response">No response yet</option>
+        <option value="accepted">Prospect accepted</option>
+        <option value="declined">Prospect declined</option>
+      </select>
+    </label>
   );
 }
 

@@ -1412,6 +1412,60 @@ section("meetings: cleanMeetings drops accountId when it's not a non-empty strin
   );
 }
 
+section("meetings: cleanMeetings preserves valid prospectResponse and drops invalid");
+
+{
+  memStorage.clear();
+  const raw = {
+    meetings: [
+      {
+        id: 10,
+        firstName: "A",
+        lastName: "B",
+        title: "",
+        linkedinUrl: "",
+        scheduledFor: "",
+        notes: "",
+        status: "booked",
+        createdAt: 1,
+        prospectResponse: "accepted",
+      },
+      {
+        id: 11,
+        firstName: "C",
+        lastName: "D",
+        title: "",
+        linkedinUrl: "",
+        scheduledFor: "",
+        notes: "",
+        status: "booked",
+        createdAt: 2,
+        prospectResponse: "declined",
+      },
+      {
+        id: 12,
+        firstName: "E",
+        lastName: "F",
+        title: "",
+        linkedinUrl: "",
+        scheduledFor: "",
+        notes: "",
+        status: "booked",
+        createdAt: 3,
+        prospectResponse: "not-a-real-value",
+      },
+    ],
+  };
+  memStorage.setItem("toptal-sdr-engine::app", JSON.stringify(raw));
+  const loaded = loadAppState();
+  eq(loaded.meetings[0].prospectResponse, "accepted", "accepted preserved");
+  eq(loaded.meetings[1].prospectResponse, "declined", "declined preserved");
+  ok(
+    loaded.meetings[2].prospectResponse === undefined,
+    "invalid value dropped",
+  );
+}
+
 section("goals: chartGranularityFor picks per-day for weekly views, per-week for larger ranges");
 
 {

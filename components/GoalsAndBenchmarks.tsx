@@ -58,6 +58,23 @@ const NOW = () => new Date();
 const monthShort = (d: Date) =>
   d.toLocaleString(undefined, { month: "short", day: "numeric" });
 
+function formatDatetimeLocal(ms: number): string {
+  const d = new Date(ms);
+  if (Number.isNaN(d.getTime())) return "";
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mm = String(d.getMinutes()).padStart(2, "0");
+  return `${y}-${m}-${day}T${hh}:${mm}`;
+}
+
+function parseDatetimeLocal(s: string): number | null {
+  if (!s) return null;
+  const ts = new Date(s).getTime();
+  return Number.isFinite(ts) ? ts : null;
+}
+
 function formatWeekLabel(bucket: WeeklyBucket): string {
   return `Week of ${monthShort(bucket.weekStart)} – ${monthShort(bucket.weekEnd)}`;
 }
@@ -136,11 +153,24 @@ export function GoalsAndBenchmarks({ state, setGoals }: Props) {
   const submitLog = (
     kind: GoalLogEntry["kind"],
     count: number,
-    opts: { note?: string; accountId?: string },
+    opts: { note?: string; accountId?: string; timestamp?: number },
   ) => {
     setGoals((prev) => appendLog(prev, createLog(kind, count, opts)));
     setLogModalKind(null);
   };
+
+  // Suggested default "When?" for the log modal. If the currently viewed
+  // period contains right-now, use now. If the period is fully in the
+  // past (e.g. "Last week"), default to 5 PM on the last day of that
+  // period so the entry lands inside the range the user is looking at.
+  const suggestedWhenMs = useMemo(() => {
+    const nowMs = now.getTime();
+    if (nowMs >= period.fromMs && nowMs <= period.toMs) return nowMs;
+    const end = new Date(period.toMs);
+    end.setHours(17, 0, 0, 0);
+    return end.getTime();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [period.fromMs, period.toMs, now.getTime()]);
 
   return (
     <div className="max-w-5xl mx-auto px-6 py-10 space-y-8">
@@ -275,6 +305,8 @@ export function GoalsAndBenchmarks({ state, setGoals }: Props) {
         <LogEntryModal
           kind={logModalKind}
           accounts={state.accounts.filter((a) => !a.isArchived)}
+          defaultWhenMs={suggestedWhenMs}
+          periodLabel={period.label}
           onClose={() => setLogModalKind(null)}
           onSubmit={(count, opts) => submitLog(logModalKind, count, opts)}
         />
@@ -702,22 +734,34 @@ function LogRow({
 function LogEntryModal({
   kind,
   accounts,
+  defaultWhenMs,
+  periodLabel,
   onClose,
   onSubmit,
 }: {
   kind: GoalLogEntry["kind"];
   accounts: import("@/lib/types").Account[];
+  defaultWhenMs: number;
+  periodLabel: string;
   onClose: () => void;
-  onSubmit: (count: number, opts: { note?: string; accountId?: string }) => void;
+  onSubmit: (
+    count: number,
+    opts: { note?: string; accountId?: string; timestamp?: number },
+  ) => void;
 }) {
   const isDial = kind === "dial";
   const [countStr, setCountStr] = useState("");
   const [note, setNote] = useState("");
   const [accountId, setAccountId] = useState("");
+  const [when, setWhen] = useState(formatDatetimeLocal(defaultWhenMs));
   const [error, setError] = useState<string | null>(null);
 
   const parsed = Number.parseInt(countStr, 10);
   const isValid = Number.isFinite(parsed) && parsed >= 1;
+  const whenTs = parseDatetimeLocal(when);
+  const nowMs = Date.now();
+  const isBackdated =
+    Number.isFinite(whenTs) && whenTs !== null && Math.abs(whenTs - nowMs) > 60_000;
 
   const submit = () => {
     if (!isValid) {
@@ -727,6 +771,8 @@ function LogEntryModal({
     onSubmit(parsed, {
       note: note.trim() || undefined,
       accountId: !isDial && accountId ? accountId : undefined,
+      timestamp:
+        whenTs !== null && Number.isFinite(whenTs) ? whenTs : undefined,
     });
   };
 
@@ -789,6 +835,27 @@ function LogEntryModal({
             placeholder={isDial ? "e.g. 15" : "e.g. 3"}
             className={`w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:ring-2 ${accentRing} outline-none`}
           />
+        </label>
+
+        <label className="block">
+          <span className="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1">
+            When?
+          </span>
+          <input
+            type="datetime-local"
+            value={when}
+            onChange={(e) => setWhen(e.target.value)}
+            className={`w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:ring-2 ${accentRing} outline-none`}
+          />
+          <p className="text-[10px] text-slate-500 mt-1">
+            Default matches the current view ({periodLabel}). Change to
+            backdate an entry.
+            {isBackdated && (
+              <span className="ml-1 font-semibold text-amber-700">
+                (Backdated entry)
+              </span>
+            )}
+          </p>
         </label>
 
         {!isDial && accounts.length > 0 && (

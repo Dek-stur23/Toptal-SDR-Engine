@@ -994,6 +994,19 @@ section("goals: createLog rejects invalid counts");
   eq(frac.count, 3, "fractional floored");
 }
 
+section("goals: createLog respects opts.timestamp when provided");
+
+{
+  const past = new Date(2026, 0, 5, 10, 0).getTime();
+  const entry = createLog("dial", 3, { timestamp: past });
+  eq(entry.timestamp, past, "timestamp override used");
+  const now = createLog("dial", 3);
+  ok(now.timestamp !== past, "no override falls back to Date.now()");
+  // NaN / non-finite → fall back to Date.now()
+  const bad = createLog("dial", 3, { timestamp: NaN });
+  ok(Number.isFinite(bad.timestamp), "NaN timestamp falls back to now");
+}
+
 section("goals: createLog carries optional accountId when provided");
 
 {

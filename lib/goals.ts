@@ -114,12 +114,16 @@ export function upsertQuarterlyGoals(
 export function createLog(
   kind: GoalMetricKind,
   count: number,
-  opts: { note?: string; accountId?: string } = {},
+  opts: { note?: string; accountId?: string; timestamp?: number } = {},
 ): GoalLogEntry {
+  const ts =
+    typeof opts.timestamp === "number" && Number.isFinite(opts.timestamp)
+      ? opts.timestamp
+      : Date.now();
   const entry: GoalLogEntry = {
     id: genId(),
     kind,
-    timestamp: Date.now(),
+    timestamp: ts,
     count: Math.max(1, Math.floor(count)),
   };
   const note = opts.note?.trim();

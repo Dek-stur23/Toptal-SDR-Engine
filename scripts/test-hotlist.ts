@@ -1205,6 +1205,175 @@ section("goals: saveWeek clears any explicit unlock override");
   ok(isWeekLocked(g, now, now), "week is now locked");
 }
 
+// ============================================================
+// Meetings Tracker — storage round-trip
+// ============================================================
+
+section("meetings: loadAppState / export defaults to empty array");
+
+{
+  memStorage.clear();
+  const loaded = loadAppState();
+  ok(Array.isArray(loaded.meetings), "meetings is an array");
+  eq(loaded.meetings.length, 0, "meetings is empty by default");
+  eq(loaded.isMeetingsHeldSectionOpen, true, "held section defaults open");
+}
+
+section("meetings: save + load round-trips a booked meeting");
+
+{
+  memStorage.clear();
+  const state: AppState = {
+    accounts: [],
+    currentAccountId: null,
+    isSidebarOpen: true,
+    isAccountsSectionOpen: true,
+    isArchivedSectionOpen: false,
+    isMeetingsHeldSectionOpen: true,
+    engineCollapsed: { software: false, procurement: false, product: false },
+    currentView: "meetings",
+    goals: {
+      quarterly: [],
+      logs: [],
+      unlockedWeekStarts: [],
+      manuallySavedWeekStarts: [],
+    },
+    meetings: [
+      {
+        id: 42,
+        firstName: "Sarah",
+        lastName: "Kim",
+        title: "Director of Eng",
+        linkedinUrl: "linkedin.com/in/sarahkim",
+        accountId: "acct-1",
+        scheduledFor: "2026-11-14T14:30",
+        notes: "Intro from Alex",
+        status: "booked",
+        createdAt: 1_700_000_000_000,
+      },
+    ],
+  };
+  saveAppState(state);
+  const loaded = loadAppState();
+  eq(loaded.meetings.length, 1, "one meeting loaded");
+  eq(loaded.meetings[0].firstName, "Sarah", "firstName preserved");
+  eq(loaded.meetings[0].status, "booked", "status preserved");
+  eq(loaded.meetings[0].accountId, "acct-1", "accountId preserved");
+  eq(loaded.meetings[0].scheduledFor, "2026-11-14T14:30", "date preserved");
+  eq(loaded.currentView, "meetings", "meetings view route preserved");
+}
+
+section("meetings: save + load round-trips a held meeting with heldAt");
+
+{
+  memStorage.clear();
+  const state: AppState = {
+    accounts: [],
+    currentAccountId: null,
+    isSidebarOpen: true,
+    isAccountsSectionOpen: true,
+    isArchivedSectionOpen: false,
+    isMeetingsHeldSectionOpen: false,
+    engineCollapsed: { software: false, procurement: false, product: false },
+    currentView: "account",
+    goals: {
+      quarterly: [],
+      logs: [],
+      unlockedWeekStarts: [],
+      manuallySavedWeekStarts: [],
+    },
+    meetings: [
+      {
+        id: 43,
+        firstName: "Paul",
+        lastName: "Meninger",
+        title: "Sr Director",
+        linkedinUrl: "",
+        scheduledFor: "2026-10-22T15:00",
+        notes: "Discussed Q1 hiring",
+        status: "held",
+        createdAt: 1_700_000_000_000,
+        heldAt: 1_700_500_000_000,
+      },
+    ],
+  };
+  saveAppState(state);
+  const loaded = loadAppState();
+  eq(loaded.meetings[0].status, "held", "status preserved");
+  eq(loaded.meetings[0].heldAt, 1_700_500_000_000, "heldAt preserved");
+  eq(loaded.isMeetingsHeldSectionOpen, false, "held section collapsed persisted");
+}
+
+section("meetings: cleanMeetings drops malformed entries and unknown statuses");
+
+{
+  memStorage.clear();
+  const raw = {
+    meetings: [
+      // Missing id — dropped
+      { firstName: "Nope", createdAt: 1 },
+      // Unknown status → coerced to "booked"
+      {
+        id: 1,
+        firstName: "Ok",
+        lastName: "",
+        title: "",
+        linkedinUrl: "",
+        scheduledFor: "",
+        notes: "",
+        status: "unknown-status",
+        createdAt: 1,
+      },
+      // Valid held
+      {
+        id: 2,
+        firstName: "Held",
+        lastName: "",
+        title: "",
+        linkedinUrl: "",
+        scheduledFor: "",
+        notes: "",
+        status: "held",
+        createdAt: 2,
+        heldAt: 3,
+      },
+    ],
+  };
+  memStorage.setItem("toptal-sdr-engine::app", JSON.stringify(raw));
+  const loaded = loadAppState();
+  eq(loaded.meetings.length, 2, "malformed entry dropped");
+  eq(loaded.meetings[0].status, "booked", "unknown status coerced");
+  eq(loaded.meetings[1].status, "held", "valid held preserved");
+}
+
+section("meetings: cleanMeetings drops accountId when it's not a non-empty string");
+
+{
+  memStorage.clear();
+  const raw = {
+    meetings: [
+      {
+        id: 1,
+        firstName: "A",
+        lastName: "B",
+        title: "",
+        linkedinUrl: "",
+        scheduledFor: "",
+        notes: "",
+        status: "booked",
+        createdAt: 1,
+        accountId: "",
+      },
+    ],
+  };
+  memStorage.setItem("toptal-sdr-engine::app", JSON.stringify(raw));
+  const loaded = loadAppState();
+  ok(
+    loaded.meetings[0].accountId === undefined,
+    "empty accountId dropped",
+  );
+}
+
 section("goals: chartGranularityFor picks per-day for weekly views, per-week for larger ranges");
 
 {

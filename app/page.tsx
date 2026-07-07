@@ -32,6 +32,7 @@ import {
 } from "lucide-react";
 import { GoalsAndBenchmarks } from "@/components/GoalsAndBenchmarks";
 import { Header } from "@/components/Header";
+import { MeetingsTracker } from "@/components/MeetingsTracker";
 import { Sidebar } from "@/components/Sidebar";
 import { StepCard } from "@/components/StepCard";
 import { ToolCard } from "@/components/ToolCard";
@@ -446,6 +447,29 @@ export default function App() {
     setState((prev) => (prev ? { ...prev, currentView: "goals" } : prev));
   };
 
+  const handleSelectMeetingsView = () => {
+    setState((prev) => (prev ? { ...prev, currentView: "meetings" } : prev));
+  };
+
+  const handleToggleMeetingsHeldSection = () => {
+    setState((prev) =>
+      prev
+        ? {
+            ...prev,
+            isMeetingsHeldSectionOpen: !prev.isMeetingsHeldSectionOpen,
+          }
+        : prev,
+    );
+  };
+
+  const mutateMeetings = (
+    updater: (prev: import("@/lib/types").Meeting[]) => import("@/lib/types").Meeting[],
+  ) => {
+    setState((prev) =>
+      prev ? { ...prev, meetings: updater(prev.meetings) } : prev,
+    );
+  };
+
   const setGoals = (
     updater: (prev: import("@/lib/types").UserGoalsState) => import("@/lib/types").UserGoalsState,
   ) => {
@@ -595,6 +619,7 @@ export default function App() {
         onImportState={handleImportState}
         onRestoreBackup={handleRestoreBackup}
         onSelectGoalsView={handleSelectGoalsView}
+        onSelectMeetingsView={handleSelectMeetingsView}
       />
 
       <div className="flex-1 flex flex-col h-full overflow-y-auto relative bg-[#F9FAFB]">
@@ -634,13 +659,24 @@ export default function App() {
           companyName={
             state.currentView === "goals"
               ? "Goals & Metrics"
-              : currentAccount.accountData.companyName
+              : state.currentView === "meetings"
+                ? "Meetings Tracker"
+                : currentAccount.accountData.companyName
           }
         />
 
         {state.currentView === "goals" ? (
           <main className="flex-1 w-full">
             <GoalsAndBenchmarks state={state} setGoals={setGoals} />
+          </main>
+        ) : state.currentView === "meetings" ? (
+          <main className="flex-1 w-full">
+            <MeetingsTracker
+              state={state}
+              onMutateMeetings={mutateMeetings}
+              isHeldSectionOpen={state.isMeetingsHeldSectionOpen}
+              onToggleHeldSection={handleToggleMeetingsHeldSection}
+            />
           </main>
         ) : (
         <main className="flex-1 max-w-4xl w-full mx-auto px-6 py-10">

@@ -5,6 +5,7 @@ import {
   Archive,
   ArchiveRestore,
   Building2,
+  CalendarDays,
   ChevronDown,
   ChevronRight,
   Download,
@@ -37,7 +38,7 @@ interface Props {
   isSidebarOpen: boolean;
   isAccountsSectionOpen: boolean;
   isArchivedSectionOpen: boolean;
-  currentView: "account" | "goals";
+  currentView: "account" | "goals" | "meetings";
   onClose: () => void;
   onAddAccount: () => void;
   onSelectAccount: (id: string) => void;
@@ -50,6 +51,7 @@ interface Props {
   onImportState: (file: File) => void;
   onRestoreBackup: (slot: BackupSlot) => void;
   onSelectGoalsView: () => void;
+  onSelectMeetingsView: () => void;
 }
 
 export function Sidebar({
@@ -71,6 +73,7 @@ export function Sidebar({
   onImportState,
   onRestoreBackup,
   onSelectGoalsView,
+  onSelectMeetingsView,
 }: Props) {
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -266,6 +269,16 @@ export function Sidebar({
           }`}
         >
           <Target className="w-4 h-4" /> Goals &amp; Metrics
+        </button>
+        <button
+          onClick={onSelectMeetingsView}
+          className={`w-full py-2 px-4 rounded-lg flex items-center gap-2 text-sm font-medium transition-colors ${
+            currentView === "meetings"
+              ? "bg-slate-700 text-white shadow-inner"
+              : "bg-slate-800 hover:bg-slate-700 text-slate-200"
+          }`}
+        >
+          <CalendarDays className="w-4 h-4" /> Meetings Tracker
         </button>
         <button
           onClick={onAddAccount}

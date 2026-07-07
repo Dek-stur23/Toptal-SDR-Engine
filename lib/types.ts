@@ -415,6 +415,7 @@ export interface AppState {
   isSidebarOpen: boolean;
   isAccountsSectionOpen: boolean;
   isArchivedSectionOpen: boolean;
+  isMeetingsHeldSectionOpen: boolean;
   engineCollapsed: {
     software: boolean;
     procurement: boolean;
@@ -422,9 +423,34 @@ export interface AppState {
   };
   currentView: AppView;
   goals: UserGoalsState;
+  meetings: Meeting[];
 }
 
-export type AppView = "account" | "goals";
+export type AppView = "account" | "goals" | "meetings";
+
+// ============================================================
+// Meetings Tracker — booked/held meetings, account-agnostic.
+// ============================================================
+
+export type MeetingStatus = "booked" | "held";
+
+export interface Meeting {
+  id: number;
+  firstName: string;
+  lastName: string;
+  title: string;
+  linkedinUrl: string;
+  // Optional Account.id link. If empty/missing the meeting is "unlinked"
+  // and the account column just renders "-".
+  accountId?: string;
+  // ISO datetime-local string, e.g. "2026-11-14T14:30". Empty string
+  // means "no time set yet".
+  scheduledFor: string;
+  notes: string;
+  status: MeetingStatus;
+  createdAt: number;    // ms epoch
+  heldAt?: number;      // ms epoch, populated on convert-to-held
+}
 
 // ============================================================
 // Goals & Benchmarks — account-agnostic tracking of dials and

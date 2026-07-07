@@ -10,6 +10,8 @@ import type {
   HotlistMessage,
   HotlistPriority,
   HotlistProspect,
+  Meeting,
+  MeetingStatus,
   QuarterlyGoals,
   UserGoalsState,
 } from "./types";
@@ -231,10 +233,50 @@ function emptyApp(): AppState {
     isSidebarOpen: true,
     isAccountsSectionOpen: true,
     isArchivedSectionOpen: false,
+    isMeetingsHeldSectionOpen: true,
     engineCollapsed: { software: false, procurement: false, product: false },
     currentView: "account",
     goals: emptyGoalsState(),
+    meetings: [],
   };
+}
+
+function cleanMeetings(raw: unknown): Meeting[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter(
+      (m): m is Meeting =>
+        !!m &&
+        typeof m === "object" &&
+        typeof (m as Meeting).id === "number" &&
+        Number.isFinite((m as Meeting).id) &&
+        typeof (m as Meeting).createdAt === "number",
+    )
+    .map((m): Meeting => {
+      const status: MeetingStatus =
+        m.status === "held" ? "held" : "booked";
+      const clean: Meeting = {
+        id: m.id,
+        firstName: typeof m.firstName === "string" ? m.firstName : "",
+        lastName: typeof m.lastName === "string" ? m.lastName : "",
+        title: typeof m.title === "string" ? m.title : "",
+        linkedinUrl: typeof m.linkedinUrl === "string" ? m.linkedinUrl : "",
+        scheduledFor:
+          typeof m.scheduledFor === "string" ? m.scheduledFor : "",
+        notes: typeof m.notes === "string" ? m.notes : "",
+        status,
+        createdAt: m.createdAt,
+      };
+      if (typeof m.accountId === "string" && m.accountId)
+        clean.accountId = m.accountId;
+      if (
+        status === "held" &&
+        typeof m.heldAt === "number" &&
+        Number.isFinite(m.heldAt)
+      )
+        clean.heldAt = m.heldAt;
+      return clean;
+    });
 }
 
 function cleanGoalsState(raw: unknown): UserGoalsState {
@@ -391,14 +433,23 @@ export function loadAppState(): AppState {
           ? parsed.isAccountsSectionOpen
           : true,
       isArchivedSectionOpen: parsed.isArchivedSectionOpen ?? false,
+      isMeetingsHeldSectionOpen:
+        typeof parsed.isMeetingsHeldSectionOpen === "boolean"
+          ? parsed.isMeetingsHeldSectionOpen
+          : true,
       engineCollapsed: {
         software: parsed.engineCollapsed?.software ?? false,
         procurement: parsed.engineCollapsed?.procurement ?? false,
         product: parsed.engineCollapsed?.product ?? false,
       },
       currentView:
-        parsed.currentView === "goals" ? "goals" : "account",
+        parsed.currentView === "goals"
+          ? "goals"
+          : parsed.currentView === "meetings"
+            ? "meetings"
+            : "account",
       goals: cleanGoalsState(parsed.goals),
+      meetings: cleanMeetings(parsed.meetings),
     };
   } catch {
     return emptyApp();
@@ -773,13 +824,23 @@ export function parseImportedAppState(json: string): AppState {
       typeof candidate.isArchivedSectionOpen === "boolean"
         ? candidate.isArchivedSectionOpen
         : false,
+    isMeetingsHeldSectionOpen:
+      typeof candidate.isMeetingsHeldSectionOpen === "boolean"
+        ? candidate.isMeetingsHeldSectionOpen
+        : true,
     engineCollapsed: {
       software: candidate.engineCollapsed?.software ?? false,
       procurement: candidate.engineCollapsed?.procurement ?? false,
       product: candidate.engineCollapsed?.product ?? false,
     },
-    currentView: candidate.currentView === "goals" ? "goals" : "account",
+    currentView:
+      candidate.currentView === "goals"
+        ? "goals"
+        : candidate.currentView === "meetings"
+          ? "meetings"
+          : "account",
     goals: cleanGoalsState(candidate.goals),
+    meetings: cleanMeetings(candidate.meetings),
   };
 }
 

@@ -970,7 +970,7 @@ section("goals: appendLog / updateLog / removeLog preserve invariants");
 
 {
   let g = emptyGoalsState();
-  const entry = createLog("dial", 3, " test note ");
+  const entry = createLog("dial", 3, { note: " test note " });
   g = appendLog(g, entry);
   eq(g.logs.length, 1, "one log");
   eq(g.logs[0].count, 3, "count preserved");
@@ -992,6 +992,27 @@ section("goals: createLog rejects invalid counts");
   eq(neg.count, 1, "negative clamped to 1");
   const frac = createLog("dial", 3.7);
   eq(frac.count, 3, "fractional floored");
+}
+
+section("goals: createLog carries optional accountId when provided");
+
+{
+  const tagged = createLog("prospect-added", 4, { accountId: "acct-1" });
+  eq(tagged.accountId, "acct-1", "accountId preserved");
+  const untagged = createLog("prospect-added", 2);
+  ok(untagged.accountId === undefined, "no accountId when not passed");
+  const empty = createLog("prospect-added", 2, { accountId: "" });
+  ok(empty.accountId === undefined, "empty accountId dropped");
+}
+
+section("goals: updateLog can patch accountId");
+
+{
+  let g = emptyGoalsState();
+  const entry = createLog("prospect-added", 2);
+  g = appendLog(g, entry);
+  g = updateLog(g, entry.id, { accountId: "acct-99" });
+  eq(g.logs[0].accountId, "acct-99", "accountId patched onto entry");
 }
 
 section("goals: sumLogsInRange aggregates by kind within range");

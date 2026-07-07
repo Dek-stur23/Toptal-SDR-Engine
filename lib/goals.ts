@@ -114,15 +114,18 @@ export function upsertQuarterlyGoals(
 export function createLog(
   kind: GoalMetricKind,
   count: number,
-  note?: string,
+  opts: { note?: string; accountId?: string } = {},
 ): GoalLogEntry {
-  return {
+  const entry: GoalLogEntry = {
     id: genId(),
     kind,
     timestamp: Date.now(),
     count: Math.max(1, Math.floor(count)),
-    note: note?.trim() || undefined,
   };
+  const note = opts.note?.trim();
+  if (note) entry.note = note;
+  if (opts.accountId) entry.accountId = opts.accountId;
+  return entry;
 }
 
 export function appendLog(
@@ -135,7 +138,7 @@ export function appendLog(
 export function updateLog(
   state: UserGoalsState,
   id: number,
-  patch: Partial<Pick<GoalLogEntry, "count" | "note">>,
+  patch: Partial<Pick<GoalLogEntry, "count" | "note" | "accountId">>,
 ): UserGoalsState {
   return {
     ...state,

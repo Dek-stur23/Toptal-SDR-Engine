@@ -450,6 +450,10 @@ export interface GoalLogEntry {
   timestamp: number; // ms epoch — sole ordering key
   count: number;     // batch-friendly (1, or 5, etc.)
   note?: string;
+  // Optional Account.id link. Used mainly on "prospect-added" logs so the
+  // weekly archive can attribute new prospects to the account they came
+  // from. Never affects rollups or chart bucketing.
+  accountId?: string;
 }
 
 export interface UserGoalsState {

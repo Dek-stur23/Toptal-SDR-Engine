@@ -249,15 +249,28 @@ function cleanGoalsState(raw: unknown): UserGoalsState {
       )
     : [];
   const logs = Array.isArray(g.logs)
-    ? g.logs.filter(
-        (l): l is GoalLogEntry =>
-          !!l &&
-          typeof l === "object" &&
-          typeof (l as GoalLogEntry).id === "number" &&
-          typeof (l as GoalLogEntry).timestamp === "number" &&
-          ((l as GoalLogEntry).kind === "dial" ||
-            (l as GoalLogEntry).kind === "prospect-added"),
-      )
+    ? g.logs
+        .filter(
+          (l): l is GoalLogEntry =>
+            !!l &&
+            typeof l === "object" &&
+            typeof (l as GoalLogEntry).id === "number" &&
+            typeof (l as GoalLogEntry).timestamp === "number" &&
+            ((l as GoalLogEntry).kind === "dial" ||
+              (l as GoalLogEntry).kind === "prospect-added"),
+        )
+        .map((l): GoalLogEntry => {
+          const clean: GoalLogEntry = {
+            id: l.id,
+            kind: l.kind,
+            timestamp: l.timestamp,
+            count: typeof l.count === "number" && l.count > 0 ? l.count : 1,
+          };
+          if (typeof l.note === "string" && l.note.trim()) clean.note = l.note;
+          if (typeof l.accountId === "string" && l.accountId)
+            clean.accountId = l.accountId;
+          return clean;
+        })
     : [];
   const unlockedWeekStarts = Array.isArray(g.unlockedWeekStarts)
     ? g.unlockedWeekStarts.filter((s): s is string => typeof s === "string")

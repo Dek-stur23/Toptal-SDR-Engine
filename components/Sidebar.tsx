@@ -35,6 +35,7 @@ interface Props {
   accounts: Account[];
   currentAccountId: string | null;
   isSidebarOpen: boolean;
+  isAccountsSectionOpen: boolean;
   isArchivedSectionOpen: boolean;
   currentView: "account" | "goals";
   onClose: () => void;
@@ -43,6 +44,7 @@ interface Props {
   onRenameAccount: (id: string, name: string) => void;
   onArchiveAccount: (id: string) => void;
   onDeleteAccount: (id: string) => void;
+  onToggleAccountsSection: () => void;
   onToggleArchivedSection: () => void;
   onExportState: () => void;
   onImportState: (file: File) => void;
@@ -54,6 +56,7 @@ export function Sidebar({
   accounts,
   currentAccountId,
   isSidebarOpen,
+  isAccountsSectionOpen,
   isArchivedSectionOpen,
   currentView,
   onClose,
@@ -62,6 +65,7 @@ export function Sidebar({
   onRenameAccount,
   onArchiveAccount,
   onDeleteAccount,
+  onToggleAccountsSection,
   onToggleArchivedSection,
   onExportState,
   onImportState,
@@ -272,7 +276,26 @@ export function Sidebar({
       </div>
 
       <div className="flex-1 overflow-y-auto px-3 pb-4 space-y-1 custom-scrollbar">
-        {activeAccounts.map((acc) => renderItem(acc, false))}
+        <button
+          onClick={onToggleAccountsSection}
+          className="w-full flex items-center justify-between text-xs font-semibold text-slate-500 uppercase tracking-wider px-2 py-1 hover:text-slate-300 transition-colors"
+        >
+          <div className="flex items-center gap-2">
+            <Building2 className="w-3.5 h-3.5" />
+            Active ({activeAccounts.length})
+          </div>
+          {isAccountsSectionOpen ? (
+            <ChevronDown className="w-3.5 h-3.5" />
+          ) : (
+            <ChevronRight className="w-3.5 h-3.5" />
+          )}
+        </button>
+
+        {isAccountsSectionOpen && (
+          <div className="mt-2 space-y-1">
+            {activeAccounts.map((acc) => renderItem(acc, false))}
+          </div>
+        )}
 
         {archivedAccounts.length > 0 && (
           <div className="mt-6">

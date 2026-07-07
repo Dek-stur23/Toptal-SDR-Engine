@@ -229,6 +229,7 @@ function emptyApp(): AppState {
     accounts: [],
     currentAccountId: null,
     isSidebarOpen: true,
+    isAccountsSectionOpen: true,
     isArchivedSectionOpen: false,
     engineCollapsed: { software: false, procurement: false, product: false },
     currentView: "account",
@@ -385,6 +386,10 @@ export function loadAppState(): AppState {
       }),
       currentAccountId: parsed.currentAccountId ?? null,
       isSidebarOpen: parsed.isSidebarOpen ?? true,
+      isAccountsSectionOpen:
+        typeof parsed.isAccountsSectionOpen === "boolean"
+          ? parsed.isAccountsSectionOpen
+          : true,
       isArchivedSectionOpen: parsed.isArchivedSectionOpen ?? false,
       engineCollapsed: {
         software: parsed.engineCollapsed?.software ?? false,
@@ -759,6 +764,10 @@ export function parseImportedAppState(json: string): AppState {
     isSidebarOpen:
       typeof candidate.isSidebarOpen === "boolean"
         ? candidate.isSidebarOpen
+        : true,
+    isAccountsSectionOpen:
+      typeof candidate.isAccountsSectionOpen === "boolean"
+        ? candidate.isAccountsSectionOpen
         : true,
     isArchivedSectionOpen:
       typeof candidate.isArchivedSectionOpen === "boolean"

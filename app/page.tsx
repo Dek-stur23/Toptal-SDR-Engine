@@ -490,6 +490,14 @@ export default function App() {
     );
   };
 
+  const handleToggleAccountsSection = () => {
+    setState((prev) =>
+      prev
+        ? { ...prev, isAccountsSectionOpen: !prev.isAccountsSectionOpen }
+        : prev,
+    );
+  };
+
   const toggleEngineCollapsed = (
     key: "software" | "procurement" | "product",
   ) => {
@@ -572,6 +580,7 @@ export default function App() {
         accounts={state.accounts}
         currentAccountId={state.currentAccountId}
         isSidebarOpen={state.isSidebarOpen}
+        isAccountsSectionOpen={state.isAccountsSectionOpen}
         isArchivedSectionOpen={state.isArchivedSectionOpen}
         currentView={state.currentView}
         onClose={() => handleToggleSidebar(false)}
@@ -580,6 +589,7 @@ export default function App() {
         onRenameAccount={handleRenameAccount}
         onArchiveAccount={handleArchiveAccount}
         onDeleteAccount={handleDeleteAccount}
+        onToggleAccountsSection={handleToggleAccountsSection}
         onToggleArchivedSection={handleToggleArchivedSection}
         onExportState={handleExportState}
         onImportState={handleImportState}

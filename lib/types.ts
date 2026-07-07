@@ -413,6 +413,7 @@ export interface AppState {
   accounts: Account[];
   currentAccountId: string | null;
   isSidebarOpen: boolean;
+  isAccountsSectionOpen: boolean;
   isArchivedSectionOpen: boolean;
   engineCollapsed: {
     software: boolean;

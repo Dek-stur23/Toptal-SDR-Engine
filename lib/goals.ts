@@ -65,7 +65,12 @@ export function quarterStartFor(date: Date): Date {
 // ---- Goals lookup / defaults --------------------------------------
 
 export function emptyGoalsState(): UserGoalsState {
-  return { quarterly: [], logs: [], unlockedWeekStarts: [] };
+  return {
+    quarterly: [],
+    logs: [],
+    unlockedWeekStarts: [],
+    manuallySavedWeekStarts: [],
+  };
 }
 
 export function defaultQuarterlyGoals(
@@ -151,9 +156,23 @@ export function isWeekLocked(
 ): boolean {
   const currentWeekStart = formatIsoDate(weekStartFor(now));
   const target = formatIsoDate(weekStartFor(weekStart));
+  // Explicit unlock always wins, whether the week is current or past.
+  if (state.unlockedWeekStarts.includes(target)) return false;
+  // Manually saved (user clicked Save week) → locked, even if it's still
+  // the current week by date.
+  if (state.manuallySavedWeekStarts.includes(target)) return true;
   if (target === currentWeekStart) return false; // current week always editable
   if (target > currentWeekStart) return false; // future weeks (shouldn't happen) editable
-  return !state.unlockedWeekStarts.includes(target);
+  return true; // past week, no unlock override → locked
+}
+
+export function isWeekManuallySaved(
+  state: UserGoalsState,
+  weekStart: Date,
+): boolean {
+  return state.manuallySavedWeekStarts.includes(
+    formatIsoDate(weekStartFor(weekStart)),
+  );
 }
 
 export function toggleWeekUnlock(
@@ -167,6 +186,36 @@ export function toggleWeekUnlock(
     unlockedWeekStarts: isUnlocked
       ? state.unlockedWeekStarts.filter((k) => k !== key)
       : [...state.unlockedWeekStarts, key],
+  };
+}
+
+// "Save week" from the current week's card — locks the week manually.
+// Also clears any explicit unlock override so the save takes effect.
+export function saveWeek(
+  state: UserGoalsState,
+  weekStart: Date,
+): UserGoalsState {
+  const key = formatIsoDate(weekStartFor(weekStart));
+  return {
+    ...state,
+    manuallySavedWeekStarts: state.manuallySavedWeekStarts.includes(key)
+      ? state.manuallySavedWeekStarts
+      : [...state.manuallySavedWeekStarts, key],
+    unlockedWeekStarts: state.unlockedWeekStarts.filter((k) => k !== key),
+  };
+}
+
+// Reverses a saveWeek by removing from manuallySavedWeekStarts.
+export function unsaveWeek(
+  state: UserGoalsState,
+  weekStart: Date,
+): UserGoalsState {
+  const key = formatIsoDate(weekStartFor(weekStart));
+  return {
+    ...state,
+    manuallySavedWeekStarts: state.manuallySavedWeekStarts.filter(
+      (k) => k !== key,
+    ),
   };
 }
 
@@ -269,6 +318,7 @@ export function groupLogsByWeek(
 // ---- View filter periods ------------------------------------------
 
 export type ViewPeriodKind =
+  | "today"
   | "this-week"
   | "last-week"
   | "this-quarter"
@@ -290,6 +340,19 @@ export function resolveViewPeriod(
   custom?: { from: Date; to: Date },
 ): ViewPeriod {
   switch (kind) {
+    case "today": {
+      const s = dayStartFor(now);
+      const e = dayEndFor(now);
+      return {
+        kind,
+        fromMs: s.getTime(),
+        toMs: e.getTime(),
+        label: "Today",
+        // 1/7 of a week — used to scale the weekly goal into a daily target
+        // when the user is filtering to today.
+        weeks: 1 / 7,
+      };
+    }
     case "this-week": {
       const s = weekStartFor(now);
       const e = weekEndFor(now);

@@ -254,12 +254,6 @@ export function Sidebar({
 
       <div className="p-4 space-y-2">
         <button
-          onClick={onAddAccount}
-          className="w-full bg-blue-600 hover:bg-blue-500 text-white py-2.5 px-4 rounded-lg flex items-center justify-center gap-2 text-sm font-medium transition-colors shadow-sm"
-        >
-          <Plus className="w-4 h-4" /> New Account
-        </button>
-        <button
           onClick={onSelectGoalsView}
           className={`w-full py-2 px-4 rounded-lg flex items-center gap-2 text-sm font-medium transition-colors ${
             currentView === "goals"
@@ -267,7 +261,13 @@ export function Sidebar({
               : "bg-slate-800 hover:bg-slate-700 text-slate-200"
           }`}
         >
-          <Target className="w-4 h-4" /> Goals &amp; Benchmarks
+          <Target className="w-4 h-4" /> Goals &amp; Metrics
+        </button>
+        <button
+          onClick={onAddAccount}
+          className="w-full bg-blue-600 hover:bg-blue-500 text-white py-2.5 px-4 rounded-lg flex items-center justify-center gap-2 text-sm font-medium transition-colors shadow-sm"
+        >
+          <Plus className="w-4 h-4" /> New Account
         </button>
       </div>
 

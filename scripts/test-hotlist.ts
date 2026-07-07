@@ -882,10 +882,13 @@ import {
   getQuarterOf,
   groupLogsByWeek,
   isWeekLocked,
+  isWeekManuallySaved,
   removeLog,
   resolveViewPeriod,
+  saveWeek,
   sumLogsInRange,
   toggleWeekUnlock,
+  unsaveWeek,
   updateLog,
   upsertQuarterlyGoals,
   weekEndFor,
@@ -995,7 +998,7 @@ section("goals: sumLogsInRange aggregates by kind within range");
   const now = new Date(2026, 0, 14, 12, 0); // Wed noon
   const g: import("../lib/types.ts").UserGoalsState = {
     quarterly: [],
-    unlockedWeekStarts: [],
+    unlockedWeekStarts: [], manuallySavedWeekStarts: [],
     logs: [
       { id: 1, kind: "dial", timestamp: now.getTime() - 3600_000, count: 5 },
       { id: 2, kind: "dial", timestamp: now.getTime() - 60_000, count: 3 },
@@ -1016,7 +1019,7 @@ section("goals: groupLogsByWeek buckets entries by week, current always present"
   const now = new Date(2026, 0, 14, 12, 0);
   const g: import("../lib/types.ts").UserGoalsState = {
     quarterly: [],
-    unlockedWeekStarts: [],
+    unlockedWeekStarts: [], manuallySavedWeekStarts: [],
     logs: [
       // This week
       { id: 1, kind: "dial", timestamp: now.getTime() - 3600_000, count: 5 },
@@ -1089,6 +1092,9 @@ section("goals: resolveViewPeriod produces sensible weeks count");
 
 {
   const now = new Date(2026, 0, 14);
+  const today = resolveViewPeriod("today", now);
+  eq(today.label, "Today", "today label");
+  ok(Math.abs(today.weeks - 1 / 7) < 1e-9, "today = 1/7 of a week");
   const thisWeek = resolveViewPeriod("this-week", now);
   eq(thisWeek.weeks, 1, "this-week = 1 week");
   const lastWeek = resolveViewPeriod("last-week", now);
@@ -1097,6 +1103,83 @@ section("goals: resolveViewPeriod produces sensible weeks count");
   eq(allTime.weeks, 1, "all-time uses weeks=1 (no cumulative multiplier)");
   const thisQuarter = resolveViewPeriod("this-quarter", now);
   ok(thisQuarter.weeks >= 1, "this-quarter weeks is at least 1");
+}
+
+section("goals: today period spans start-of-day to end-of-day");
+
+{
+  const noon = new Date(2026, 0, 14, 12, 0);
+  const period = resolveViewPeriod("today", noon);
+  const startDate = new Date(period.fromMs);
+  const endDate = new Date(period.toMs);
+  eq(startDate.getHours(), 0, "today starts at 00:00");
+  eq(startDate.getMinutes(), 0, "today starts at 00:00");
+  eq(endDate.getHours(), 23, "today ends at 23:xx");
+  eq(endDate.getMinutes(), 59, "today ends at 23:59");
+  eq(
+    formatIsoDate(startDate),
+    formatIsoDate(endDate),
+    "start and end are the same calendar day",
+  );
+}
+
+section("goals: saveWeek locks the current week manually");
+
+{
+  const now = new Date(2026, 0, 14);
+  let g = emptyGoalsState();
+  ok(!isWeekLocked(g, now, now), "current week is unlocked by default");
+  g = saveWeek(g, now);
+  ok(isWeekLocked(g, now, now), "current week is locked after saveWeek");
+  ok(isWeekManuallySaved(g, now), "isWeekManuallySaved reports true");
+}
+
+section("goals: unsaveWeek reopens a manually saved week");
+
+{
+  const now = new Date(2026, 0, 14);
+  let g = emptyGoalsState();
+  g = saveWeek(g, now);
+  g = unsaveWeek(g, now);
+  ok(!isWeekLocked(g, now, now), "current week unlocked after unsaveWeek");
+  ok(!isWeekManuallySaved(g, now), "isWeekManuallySaved reports false");
+}
+
+section("goals: saveWeek is idempotent");
+
+{
+  const now = new Date(2026, 0, 14);
+  let g = emptyGoalsState();
+  g = saveWeek(g, now);
+  const before = g.manuallySavedWeekStarts.length;
+  g = saveWeek(g, now);
+  eq(g.manuallySavedWeekStarts.length, before, "no duplicate entry on re-save");
+}
+
+section("goals: toggleWeekUnlock overrides a manual save");
+
+{
+  const now = new Date(2026, 0, 14);
+  let g = emptyGoalsState();
+  g = saveWeek(g, now);
+  ok(isWeekLocked(g, now, now), "locked after save");
+  g = toggleWeekUnlock(g, now);
+  ok(
+    !isWeekLocked(g, now, now),
+    "explicit unlock override wins over manual save",
+  );
+}
+
+section("goals: saveWeek clears any explicit unlock override");
+
+{
+  const now = new Date(2026, 0, 14);
+  let g = emptyGoalsState();
+  g = toggleWeekUnlock(g, now); // explicitly unlock (weird for current week, but OK)
+  eq(g.unlockedWeekStarts.length, 1, "unlock recorded");
+  g = saveWeek(g, now);
+  eq(g.unlockedWeekStarts.length, 0, "saveWeek clears the unlock override");
+  ok(isWeekLocked(g, now, now), "week is now locked");
 }
 
 // ============================================================

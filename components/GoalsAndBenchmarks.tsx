@@ -8,6 +8,7 @@ import {
   Edit2,
   Lock,
   Phone,
+  Save,
   Target,
   Trash2,
   Unlock,
@@ -29,10 +30,13 @@ import {
   getQuarterOf,
   groupLogsByWeek,
   isWeekLocked,
+  isWeekManuallySaved,
   removeLog,
   resolveViewPeriod,
+  saveWeek,
   sumLogsInRange,
   toggleWeekUnlock,
+  unsaveWeek,
   updateLog,
   upsertQuarterlyGoals,
   weekStartFor,
@@ -87,25 +91,33 @@ export function GoalsAndBenchmarks({ state, setGoals }: Props) {
     todayEnd.getTime(),
   );
 
-  // Goal targets for the selected period (multiply weekly by weeks in range)
+  // Goal targets for the selected period. "Today" uses the dedicated
+  // daily dial goal + a 1/7 approximation for weekly prospects. Every
+  // other range multiplies the weekly goal by the number of weeks it
+  // covers.
   const periodDialsGoal =
-    currentQuarterGoals.weeklyDialsGoal * period.weeks;
+    periodKind === "today"
+      ? currentQuarterGoals.dailyDialsGoal
+      : currentQuarterGoals.weeklyDialsGoal * period.weeks;
   const periodDialsBenchmark =
-    currentQuarterGoals.weeklyDialsBenchmark * period.weeks;
-  const periodProspectsGoal =
-    currentQuarterGoals.weeklyProspectsGoal * period.weeks;
-  const periodProspectsBenchmark =
-    currentQuarterGoals.weeklyProspectsBenchmark * period.weeks;
+    periodKind === "today"
+      ? currentQuarterGoals.dailyDialsBenchmark
+      : currentQuarterGoals.weeklyDialsBenchmark * period.weeks;
+  const periodProspectsGoal = Math.round(
+    currentQuarterGoals.weeklyProspectsGoal * period.weeks,
+  );
+  const periodProspectsBenchmark = Math.round(
+    currentQuarterGoals.weeklyProspectsBenchmark * period.weeks,
+  );
 
   const buckets = useMemo(() => groupLogsByWeek(goals, now), [goals, now]);
 
-  const logQuick = (kind: GoalLogEntry["kind"], count: number) => {
-    setGoals((prev) => appendLog(prev, createLog(kind, count)));
-  };
-  const logBatch = (kind: GoalLogEntry["kind"]) => {
+  const logMetric = (kind: GoalLogEntry["kind"]) => {
     const raw = window.prompt(
-      `How many ${kind === "dial" ? "dials" : "new prospects"} to log?`,
-      "5",
+      kind === "dial"
+        ? "Log dials — how many?"
+        : "Log prospects added — how many?",
+      "",
     );
     if (!raw) return;
     const n = Number.parseInt(raw, 10);
@@ -118,7 +130,7 @@ export function GoalsAndBenchmarks({ state, setGoals }: Props) {
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
-            <Target className="w-6 h-6 text-blue-600" /> Goals &amp; Benchmarks
+            <Target className="w-6 h-6 text-blue-600" /> Goals &amp; Metrics
           </h1>
           <p className="text-sm text-slate-500 mt-1">
             Q{quarter} {year} · goals apply across every account.
@@ -143,6 +155,7 @@ export function GoalsAndBenchmarks({ state, setGoals }: Props) {
             onChange={(e) => setPeriodKind(e.target.value as ViewPeriodKind)}
             className="text-sm rounded-md border border-slate-300 bg-white px-2 py-1.5 focus:ring-2 focus:ring-blue-500 outline-none"
           >
+            <option value="today">Today</option>
             <option value="this-week">This week</option>
             <option value="last-week">Last week</option>
             <option value="this-quarter">This quarter</option>
@@ -175,37 +188,21 @@ export function GoalsAndBenchmarks({ state, setGoals }: Props) {
           />
           <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm flex flex-col gap-2">
             <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-              Quick log
+              Log activity
             </span>
             <div className="flex flex-col gap-2 mt-1">
-              <div className="flex gap-2">
-                <button
-                  onClick={() => logQuick("dial", 1)}
-                  className="flex-1 text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white px-2.5 py-2 rounded-md transition-colors flex items-center justify-center gap-1"
-                >
-                  <Phone className="w-3.5 h-3.5" /> +1 dial
-                </button>
-                <button
-                  onClick={() => logBatch("dial")}
-                  className="text-xs font-semibold bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 px-2.5 py-2 rounded-md transition-colors"
-                >
-                  batch…
-                </button>
-              </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => logQuick("prospect-added", 1)}
-                  className="flex-1 text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 py-2 rounded-md transition-colors flex items-center justify-center gap-1"
-                >
-                  <UserPlus className="w-3.5 h-3.5" /> +1 prospect
-                </button>
-                <button
-                  onClick={() => logBatch("prospect-added")}
-                  className="text-xs font-semibold bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 px-2.5 py-2 rounded-md transition-colors"
-                >
-                  batch…
-                </button>
-              </div>
+              <button
+                onClick={() => logMetric("dial")}
+                className="w-full text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white px-2.5 py-2 rounded-md transition-colors flex items-center justify-center gap-1.5"
+              >
+                <Phone className="w-3.5 h-3.5" /> Log dials
+              </button>
+              <button
+                onClick={() => logMetric("prospect-added")}
+                className="w-full text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 py-2 rounded-md transition-colors flex items-center justify-center gap-1.5"
+              >
+                <UserPlus className="w-3.5 h-3.5" /> Log prospects added
+              </button>
             </div>
           </div>
         </div>
@@ -337,6 +334,7 @@ function WeeklyBucketCard({
   const explicitlyUnlocked = state.unlockedWeekStarts.includes(
     bucket.weekStartIso,
   );
+  const isManuallySaved = isWeekManuallySaved(state, bucket.weekStart);
 
   const dialsPct = pct(bucket.totals.dials, quarterly.weeklyDialsGoal);
   const prospectsPct = pct(bucket.totals.prospects, quarterly.weeklyProspectsGoal);
@@ -357,12 +355,17 @@ function WeeklyBucketCard({
             <span className="font-semibold text-sm text-slate-900">
               {formatWeekLabel(bucket)}
             </span>
-            {bucket.isCurrent && (
+            {bucket.isCurrent && !isManuallySaved && (
               <span className="text-[10px] font-bold uppercase tracking-wider bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">
                 Current
               </span>
             )}
-            {!bucket.isCurrent && locked && (
+            {isManuallySaved && (
+              <span className="text-[10px] font-semibold uppercase tracking-wider bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded flex items-center gap-1">
+                <Save className="w-2.5 h-2.5" /> Saved
+              </span>
+            )}
+            {!bucket.isCurrent && !isManuallySaved && locked && (
               <span className="text-[10px] font-semibold uppercase tracking-wider bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded flex items-center gap-1">
                 <Lock className="w-2.5 h-2.5" /> Locked
               </span>
@@ -386,24 +389,52 @@ function WeeklyBucketCard({
       </button>
       {open && (
         <div className="border-t border-slate-100 p-3 space-y-3 bg-slate-50/40">
-          {!bucket.isCurrent && (
-            <button
-              onClick={() =>
-                setGoals((prev) => toggleWeekUnlock(prev, bucket.weekStart))
-              }
-              className="text-[11px] font-semibold text-slate-600 hover:text-slate-900 flex items-center gap-1"
-            >
-              {locked ? (
-                <>
-                  <Unlock className="w-3 h-3" /> Unlock this week for editing
-                </>
-              ) : (
-                <>
-                  <Lock className="w-3 h-3" /> Re-lock this week
-                </>
-              )}
-            </button>
-          )}
+          <div className="flex items-center gap-3 flex-wrap">
+            {bucket.isCurrent && !isManuallySaved && (
+              <button
+                onClick={() => {
+                  if (
+                    window.confirm(
+                      "Save this week? It will be locked in the archive. You can reopen it later if needed.",
+                    )
+                  ) {
+                    setGoals((prev) => saveWeek(prev, bucket.weekStart));
+                  }
+                }}
+                className="text-[11px] font-semibold text-white bg-blue-600 hover:bg-blue-700 flex items-center gap-1 px-2.5 py-1.5 rounded shadow-sm"
+              >
+                <Save className="w-3 h-3" /> Save week
+              </button>
+            )}
+            {bucket.isCurrent && isManuallySaved && (
+              <button
+                onClick={() =>
+                  setGoals((prev) => unsaveWeek(prev, bucket.weekStart))
+                }
+                className="text-[11px] font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 flex items-center gap-1 px-2.5 py-1.5 rounded"
+              >
+                <Unlock className="w-3 h-3" /> Reopen this week
+              </button>
+            )}
+            {!bucket.isCurrent && (
+              <button
+                onClick={() =>
+                  setGoals((prev) => toggleWeekUnlock(prev, bucket.weekStart))
+                }
+                className="text-[11px] font-semibold text-slate-600 hover:text-slate-900 flex items-center gap-1"
+              >
+                {locked ? (
+                  <>
+                    <Unlock className="w-3 h-3" /> Unlock this week for editing
+                  </>
+                ) : (
+                  <>
+                    <Lock className="w-3 h-3" /> Re-lock this week
+                  </>
+                )}
+              </button>
+            )}
+          </div>
           {bucket.logs.length === 0 ? (
             <p className="text-xs italic text-slate-500">
               No entries logged this week.

@@ -459,4 +459,8 @@ export interface UserGoalsState {
   // unlocked for editing. Past weeks are locked by default; entries in
   // this list are the exceptions.
   unlockedWeekStarts: string[];
+  // Week-start dates the user clicked "Save week" on before the week
+  // ended naturally. Locks the week just like a past week, and the
+  // Unlock control still works to reopen it.
+  manuallySavedWeekStarts: string[];
 }

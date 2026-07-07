@@ -262,7 +262,12 @@ function cleanGoalsState(raw: unknown): UserGoalsState {
   const unlockedWeekStarts = Array.isArray(g.unlockedWeekStarts)
     ? g.unlockedWeekStarts.filter((s): s is string => typeof s === "string")
     : [];
-  return { quarterly, logs, unlockedWeekStarts };
+  const manuallySavedWeekStarts = Array.isArray(g.manuallySavedWeekStarts)
+    ? g.manuallySavedWeekStarts.filter(
+        (s): s is string => typeof s === "string",
+      )
+    : [];
+  return { quarterly, logs, unlockedWeekStarts, manuallySavedWeekStarts };
 }
 
 export function loadAppState(): AppState {

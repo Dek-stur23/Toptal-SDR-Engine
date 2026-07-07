@@ -623,7 +623,7 @@ export default function App() {
           onOpenSidebar={() => handleToggleSidebar(true)}
           companyName={
             state.currentView === "goals"
-              ? "Goals & Benchmarks"
+              ? "Goals & Metrics"
               : currentAccount.accountData.companyName
           }
         />

@@ -4,16 +4,21 @@ import type {
   Account,
   AccountData,
   AppState,
+  AppView,
+  GoalLogEntry,
   HotlistChannel,
   HotlistMessage,
   HotlistPriority,
   HotlistProspect,
+  QuarterlyGoals,
+  UserGoalsState,
 } from "./types";
 import type {
   ProcurementEngineState,
   ProductEngineState,
   SoftwareEngineState,
 } from "./types";
+import { emptyGoalsState } from "./goals";
 import { genId } from "./ids";
 import {
   inlineFromIdb,
@@ -226,7 +231,38 @@ function emptyApp(): AppState {
     isSidebarOpen: true,
     isArchivedSectionOpen: false,
     engineCollapsed: { software: false, procurement: false, product: false },
+    currentView: "account",
+    goals: emptyGoalsState(),
   };
+}
+
+function cleanGoalsState(raw: unknown): UserGoalsState {
+  if (!raw || typeof raw !== "object") return emptyGoalsState();
+  const g = raw as Partial<UserGoalsState>;
+  const quarterly = Array.isArray(g.quarterly)
+    ? g.quarterly.filter(
+        (q): q is QuarterlyGoals =>
+          !!q &&
+          typeof q === "object" &&
+          typeof (q as QuarterlyGoals).year === "number" &&
+          typeof (q as QuarterlyGoals).quarter === "number",
+      )
+    : [];
+  const logs = Array.isArray(g.logs)
+    ? g.logs.filter(
+        (l): l is GoalLogEntry =>
+          !!l &&
+          typeof l === "object" &&
+          typeof (l as GoalLogEntry).id === "number" &&
+          typeof (l as GoalLogEntry).timestamp === "number" &&
+          ((l as GoalLogEntry).kind === "dial" ||
+            (l as GoalLogEntry).kind === "prospect-added"),
+      )
+    : [];
+  const unlockedWeekStarts = Array.isArray(g.unlockedWeekStarts)
+    ? g.unlockedWeekStarts.filter((s): s is string => typeof s === "string")
+    : [];
+  return { quarterly, logs, unlockedWeekStarts };
 }
 
 export function loadAppState(): AppState {
@@ -337,6 +373,9 @@ export function loadAppState(): AppState {
         procurement: parsed.engineCollapsed?.procurement ?? false,
         product: parsed.engineCollapsed?.product ?? false,
       },
+      currentView:
+        parsed.currentView === "goals" ? "goals" : "account",
+      goals: cleanGoalsState(parsed.goals),
     };
   } catch {
     return emptyApp();
@@ -712,6 +751,8 @@ export function parseImportedAppState(json: string): AppState {
       procurement: candidate.engineCollapsed?.procurement ?? false,
       product: candidate.engineCollapsed?.product ?? false,
     },
+    currentView: candidate.currentView === "goals" ? "goals" : "account",
+    goals: cleanGoalsState(candidate.goals),
   };
 }
 

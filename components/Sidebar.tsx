@@ -12,6 +12,7 @@ import {
   History,
   MoreVertical,
   Plus,
+  Target,
   Trash2,
   Upload,
   X,
@@ -35,6 +36,7 @@ interface Props {
   currentAccountId: string | null;
   isSidebarOpen: boolean;
   isArchivedSectionOpen: boolean;
+  currentView: "account" | "goals";
   onClose: () => void;
   onAddAccount: () => void;
   onSelectAccount: (id: string) => void;
@@ -45,6 +47,7 @@ interface Props {
   onExportState: () => void;
   onImportState: (file: File) => void;
   onRestoreBackup: (slot: BackupSlot) => void;
+  onSelectGoalsView: () => void;
 }
 
 export function Sidebar({
@@ -52,6 +55,7 @@ export function Sidebar({
   currentAccountId,
   isSidebarOpen,
   isArchivedSectionOpen,
+  currentView,
   onClose,
   onAddAccount,
   onSelectAccount,
@@ -62,6 +66,7 @@ export function Sidebar({
   onExportState,
   onImportState,
   onRestoreBackup,
+  onSelectGoalsView,
 }: Props) {
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -247,12 +252,22 @@ export function Sidebar({
         </button>
       </div>
 
-      <div className="p-4">
+      <div className="p-4 space-y-2">
         <button
           onClick={onAddAccount}
           className="w-full bg-blue-600 hover:bg-blue-500 text-white py-2.5 px-4 rounded-lg flex items-center justify-center gap-2 text-sm font-medium transition-colors shadow-sm"
         >
           <Plus className="w-4 h-4" /> New Account
+        </button>
+        <button
+          onClick={onSelectGoalsView}
+          className={`w-full py-2 px-4 rounded-lg flex items-center gap-2 text-sm font-medium transition-colors ${
+            currentView === "goals"
+              ? "bg-slate-700 text-white shadow-inner"
+              : "bg-slate-800 hover:bg-slate-700 text-slate-200"
+          }`}
+        >
+          <Target className="w-4 h-4" /> Goals &amp; Benchmarks
         </button>
       </div>
 

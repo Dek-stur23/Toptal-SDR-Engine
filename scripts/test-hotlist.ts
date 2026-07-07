@@ -869,6 +869,237 @@ const SAMPLE_DATA_URL =
   "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR4nGNgAAIAAAUAAeImBZsAAAAASUVORK5CYII=";
 
 // ============================================================
+// Goals & Benchmarks — date math and rollups
+// ============================================================
+
+import {
+  appendLog,
+  createLog,
+  defaultQuarterlyGoals,
+  emptyGoalsState,
+  findQuarterlyGoals,
+  formatIsoDate,
+  getQuarterOf,
+  groupLogsByWeek,
+  isWeekLocked,
+  removeLog,
+  resolveViewPeriod,
+  sumLogsInRange,
+  toggleWeekUnlock,
+  updateLog,
+  upsertQuarterlyGoals,
+  weekEndFor,
+  weekStartFor,
+} from "../lib/goals.ts";
+
+section("goals: weekStartFor returns Monday 00:00 for a mid-week date");
+
+{
+  // Wed 2026-01-14 -> Monday 2026-01-12
+  const wed = new Date(2026, 0, 14, 15, 30);
+  const start = weekStartFor(wed);
+  eq(formatIsoDate(start), "2026-01-12", "Wednesday resolves to preceding Monday");
+  eq(start.getHours(), 0, "Monday is at 00:00");
+  eq(start.getMinutes(), 0, "Monday is at 00:00");
+}
+
+section("goals: weekStartFor rolls back from Sunday to previous Monday");
+
+{
+  const sun = new Date(2026, 0, 18, 9, 0); // Sun 2026-01-18
+  const start = weekStartFor(sun);
+  eq(formatIsoDate(start), "2026-01-12", "Sunday resolves to previous Monday");
+}
+
+section("goals: weekEndFor returns Sunday 23:59:59");
+
+{
+  const wed = new Date(2026, 0, 14);
+  const end = weekEndFor(wed);
+  eq(formatIsoDate(end), "2026-01-18", "week ends on Sunday");
+  eq(end.getHours(), 23, "end at 23:xx");
+  eq(end.getMinutes(), 59, "end at 23:59");
+}
+
+section("goals: getQuarterOf identifies quarters correctly");
+
+{
+  eq(getQuarterOf(new Date(2026, 0, 15)).quarter, 1, "Jan is Q1");
+  eq(getQuarterOf(new Date(2026, 3, 1)).quarter, 2, "Apr is Q2");
+  eq(getQuarterOf(new Date(2026, 6, 1)).quarter, 3, "Jul is Q3");
+  eq(getQuarterOf(new Date(2026, 9, 1)).quarter, 4, "Oct is Q4");
+  eq(getQuarterOf(new Date(2026, 11, 31)).year, 2026, "year preserved");
+}
+
+section("goals: findQuarterlyGoals returns null when unset");
+
+{
+  const g = emptyGoalsState();
+  eq(findQuarterlyGoals(g, 2026, 1), null, "empty state returns null");
+}
+
+section("goals: upsertQuarterlyGoals inserts and replaces by (year, quarter)");
+
+{
+  let g = emptyGoalsState();
+  g = upsertQuarterlyGoals(g, {
+    ...defaultQuarterlyGoals(2026, 1),
+    dailyDialsGoal: 40,
+  });
+  const found = findQuarterlyGoals(g, 2026, 1);
+  eq(found?.dailyDialsGoal, 40, "inserted goals found");
+
+  g = upsertQuarterlyGoals(g, {
+    ...defaultQuarterlyGoals(2026, 1),
+    dailyDialsGoal: 50,
+  });
+  eq(g.quarterly.length, 1, "only one Q1 2026 entry after replace");
+  eq(
+    findQuarterlyGoals(g, 2026, 1)?.dailyDialsGoal,
+    50,
+    "value replaced",
+  );
+}
+
+section("goals: appendLog / updateLog / removeLog preserve invariants");
+
+{
+  let g = emptyGoalsState();
+  const entry = createLog("dial", 3, " test note ");
+  g = appendLog(g, entry);
+  eq(g.logs.length, 1, "one log");
+  eq(g.logs[0].count, 3, "count preserved");
+  eq(g.logs[0].note, "test note", "note trimmed");
+
+  g = updateLog(g, entry.id, { count: 5 });
+  eq(g.logs[0].count, 5, "count updated");
+
+  g = removeLog(g, entry.id);
+  eq(g.logs.length, 0, "log removed");
+}
+
+section("goals: createLog rejects invalid counts");
+
+{
+  const zero = createLog("dial", 0);
+  eq(zero.count, 1, "count 0 clamped to 1");
+  const neg = createLog("dial", -5);
+  eq(neg.count, 1, "negative clamped to 1");
+  const frac = createLog("dial", 3.7);
+  eq(frac.count, 3, "fractional floored");
+}
+
+section("goals: sumLogsInRange aggregates by kind within range");
+
+{
+  const now = new Date(2026, 0, 14, 12, 0); // Wed noon
+  const g: import("../lib/types.ts").UserGoalsState = {
+    quarterly: [],
+    unlockedWeekStarts: [],
+    logs: [
+      { id: 1, kind: "dial", timestamp: now.getTime() - 3600_000, count: 5 },
+      { id: 2, kind: "dial", timestamp: now.getTime() - 60_000, count: 3 },
+      { id: 3, kind: "prospect-added", timestamp: now.getTime(), count: 2 },
+      { id: 4, kind: "dial", timestamp: now.getTime() - 8 * 24 * 3600_000, count: 100 }, // 8 days ago
+    ],
+  };
+  const weekStart = weekStartFor(now).getTime();
+  const weekEnd = weekEndFor(now).getTime();
+  const roll = sumLogsInRange(g.logs, weekStart, weekEnd);
+  eq(roll.dials, 8, "dials this week = 5 + 3, not 100 from 8 days ago");
+  eq(roll.prospects, 2, "prospects this week = 2");
+}
+
+section("goals: groupLogsByWeek buckets entries by week, current always present");
+
+{
+  const now = new Date(2026, 0, 14, 12, 0);
+  const g: import("../lib/types.ts").UserGoalsState = {
+    quarterly: [],
+    unlockedWeekStarts: [],
+    logs: [
+      // This week
+      { id: 1, kind: "dial", timestamp: now.getTime() - 3600_000, count: 5 },
+      // Last week (Wed Jan 7)
+      {
+        id: 2,
+        kind: "dial",
+        timestamp: new Date(2026, 0, 7, 10).getTime(),
+        count: 12,
+      },
+      // Last week (Sun Jan 11) — same bucket as above
+      {
+        id: 3,
+        kind: "prospect-added",
+        timestamp: new Date(2026, 0, 11, 20).getTime(),
+        count: 4,
+      },
+    ],
+  };
+  const buckets = groupLogsByWeek(g, now);
+  eq(buckets.length, 2, "two week buckets");
+  ok(buckets[0].isCurrent, "first bucket (newest) is current week");
+  eq(buckets[0].totals.dials, 5, "current week dials");
+  eq(buckets[1].totals.dials, 12, "previous week dials");
+  eq(buckets[1].totals.prospects, 4, "previous week prospects");
+}
+
+section("goals: groupLogsByWeek always includes current week even with no logs");
+
+{
+  const now = new Date(2026, 0, 14, 12, 0);
+  const g = emptyGoalsState();
+  const buckets = groupLogsByWeek(g, now);
+  eq(buckets.length, 1, "one placeholder bucket for current week");
+  ok(buckets[0].isCurrent, "it's the current week");
+  eq(buckets[0].totals.dials, 0, "no dials");
+  eq(buckets[0].logs.length, 0, "no entries");
+}
+
+section("goals: isWeekLocked — current week is always editable");
+
+{
+  const now = new Date(2026, 0, 14);
+  const g = emptyGoalsState();
+  ok(!isWeekLocked(g, now, now), "current week never locked");
+}
+
+section("goals: isWeekLocked — past week locked by default");
+
+{
+  const now = new Date(2026, 0, 14);
+  const lastWeek = new Date(2026, 0, 7);
+  const g = emptyGoalsState();
+  ok(isWeekLocked(g, lastWeek, now), "past week is locked");
+}
+
+section("goals: toggleWeekUnlock unlocks and re-locks a past week");
+
+{
+  const now = new Date(2026, 0, 14);
+  const lastWeek = new Date(2026, 0, 7);
+  let g = emptyGoalsState();
+  g = toggleWeekUnlock(g, lastWeek);
+  ok(!isWeekLocked(g, lastWeek, now), "explicitly unlocked past week");
+  g = toggleWeekUnlock(g, lastWeek);
+  ok(isWeekLocked(g, lastWeek, now), "re-locked after second toggle");
+}
+
+section("goals: resolveViewPeriod produces sensible weeks count");
+
+{
+  const now = new Date(2026, 0, 14);
+  const thisWeek = resolveViewPeriod("this-week", now);
+  eq(thisWeek.weeks, 1, "this-week = 1 week");
+  const lastWeek = resolveViewPeriod("last-week", now);
+  eq(lastWeek.weeks, 1, "last-week = 1 week");
+  const allTime = resolveViewPeriod("all-time", now);
+  eq(allTime.weeks, 1, "all-time uses weeks=1 (no cumulative multiplier)");
+  const thisQuarter = resolveViewPeriod("this-quarter", now);
+  ok(thisQuarter.weeks >= 1, "this-quarter weeks is at least 1");
+}
+
+// ============================================================
 // CSV: permissive LinkedIn URL column matching
 // ============================================================
 

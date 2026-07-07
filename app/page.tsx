@@ -30,6 +30,7 @@ import {
   Zap,
   type LucideIcon,
 } from "lucide-react";
+import { GoalsAndBenchmarks } from "@/components/GoalsAndBenchmarks";
 import { Header } from "@/components/Header";
 import { Sidebar } from "@/components/Sidebar";
 import { StepCard } from "@/components/StepCard";
@@ -436,7 +437,19 @@ export default function App() {
   };
 
   const handleSelectAccount = (id: string) => {
-    setState((prev) => (prev ? { ...prev, currentAccountId: id } : prev));
+    setState((prev) =>
+      prev ? { ...prev, currentAccountId: id, currentView: "account" } : prev,
+    );
+  };
+
+  const handleSelectGoalsView = () => {
+    setState((prev) => (prev ? { ...prev, currentView: "goals" } : prev));
+  };
+
+  const setGoals = (
+    updater: (prev: import("@/lib/types").UserGoalsState) => import("@/lib/types").UserGoalsState,
+  ) => {
+    setState((prev) => (prev ? { ...prev, goals: updater(prev.goals) } : prev));
   };
 
   const handleDeleteAccount = (id: string) => {
@@ -560,6 +573,7 @@ export default function App() {
         currentAccountId={state.currentAccountId}
         isSidebarOpen={state.isSidebarOpen}
         isArchivedSectionOpen={state.isArchivedSectionOpen}
+        currentView={state.currentView}
         onClose={() => handleToggleSidebar(false)}
         onAddAccount={handleAddAccount}
         onSelectAccount={handleSelectAccount}
@@ -570,6 +584,7 @@ export default function App() {
         onExportState={handleExportState}
         onImportState={handleImportState}
         onRestoreBackup={handleRestoreBackup}
+        onSelectGoalsView={handleSelectGoalsView}
       />
 
       <div className="flex-1 flex flex-col h-full overflow-y-auto relative bg-[#F9FAFB]">
@@ -606,9 +621,18 @@ export default function App() {
         <Header
           isSidebarOpen={state.isSidebarOpen}
           onOpenSidebar={() => handleToggleSidebar(true)}
-          companyName={currentAccount.accountData.companyName}
+          companyName={
+            state.currentView === "goals"
+              ? "Goals & Benchmarks"
+              : currentAccount.accountData.companyName
+          }
         />
 
+        {state.currentView === "goals" ? (
+          <main className="flex-1 w-full">
+            <GoalsAndBenchmarks state={state} setGoals={setGoals} />
+          </main>
+        ) : (
         <main className="flex-1 max-w-4xl w-full mx-auto px-6 py-10">
           <div key={currentAccount.id} className="space-y-16">
             <section>
@@ -982,6 +1006,7 @@ export default function App() {
             </section>
           </div>
         </main>
+        )}
       </div>
     </div>
   );

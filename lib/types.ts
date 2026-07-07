@@ -419,4 +419,44 @@ export interface AppState {
     procurement: boolean;
     product: boolean;
   };
+  currentView: AppView;
+  goals: UserGoalsState;
+}
+
+export type AppView = "account" | "goals";
+
+// ============================================================
+// Goals & Benchmarks — account-agnostic tracking of dials and
+// new-prospects-added, with per-quarter goal targets and per-week
+// cumulative archives.
+// ============================================================
+
+export interface QuarterlyGoals {
+  year: number;
+  quarter: 1 | 2 | 3 | 4;
+  dailyDialsGoal: number;
+  dailyDialsBenchmark: number;
+  weeklyDialsGoal: number;
+  weeklyDialsBenchmark: number;
+  weeklyProspectsGoal: number;
+  weeklyProspectsBenchmark: number;
+}
+
+export type GoalMetricKind = "dial" | "prospect-added";
+
+export interface GoalLogEntry {
+  id: number;
+  kind: GoalMetricKind;
+  timestamp: number; // ms epoch — sole ordering key
+  count: number;     // batch-friendly (1, or 5, etc.)
+  note?: string;
+}
+
+export interface UserGoalsState {
+  quarterly: QuarterlyGoals[];
+  logs: GoalLogEntry[];
+  // Week-start (YYYY-MM-DD, ISO Monday) dates the user has explicitly
+  // unlocked for editing. Past weeks are locked by default; entries in
+  // this list are the exceptions.
+  unlockedWeekStarts: string[];
 }

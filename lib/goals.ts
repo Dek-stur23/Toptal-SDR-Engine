@@ -6,6 +6,7 @@
 import type {
   GoalLogEntry,
   GoalMetricKind,
+  Meeting,
   QuarterlyGoals,
   UserGoalsState,
 } from "./types";
@@ -86,6 +87,10 @@ export function defaultQuarterlyGoals(
     weeklyDialsBenchmark: 0,
     weeklyProspectsGoal: 0,
     weeklyProspectsBenchmark: 0,
+    weeklyMeetingsBookedGoal: 0,
+    weeklyMeetingsBookedBenchmark: 0,
+    weeklyMeetingsHeldGoal: 0,
+    weeklyMeetingsHeldBenchmark: 0,
   };
 }
 
@@ -270,6 +275,45 @@ export function weekRollup(
   );
 }
 
+// ---- Meeting rollups ----------------------------------------------
+
+export interface MeetingRollup {
+  booked: number;
+  held: number;
+}
+
+// Counts meetings whose "activity timestamp" falls in the range:
+// - booked: counts meetings by createdAt (when the record was made,
+//   which is when the SDR booked the meeting). Every meeting counts,
+//   including ones later converted to held.
+// - held: counts meetings by heldAt, only when status === "held".
+export function sumMeetingsInRange(
+  meetings: Meeting[],
+  fromMs: number,
+  toMs: number,
+): MeetingRollup {
+  let booked = 0;
+  let held = 0;
+  for (const m of meetings) {
+    if (
+      typeof m.createdAt === "number" &&
+      m.createdAt >= fromMs &&
+      m.createdAt <= toMs
+    ) {
+      booked++;
+    }
+    if (
+      m.status === "held" &&
+      typeof m.heldAt === "number" &&
+      m.heldAt >= fromMs &&
+      m.heldAt <= toMs
+    ) {
+      held++;
+    }
+  }
+  return { booked, held };
+}
+
 // ---- Weekly archive (grouping) -----------------------------------
 
 export interface WeeklyBucket {
@@ -350,12 +394,10 @@ export function chartGranularityFor(
 // - All time: last 12 weekly buckets ending at the current week.
 // - Today: single-day bucket. The dashboard skips rendering the chart in
 //   that case, but returning a valid array keeps the function total.
-export function bucketLogsForChart(
-  logs: GoalLogEntry[],
+function buildChartRanges(
   period: ViewPeriod,
-  kind: GoalMetricKind,
-  now: Date = new Date(),
-): ChartBucket[] {
+  now: Date,
+): { start: Date; end: Date }[] {
   const granularity = chartGranularityFor(period.kind);
   const ranges: { start: Date; end: Date }[] = [];
 
@@ -365,7 +407,6 @@ export function bucketLogsForChart(
       const e = dayEndFor(now);
       ranges.push({ start: s, end: e });
     } else {
-      // this-week / last-week: 7 buckets starting from period.fromMs
       const start = new Date(period.fromMs);
       for (let i = 0; i < 7; i++) {
         const bStart = new Date(start);
@@ -377,7 +418,6 @@ export function bucketLogsForChart(
       }
     }
   } else if (period.kind === "this-quarter") {
-    // Every week from quarter start through now.
     let cursor = weekStartFor(new Date(period.fromMs));
     const endMs = period.toMs;
     while (cursor.getTime() <= endMs) {
@@ -388,8 +428,6 @@ export function bucketLogsForChart(
       cursor.setDate(cursor.getDate() + 7);
     }
   } else {
-    // all-time / custom (default): last 12 weekly buckets ending at
-    // the week containing `now`.
     const currentWeekStart = weekStartFor(now);
     for (let i = 11; i >= 0; i--) {
       const s = new Date(currentWeekStart);
@@ -397,7 +435,26 @@ export function bucketLogsForChart(
       ranges.push({ start: s, end: weekEndFor(s) });
     }
   }
+  return ranges;
+}
 
+function labelForRange(
+  granularity: ChartGranularity,
+  start: Date,
+): string {
+  return granularity === "day"
+    ? start.toLocaleString(undefined, { weekday: "short" })
+    : start.toLocaleString(undefined, { month: "short", day: "numeric" });
+}
+
+export function bucketLogsForChart(
+  logs: GoalLogEntry[],
+  period: ViewPeriod,
+  kind: GoalMetricKind,
+  now: Date = new Date(),
+): ChartBucket[] {
+  const granularity = chartGranularityFor(period.kind);
+  const ranges = buildChartRanges(period, now);
   const nowMs = now.getTime();
   return ranges.map((r) => {
     let count = 0;
@@ -407,12 +464,44 @@ export function bucketLogsForChart(
         count += l.count;
       }
     }
-    const label =
-      granularity === "day"
-        ? r.start.toLocaleString(undefined, { weekday: "short" })
-        : r.start.toLocaleString(undefined, { month: "short", day: "numeric" });
+    const label = labelForRange(granularity, r.start);
     return {
       label,
+      startMs: r.start.getTime(),
+      endMs: r.end.getTime(),
+      count,
+      isCurrent: nowMs >= r.start.getTime() && nowMs <= r.end.getTime(),
+    };
+  });
+}
+
+// Bucket meetings into the same ChartBucket shape as logs. Booked bars
+// use meeting.createdAt; held bars use meeting.heldAt (only when
+// status === "held").
+export function bucketMeetingsForChart(
+  meetings: Meeting[],
+  period: ViewPeriod,
+  status: "booked" | "held",
+  now: Date = new Date(),
+): ChartBucket[] {
+  const granularity = chartGranularityFor(period.kind);
+  const ranges = buildChartRanges(period, now);
+  const nowMs = now.getTime();
+  return ranges.map((r) => {
+    let count = 0;
+    for (const m of meetings) {
+      let ts: number | null = null;
+      if (status === "booked") {
+        if (typeof m.createdAt === "number") ts = m.createdAt;
+      } else if (m.status === "held" && typeof m.heldAt === "number") {
+        ts = m.heldAt;
+      }
+      if (ts !== null && ts >= r.start.getTime() && ts <= r.end.getTime()) {
+        count++;
+      }
+    }
+    return {
+      label: labelForRange(granularity, r.start),
       startMs: r.start.getTime(),
       endMs: r.end.getTime(),
       count,

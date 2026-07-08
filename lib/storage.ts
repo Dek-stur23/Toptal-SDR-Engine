@@ -292,14 +292,33 @@ function cleanMeetings(raw: unknown): Meeting[] {
 function cleanGoalsState(raw: unknown): UserGoalsState {
   if (!raw || typeof raw !== "object") return emptyGoalsState();
   const g = raw as Partial<UserGoalsState>;
+  const asNum = (v: unknown): number =>
+    typeof v === "number" && Number.isFinite(v) && v >= 0 ? v : 0;
   const quarterly = Array.isArray(g.quarterly)
-    ? g.quarterly.filter(
-        (q): q is QuarterlyGoals =>
-          !!q &&
-          typeof q === "object" &&
-          typeof (q as QuarterlyGoals).year === "number" &&
-          typeof (q as QuarterlyGoals).quarter === "number",
-      )
+    ? g.quarterly
+        .filter(
+          (q): q is QuarterlyGoals =>
+            !!q &&
+            typeof q === "object" &&
+            typeof (q as QuarterlyGoals).year === "number" &&
+            typeof (q as QuarterlyGoals).quarter === "number",
+        )
+        .map((q): QuarterlyGoals => ({
+          year: q.year,
+          quarter: q.quarter,
+          dailyDialsGoal: asNum(q.dailyDialsGoal),
+          dailyDialsBenchmark: asNum(q.dailyDialsBenchmark),
+          weeklyDialsGoal: asNum(q.weeklyDialsGoal),
+          weeklyDialsBenchmark: asNum(q.weeklyDialsBenchmark),
+          weeklyProspectsGoal: asNum(q.weeklyProspectsGoal),
+          weeklyProspectsBenchmark: asNum(q.weeklyProspectsBenchmark),
+          weeklyMeetingsBookedGoal: asNum(q.weeklyMeetingsBookedGoal),
+          weeklyMeetingsBookedBenchmark: asNum(
+            q.weeklyMeetingsBookedBenchmark,
+          ),
+          weeklyMeetingsHeldGoal: asNum(q.weeklyMeetingsHeldGoal),
+          weeklyMeetingsHeldBenchmark: asNum(q.weeklyMeetingsHeldBenchmark),
+        }))
     : [];
   const logs = Array.isArray(g.logs)
     ? g.logs

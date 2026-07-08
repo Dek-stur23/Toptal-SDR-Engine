@@ -875,6 +875,7 @@ const SAMPLE_DATA_URL =
 import {
   appendLog,
   bucketLogsForChart,
+  bucketMeetingsForChart,
   chartGranularityFor,
   createLog,
   defaultQuarterlyGoals,
@@ -889,6 +890,7 @@ import {
   resolveViewPeriod,
   saveWeek,
   sumLogsInRange,
+  sumMeetingsInRange,
   toggleWeekUnlock,
   unsaveWeek,
   updateLog,
@@ -1527,6 +1529,115 @@ section("meetings: cleanMeetings preserves valid prospectResponse and drops inva
   ok(
     loaded.meetings[2].prospectResponse === undefined,
     "invalid value dropped",
+  );
+}
+
+section("goals: sumMeetingsInRange counts booked by createdAt and held by heldAt");
+
+{
+  const wedNoon = new Date(2026, 0, 14, 12).getTime();
+  const monMorning = new Date(2026, 0, 12, 9).getTime();
+  const oldWeek = new Date(2026, 0, 5, 10).getTime();
+  const meetings: import("../lib/types.ts").Meeting[] = [
+    // Booked Mon this week, not held
+    {
+      id: 1,
+      firstName: "A",
+      lastName: "",
+      title: "",
+      linkedinUrl: "",
+      scheduledFor: "",
+      notes: "",
+      status: "booked",
+      createdAt: monMorning,
+    },
+    // Booked last week, held Wed this week
+    {
+      id: 2,
+      firstName: "B",
+      lastName: "",
+      title: "",
+      linkedinUrl: "",
+      scheduledFor: "",
+      notes: "",
+      status: "held",
+      createdAt: oldWeek,
+      heldAt: wedNoon,
+    },
+    // Booked Mon this week AND held Wed this week — counts on both sides
+    {
+      id: 3,
+      firstName: "C",
+      lastName: "",
+      title: "",
+      linkedinUrl: "",
+      scheduledFor: "",
+      notes: "",
+      status: "held",
+      createdAt: monMorning,
+      heldAt: wedNoon,
+    },
+  ];
+  const from = new Date(2026, 0, 12).getTime();
+  const to = new Date(2026, 0, 18, 23, 59, 59, 999).getTime();
+  const roll = sumMeetingsInRange(meetings, from, to);
+  eq(roll.booked, 2, "2 meetings booked this week (id 1 + 3)");
+  eq(roll.held, 2, "2 meetings held this week (id 2 + 3)");
+}
+
+section("goals: bucketMeetingsForChart splits booked/held into daily buckets");
+
+{
+  const now = new Date(2026, 0, 14, 12);
+  const period = resolveViewPeriod("this-week", now);
+  const monCreated = new Date(2026, 0, 12, 10).getTime();
+  const wedHeld = new Date(2026, 0, 14, 10).getTime();
+  const meetings: import("../lib/types.ts").Meeting[] = [
+    {
+      id: 1,
+      firstName: "",
+      lastName: "",
+      title: "",
+      linkedinUrl: "",
+      scheduledFor: "",
+      notes: "",
+      status: "held",
+      createdAt: monCreated,
+      heldAt: wedHeld,
+    },
+  ];
+  const booked = bucketMeetingsForChart(meetings, period, "booked", now);
+  const held = bucketMeetingsForChart(meetings, period, "held", now);
+  eq(booked.length, 7, "7 daily bars");
+  eq(booked[0].count, 1, "Mon booked=1");
+  eq(booked[2].count, 0, "Wed booked=0");
+  eq(held[0].count, 0, "Mon held=0");
+  eq(held[2].count, 1, "Wed held=1");
+}
+
+section("goals: bucketMeetingsForChart excludes still-booked meetings from held count");
+
+{
+  const now = new Date(2026, 0, 14, 12);
+  const period = resolveViewPeriod("this-week", now);
+  const meetings: import("../lib/types.ts").Meeting[] = [
+    {
+      id: 1,
+      firstName: "",
+      lastName: "",
+      title: "",
+      linkedinUrl: "",
+      scheduledFor: "",
+      notes: "",
+      status: "booked",
+      createdAt: new Date(2026, 0, 12, 9).getTime(),
+    },
+  ];
+  const held = bucketMeetingsForChart(meetings, period, "held", now);
+  eq(
+    held.reduce((s, b) => s + b.count, 0),
+    0,
+    "no held count for booked-only meeting",
   );
 }
 

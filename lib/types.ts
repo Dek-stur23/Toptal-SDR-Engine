@@ -483,6 +483,13 @@ export interface QuarterlyGoals {
   weeklyDialsBenchmark: number;
   weeklyProspectsGoal: number;
   weeklyProspectsBenchmark: number;
+  // Meeting goals track SDR activity — how many meetings booked (created
+  // in the tracker) and held (converted to held) per week. Weekly-only
+  // by design; daily numbers would usually be 0 or 1.
+  weeklyMeetingsBookedGoal: number;
+  weeklyMeetingsBookedBenchmark: number;
+  weeklyMeetingsHeldGoal: number;
+  weeklyMeetingsHeldBenchmark: number;
 }
 
 export type GoalMetricKind = "dial" | "prospect-added";

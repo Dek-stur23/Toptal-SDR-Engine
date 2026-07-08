@@ -3,6 +3,8 @@
 import { useMemo, useState } from "react";
 import {
   Building2,
+  CalendarCheck,
+  CalendarPlus,
   CheckCircle2,
   ChevronDown,
   ChevronRight,
@@ -25,6 +27,7 @@ import type {
 import {
   appendLog,
   bucketLogsForChart,
+  bucketMeetingsForChart,
   chartGranularityFor,
   createLog,
   defaultQuarterlyGoals,
@@ -38,6 +41,7 @@ import {
   resolveViewPeriod,
   saveWeek,
   sumLogsInRange,
+  sumMeetingsInRange,
   toggleWeekUnlock,
   unsaveWeek,
   updateLog,
@@ -130,6 +134,23 @@ export function GoalsAndBenchmarks({ state, setGoals }: Props) {
   const periodProspectsBenchmark = Math.round(
     currentQuarterGoals.weeklyProspectsBenchmark * period.weeks,
   );
+  const periodMeetingsBookedGoal = Math.round(
+    currentQuarterGoals.weeklyMeetingsBookedGoal * period.weeks,
+  );
+  const periodMeetingsBookedBenchmark = Math.round(
+    currentQuarterGoals.weeklyMeetingsBookedBenchmark * period.weeks,
+  );
+  const periodMeetingsHeldGoal = Math.round(
+    currentQuarterGoals.weeklyMeetingsHeldGoal * period.weeks,
+  );
+  const periodMeetingsHeldBenchmark = Math.round(
+    currentQuarterGoals.weeklyMeetingsHeldBenchmark * period.weeks,
+  );
+
+  const meetingsRollup = useMemo(
+    () => sumMeetingsInRange(state.meetings, period.fromMs, period.toMs),
+    [state.meetings, period.fromMs, period.toMs],
+  );
 
   const buckets = useMemo(() => groupLogsByWeek(goals, now), [goals, now]);
 
@@ -213,7 +234,7 @@ export function GoalsAndBenchmarks({ state, setGoals }: Props) {
           </span>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           <MetricCard
             icon={<Phone className="w-4 h-4 text-blue-500" />}
             label={`Dials · ${period.label}`}
@@ -232,6 +253,20 @@ export function GoalsAndBenchmarks({ state, setGoals }: Props) {
             actual={periodRollup.prospects}
             goal={periodProspectsGoal}
             benchmark={periodProspectsBenchmark}
+          />
+          <MetricCard
+            icon={<CalendarPlus className="w-4 h-4 text-indigo-500" />}
+            label={`Meetings booked · ${period.label}`}
+            actual={meetingsRollup.booked}
+            goal={periodMeetingsBookedGoal}
+            benchmark={periodMeetingsBookedBenchmark}
+          />
+          <MetricCard
+            icon={<CalendarCheck className="w-4 h-4 text-purple-500" />}
+            label={`Meetings held · ${period.label}`}
+            actual={meetingsRollup.held}
+            goal={periodMeetingsHeldGoal}
+            benchmark={periodMeetingsHeldBenchmark}
           />
           <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm flex flex-col gap-2">
             <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
@@ -259,6 +294,7 @@ export function GoalsAndBenchmarks({ state, setGoals }: Props) {
       {periodKind !== "today" && (
         <PacingSection
           logs={goals.logs}
+          meetings={state.meetings}
           period={period}
           quarterly={currentQuarterGoals}
         />
@@ -317,10 +353,12 @@ export function GoalsAndBenchmarks({ state, setGoals }: Props) {
 
 function PacingSection({
   logs,
+  meetings,
   period,
   quarterly,
 }: {
   logs: import("@/lib/types").GoalLogEntry[];
+  meetings: import("@/lib/types").Meeting[];
   period: ReturnType<typeof resolveViewPeriod>;
   quarterly: QuarterlyGoals;
 }) {
@@ -333,6 +371,14 @@ function PacingSection({
     () => bucketLogsForChart(logs, period, "prospect-added", now),
     [logs, period, now.getTime()],
   );
+  const meetingsBookedBuckets = useMemo(
+    () => bucketMeetingsForChart(meetings, period, "booked", now),
+    [meetings, period, now.getTime()],
+  );
+  const meetingsHeldBuckets = useMemo(
+    () => bucketMeetingsForChart(meetings, period, "held", now),
+    [meetings, period, now.getTime()],
+  );
   // Reference-line values in the same unit as the bars. Bars are per-day
   // for week views, per-week for quarter/all-time views.
   const granularity = chartGranularityFor(period.kind);
@@ -344,7 +390,7 @@ function PacingSection({
     granularity === "day"
       ? quarterly.dailyDialsBenchmark
       : quarterly.weeklyDialsBenchmark;
-  // No dedicated daily prospect goal — approximate as weekly / 7 for daily views.
+  // No dedicated daily prospect/meeting goals — approximate weekly / 7.
   const prospectsGoalPerBucket =
     granularity === "day"
       ? Math.round(quarterly.weeklyProspectsGoal / 7)
@@ -353,6 +399,22 @@ function PacingSection({
     granularity === "day"
       ? Math.round(quarterly.weeklyProspectsBenchmark / 7)
       : quarterly.weeklyProspectsBenchmark;
+  const meetingsBookedGoalPerBucket =
+    granularity === "day"
+      ? Math.round(quarterly.weeklyMeetingsBookedGoal / 7)
+      : quarterly.weeklyMeetingsBookedGoal;
+  const meetingsBookedBenchmarkPerBucket =
+    granularity === "day"
+      ? Math.round(quarterly.weeklyMeetingsBookedBenchmark / 7)
+      : quarterly.weeklyMeetingsBookedBenchmark;
+  const meetingsHeldGoalPerBucket =
+    granularity === "day"
+      ? Math.round(quarterly.weeklyMeetingsHeldGoal / 7)
+      : quarterly.weeklyMeetingsHeldGoal;
+  const meetingsHeldBenchmarkPerBucket =
+    granularity === "day"
+      ? Math.round(quarterly.weeklyMeetingsHeldBenchmark / 7)
+      : quarterly.weeklyMeetingsHeldBenchmark;
 
   const subtitle =
     granularity === "day" ? "Per day" : "Per week";
@@ -384,6 +446,28 @@ function PacingSection({
           currentBarColorClass="fill-emerald-700"
           goalStrokeClass="stroke-emerald-700"
           benchmarkStrokeClass="stroke-emerald-300"
+        />
+        <PacingChart
+          title="Meetings booked"
+          subtitle={subtitle}
+          buckets={meetingsBookedBuckets}
+          goal={meetingsBookedGoalPerBucket}
+          benchmark={meetingsBookedBenchmarkPerBucket}
+          barColorClass="fill-indigo-500"
+          currentBarColorClass="fill-indigo-700"
+          goalStrokeClass="stroke-indigo-700"
+          benchmarkStrokeClass="stroke-indigo-300"
+        />
+        <PacingChart
+          title="Meetings held"
+          subtitle={subtitle}
+          buckets={meetingsHeldBuckets}
+          goal={meetingsHeldGoalPerBucket}
+          benchmark={meetingsHeldBenchmarkPerBucket}
+          barColorClass="fill-purple-500"
+          currentBarColorClass="fill-purple-700"
+          goalStrokeClass="stroke-purple-700"
+          benchmarkStrokeClass="stroke-purple-300"
         />
       </div>
     </section>
@@ -986,6 +1070,26 @@ function EditGoalsModal({
             label="Weekly new prospects — benchmark"
             value={draft.weeklyProspectsBenchmark}
             onChange={(v) => set({ weeklyProspectsBenchmark: v })}
+          />
+          <NumberField
+            label="Weekly meetings booked — goal"
+            value={draft.weeklyMeetingsBookedGoal}
+            onChange={(v) => set({ weeklyMeetingsBookedGoal: v })}
+          />
+          <NumberField
+            label="Weekly meetings booked — benchmark"
+            value={draft.weeklyMeetingsBookedBenchmark}
+            onChange={(v) => set({ weeklyMeetingsBookedBenchmark: v })}
+          />
+          <NumberField
+            label="Weekly meetings held — goal"
+            value={draft.weeklyMeetingsHeldGoal}
+            onChange={(v) => set({ weeklyMeetingsHeldGoal: v })}
+          />
+          <NumberField
+            label="Weekly meetings held — benchmark"
+            value={draft.weeklyMeetingsHeldBenchmark}
+            onChange={(v) => set({ weeklyMeetingsHeldBenchmark: v })}
           />
         </div>
         <div className="flex justify-end gap-2 pt-2">

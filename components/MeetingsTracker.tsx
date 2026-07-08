@@ -954,13 +954,14 @@ function MeetingModal({
   };
 
   return (
+    // Backdrop is intentionally non-closable — the form is long enough
+    // that a stray click outside the panel used to nuke everything the
+    // user typed. Close via the X button, Cancel, or Escape.
     <div
       className="fixed inset-0 z-50 bg-slate-900/70 flex items-center justify-center p-4"
-      onClick={guardedClose}
     >
       <div
         className="bg-white rounded-xl shadow-xl max-w-lg w-full p-5 space-y-4 text-slate-800"
-        onClick={(e) => e.stopPropagation()}
         onKeyDown={(e) => {
           if (e.key === "Escape") guardedClose();
           if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {

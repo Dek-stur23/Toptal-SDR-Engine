@@ -424,7 +424,10 @@ export interface AppState {
   currentView: AppView;
   goals: UserGoalsState;
   meetings: Meeting[];
+  meetingsView: MeetingsView;
 }
+
+export type MeetingsView = "list" | "calendar";
 
 export type AppView = "account" | "goals" | "meetings";
 

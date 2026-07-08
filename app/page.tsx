@@ -462,6 +462,12 @@ export default function App() {
     );
   };
 
+  const handleSetMeetingsView = (
+    view: import("@/lib/types").MeetingsView,
+  ) => {
+    setState((prev) => (prev ? { ...prev, meetingsView: view } : prev));
+  };
+
   const mutateMeetings = (
     updater: (prev: import("@/lib/types").Meeting[]) => import("@/lib/types").Meeting[],
   ) => {
@@ -676,6 +682,8 @@ export default function App() {
               onMutateMeetings={mutateMeetings}
               isHeldSectionOpen={state.isMeetingsHeldSectionOpen}
               onToggleHeldSection={handleToggleMeetingsHeldSection}
+              meetingsView={state.meetingsView}
+              onSetMeetingsView={handleSetMeetingsView}
             />
           </main>
         ) : (

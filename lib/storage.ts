@@ -238,6 +238,7 @@ function emptyApp(): AppState {
     currentView: "account",
     goals: emptyGoalsState(),
     meetings: [],
+    meetingsView: "list",
   };
 }
 
@@ -459,6 +460,7 @@ export function loadAppState(): AppState {
             : "account",
       goals: cleanGoalsState(parsed.goals),
       meetings: cleanMeetings(parsed.meetings),
+      meetingsView: parsed.meetingsView === "calendar" ? "calendar" : "list",
     };
   } catch {
     return emptyApp();
@@ -850,6 +852,7 @@ export function parseImportedAppState(json: string): AppState {
           : "account",
     goals: cleanGoalsState(candidate.goals),
     meetings: cleanMeetings(candidate.meetings),
+    meetingsView: candidate.meetingsView === "calendar" ? "calendar" : "list",
   };
 }
 

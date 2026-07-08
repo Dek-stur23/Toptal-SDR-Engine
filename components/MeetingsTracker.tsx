@@ -5,12 +5,15 @@ import {
   Building2,
   CalendarClock,
   CalendarDays,
+  CalendarRange,
   CheckCircle2,
   ChevronDown,
+  ChevronLeft,
   ChevronRight,
   Edit2,
   ExternalLink,
   Image as ImageIcon,
+  List,
   Loader2,
   Plus,
   RotateCcw,
@@ -30,6 +33,10 @@ interface Props {
   onMutateMeetings: (updater: (prev: Meeting[]) => Meeting[]) => void;
   isHeldSectionOpen: boolean;
   onToggleHeldSection: () => void;
+  meetingsView: import("@/lib/types").MeetingsView;
+  onSetMeetingsView: (
+    view: import("@/lib/types").MeetingsView,
+  ) => void;
 }
 
 const monthDay = (iso: string): string => {
@@ -103,6 +110,8 @@ export function MeetingsTracker({
   onMutateMeetings,
   isHeldSectionOpen,
   onToggleHeldSection,
+  meetingsView,
+  onSetMeetingsView,
 }: Props) {
   const [modalMode, setModalMode] = useState<
     { kind: "create" } | { kind: "edit"; meeting: Meeting } | null
@@ -211,14 +220,52 @@ export function MeetingsTracker({
             actually happen.
           </p>
         </div>
-        <button
-          onClick={() => setModalMode({ kind: "create" })}
-          className="text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 flex items-center gap-1.5 px-3 py-2 rounded-lg shadow-sm"
-        >
-          <Plus className="w-3.5 h-3.5" /> New meeting
-        </button>
+        <div className="flex items-center gap-2">
+          <div
+            className="inline-flex rounded-lg border border-slate-200 bg-white p-0.5 shadow-sm text-xs font-semibold"
+            role="tablist"
+            aria-label="Meetings view"
+          >
+            <button
+              onClick={() => onSetMeetingsView("list")}
+              className={`px-2.5 py-1.5 rounded-md flex items-center gap-1.5 transition-colors ${
+                meetingsView === "list"
+                  ? "bg-slate-900 text-white"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+              aria-pressed={meetingsView === "list"}
+            >
+              <List className="w-3.5 h-3.5" /> List
+            </button>
+            <button
+              onClick={() => onSetMeetingsView("calendar")}
+              className={`px-2.5 py-1.5 rounded-md flex items-center gap-1.5 transition-colors ${
+                meetingsView === "calendar"
+                  ? "bg-slate-900 text-white"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+              aria-pressed={meetingsView === "calendar"}
+            >
+              <CalendarRange className="w-3.5 h-3.5" /> Calendar
+            </button>
+          </div>
+          <button
+            onClick={() => setModalMode({ kind: "create" })}
+            className="text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 flex items-center gap-1.5 px-3 py-2 rounded-lg shadow-sm"
+          >
+            <Plus className="w-3.5 h-3.5" /> New meeting
+          </button>
+        </div>
       </div>
 
+      {meetingsView === "calendar" ? (
+        <CalendarView
+          meetings={state.meetings}
+          accountNameById={accountNameById}
+          onOpenMeeting={(m) => setModalMode({ kind: "edit", meeting: m })}
+        />
+      ) : (
+      <>
       {/* Booked (upcoming) */}
       <section className="space-y-3">
         <h2 className="text-sm font-bold text-slate-700 uppercase tracking-wider">
@@ -283,6 +330,8 @@ export function MeetingsTracker({
           )
         )}
       </section>
+      </>
+      )}
 
       {modalMode && (
         <MeetingModal
@@ -293,6 +342,222 @@ export function MeetingsTracker({
         />
       )}
     </div>
+  );
+}
+
+function CalendarView({
+  meetings,
+  accountNameById,
+  onOpenMeeting,
+}: {
+  meetings: Meeting[];
+  accountNameById: Record<string, string>;
+  onOpenMeeting: (m: Meeting) => void;
+}) {
+  const today = new Date();
+  const [cursor, setCursor] = useState(
+    () => new Date(today.getFullYear(), today.getMonth(), 1),
+  );
+
+  const year = cursor.getFullYear();
+  const month = cursor.getMonth();
+  const monthLabel = cursor.toLocaleString(undefined, {
+    month: "long",
+    year: "numeric",
+  });
+
+  // Build a grid: 6 rows × 7 columns, Sunday-first, that always covers the
+  // whole month plus leading/trailing days from adjacent months so the
+  // grid stays a stable rectangle.
+  const firstOfMonth = new Date(year, month, 1);
+  const gridStart = new Date(firstOfMonth);
+  gridStart.setDate(firstOfMonth.getDate() - firstOfMonth.getDay()); // back to Sunday
+  const days: Date[] = [];
+  for (let i = 0; i < 42; i++) {
+    const d = new Date(gridStart);
+    d.setDate(gridStart.getDate() + i);
+    days.push(d);
+  }
+
+  // Group meetings by YYYY-MM-DD from their scheduledFor field. Skip
+  // meetings without a valid scheduledFor.
+  const dayKey = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const meetingsByDay = useMemo(() => {
+    const map = new Map<string, Meeting[]>();
+    for (const m of meetings) {
+      if (!m.scheduledFor) continue;
+      const d = new Date(m.scheduledFor);
+      if (Number.isNaN(d.getTime())) continue;
+      const key = dayKey(d);
+      const arr = map.get(key) ?? [];
+      arr.push(m);
+      map.set(key, arr);
+    }
+    // Sort each day's meetings by time asc.
+    for (const arr of map.values()) {
+      arr.sort((a, b) => a.scheduledFor.localeCompare(b.scheduledFor));
+    }
+    return map;
+  }, [meetings]);
+
+  const goToPrev = () => setCursor(new Date(year, month - 1, 1));
+  const goToNext = () => setCursor(new Date(year, month + 1, 1));
+  const goToToday = () =>
+    setCursor(new Date(today.getFullYear(), today.getMonth(), 1));
+
+  const isToday = (d: Date) =>
+    d.getFullYear() === today.getFullYear() &&
+    d.getMonth() === today.getMonth() &&
+    d.getDate() === today.getDate();
+
+  const isInMonth = (d: Date) => d.getMonth() === month;
+
+  return (
+    <section className="space-y-3">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={goToPrev}
+            className="p-1.5 rounded-md text-slate-600 hover:text-slate-900 hover:bg-slate-100"
+            aria-label="Previous month"
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </button>
+          <h2 className="text-lg font-bold text-slate-900 min-w-40 text-center">
+            {monthLabel}
+          </h2>
+          <button
+            onClick={goToNext}
+            className="p-1.5 rounded-md text-slate-600 hover:text-slate-900 hover:bg-slate-100"
+            aria-label="Next month"
+          >
+            <ChevronRight className="w-4 h-4" />
+          </button>
+        </div>
+        <button
+          onClick={goToToday}
+          className="text-xs font-semibold text-slate-600 hover:text-slate-900 bg-slate-50 hover:bg-slate-100 border border-slate-200 px-3 py-1.5 rounded-md"
+        >
+          Today
+        </button>
+      </div>
+
+      <div className="grid grid-cols-7 gap-px bg-slate-200 border border-slate-200 rounded-lg overflow-hidden text-xs">
+        {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((w) => (
+          <div
+            key={w}
+            className="bg-slate-50 text-slate-500 font-semibold text-[10px] uppercase tracking-wider text-center py-1.5"
+          >
+            {w}
+          </div>
+        ))}
+        {days.map((d) => {
+          const key = dayKey(d);
+          const dayMeetings = meetingsByDay.get(key) ?? [];
+          const inMonth = isInMonth(d);
+          const todayCell = isToday(d);
+          return (
+            <div
+              key={d.toISOString()}
+              className={`bg-white min-h-24 p-1.5 flex flex-col gap-1 ${
+                inMonth ? "" : "opacity-50 bg-slate-50/40"
+              } ${todayCell ? "ring-2 ring-blue-500 ring-inset z-10" : ""}`}
+            >
+              <div className="flex items-center justify-between">
+                <span
+                  className={`text-[11px] font-semibold ${
+                    todayCell
+                      ? "text-blue-700"
+                      : inMonth
+                        ? "text-slate-700"
+                        : "text-slate-400"
+                  }`}
+                >
+                  {d.getDate()}
+                </span>
+                {dayMeetings.length > 3 && (
+                  <span className="text-[9px] text-slate-500">
+                    {dayMeetings.length}
+                  </span>
+                )}
+              </div>
+              <div className="flex flex-col gap-0.5 min-h-0">
+                {dayMeetings.slice(0, 3).map((m) => (
+                  <MeetingChip
+                    key={m.id}
+                    meeting={m}
+                    accountNameById={accountNameById}
+                    onClick={() => onOpenMeeting(m)}
+                  />
+                ))}
+                {dayMeetings.length > 3 && (
+                  <button
+                    onClick={() => onOpenMeeting(dayMeetings[3])}
+                    className="text-[10px] text-slate-500 hover:text-slate-700 font-semibold text-left"
+                  >
+                    + {dayMeetings.length - 3} more
+                  </button>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function MeetingChip({
+  meeting,
+  accountNameById,
+  onClick,
+}: {
+  meeting: Meeting;
+  accountNameById: Record<string, string>;
+  onClick: () => void;
+}) {
+  const name =
+    `${meeting.firstName} ${meeting.lastName}`.trim() || "(unnamed)";
+  const time = (() => {
+    if (!meeting.scheduledFor) return "";
+    const d = new Date(meeting.scheduledFor);
+    if (Number.isNaN(d.getTime())) return "";
+    return d.toLocaleTimeString(undefined, {
+      hour: "numeric",
+      minute: "2-digit",
+    });
+  })();
+  const accountName = meeting.accountId
+    ? (accountNameById[meeting.accountId] ?? "")
+    : "";
+  const isHeld = meeting.status === "held";
+  const declined = meeting.prospectResponse === "declined";
+  const accepted = meeting.prospectResponse === "accepted";
+
+  // Color: held=emerald, declined=red, accepted booked=blue-strong,
+  // no-response booked=blue-soft.
+  const cls = isHeld
+    ? "bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100"
+    : declined
+      ? "bg-red-50 text-red-800 border-red-200 hover:bg-red-100"
+      : accepted
+        ? "bg-blue-100 text-blue-900 border-blue-300 hover:bg-blue-200"
+        : "bg-blue-50 text-blue-800 border-blue-200 hover:bg-blue-100";
+
+  const title = `${name}${meeting.title ? " · " + meeting.title : ""}${accountName ? " @ " + accountName : ""}${time ? " · " + time : ""}${isHeld ? " · Held" : declined ? " · Declined" : accepted ? " · Accepted" : ""}`;
+
+  return (
+    <button
+      onClick={onClick}
+      title={title}
+      className={`text-left border rounded px-1 py-0.5 text-[10px] leading-tight truncate transition-colors ${cls}`}
+    >
+      {time && (
+        <span className="font-semibold mr-1">{time}</span>
+      )}
+      <span className="truncate">{name}</span>
+    </button>
   );
 }
 

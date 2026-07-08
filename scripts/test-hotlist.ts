@@ -1425,6 +1425,57 @@ section("meetings: cleanMeetings drops accountId when it's not a non-empty strin
   );
 }
 
+section("meetings: cleanMeetings preserves ese when non-empty string, drops otherwise");
+
+{
+  memStorage.clear();
+  const raw = {
+    meetings: [
+      {
+        id: 20,
+        firstName: "A",
+        lastName: "B",
+        title: "",
+        linkedinUrl: "",
+        scheduledFor: "",
+        notes: "",
+        status: "booked",
+        createdAt: 1,
+        ese: "Dan Weldon",
+      },
+      {
+        id: 21,
+        firstName: "C",
+        lastName: "D",
+        title: "",
+        linkedinUrl: "",
+        scheduledFor: "",
+        notes: "",
+        status: "booked",
+        createdAt: 2,
+        ese: "  ",
+      },
+      {
+        id: 22,
+        firstName: "E",
+        lastName: "F",
+        title: "",
+        linkedinUrl: "",
+        scheduledFor: "",
+        notes: "",
+        status: "booked",
+        createdAt: 3,
+        ese: 12345,
+      },
+    ],
+  };
+  memStorage.setItem("toptal-sdr-engine::app", JSON.stringify(raw));
+  const loaded = loadAppState();
+  eq(loaded.meetings[0].ese, "Dan Weldon", "valid ese preserved");
+  ok(loaded.meetings[1].ese === undefined, "whitespace-only ese dropped");
+  ok(loaded.meetings[2].ese === undefined, "non-string ese dropped");
+}
+
 section("meetings: cleanMeetings preserves valid prospectResponse and drops invalid");
 
 {

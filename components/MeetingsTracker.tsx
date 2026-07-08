@@ -68,6 +68,16 @@ function isPastDue(iso: string, now: Date = new Date()): boolean {
   return d.getTime() < now.getTime();
 }
 
+// Enterprise Sales Executives that meetings can be tagged to. The list
+// is hardcoded on purpose — these are the four ESEs the team works with.
+// Extend here if the roster changes.
+const ESE_OPTIONS = [
+  "Dan Weldon",
+  "Ryan Abraham",
+  "Blake Harvey",
+  "Matt Schneider",
+] as const;
+
 const PROSPECT_RESPONSE_LABEL: Record<
   import("@/lib/types").ProspectResponse,
   string
@@ -352,6 +362,14 @@ function MeetingCard({
                 {accountName}
               </span>
             )}
+            {meeting.ese && (
+              <span
+                className="text-[10px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200 px-1.5 py-0.5 rounded"
+                title="Enterprise Sales Executive"
+              >
+                ESE: {meeting.ese}
+              </span>
+            )}
             {meeting.status === "booked" && (
               <span className="flex items-center gap-1">
                 <CalendarClock className="w-3 h-3" />
@@ -493,6 +511,7 @@ function MeetingModal({
   const [title, setTitle] = useState(source?.title ?? "");
   const [linkedinUrl, setLinkedinUrl] = useState(source?.linkedinUrl ?? "");
   const [accountId, setAccountId] = useState(source?.accountId ?? "");
+  const [ese, setEse] = useState(source?.ese ?? "");
   const [scheduledFor, setScheduledFor] = useState(source?.scheduledFor ?? "");
   const [notes, setNotes] = useState(source?.notes ?? "");
   const [image, setImage] = useState<string | null>(source?.image ?? null);
@@ -623,6 +642,7 @@ function MeetingModal({
     if (accountId) meeting.accountId = accountId;
     if (source?.heldAt) meeting.heldAt = source.heldAt;
     if (image) meeting.image = image;
+    if (ese) meeting.ese = ese;
     onSave(meeting);
   };
 
@@ -774,6 +794,21 @@ function MeetingModal({
               ))}
             </select>
           )}
+        </Field>
+
+        <Field label="ESE">
+          <select
+            value={ese}
+            onChange={(e) => setEse(e.target.value)}
+            className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+          >
+            <option value="">— No ESE —</option>
+            {ESE_OPTIONS.map((name) => (
+              <option key={name} value={name}>
+                {name}
+              </option>
+            ))}
+          </select>
         </Field>
 
         <Field label="LinkedIn URL">

@@ -460,6 +460,9 @@ export interface Meeting {
   image?: string | null;
   // Prospect's response to the booked invite. Defaults to "no-response".
   prospectResponse?: ProspectResponse;
+  // Enterprise Sales Executive tied to the account for this meeting.
+  // Stored as the display name (e.g. "Dan Weldon"). Optional.
+  ese?: string;
 }
 
 // ============================================================

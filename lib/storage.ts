@@ -283,6 +283,7 @@ function cleanMeetings(raw: unknown): Meeting[] {
       ) {
         clean.prospectResponse = m.prospectResponse;
       }
+      if (typeof m.ese === "string" && m.ese.trim()) clean.ese = m.ese.trim();
       return clean;
     });
 }

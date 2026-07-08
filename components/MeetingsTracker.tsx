@@ -1244,7 +1244,7 @@ const HELD_OUTCOME_STYLE: Record<import("@/lib/types").HeldOutcome, string> = {
   "opportunity-identified":
     "bg-emerald-100 text-emerald-800 border-emerald-300",
   "future-follow-up": "bg-amber-100 text-amber-800 border-amber-300",
-  "dead-end": "bg-slate-100 text-slate-700 border-slate-300",
+  "dead-end": "bg-red-100 text-red-800 border-red-300",
 };
 
 function HeldOutcomePicker({

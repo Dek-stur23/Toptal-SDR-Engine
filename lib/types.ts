@@ -442,6 +442,14 @@ export type MeetingStatus = "booked" | "held";
 // meetings for history.
 export type ProspectResponse = "no-response" | "accepted" | "declined";
 
+// Outcome the SDR marks on a held meeting to categorize how it went.
+// Only meaningful while status === "held"; preserved if the meeting is
+// moved back to booked.
+export type HeldOutcome =
+  | "opportunity-identified"
+  | "future-follow-up"
+  | "dead-end";
+
 export interface Meeting {
   id: number;
   firstName: string;
@@ -466,6 +474,8 @@ export interface Meeting {
   // Enterprise Sales Executive tied to the account for this meeting.
   // Stored as the display name (e.g. "Dan Weldon"). Optional.
   ese?: string;
+  // Outcome of a held meeting. Optional; defaults to unset.
+  heldOutcome?: HeldOutcome;
 }
 
 // ============================================================

@@ -285,6 +285,13 @@ function cleanMeetings(raw: unknown): Meeting[] {
         clean.prospectResponse = m.prospectResponse;
       }
       if (typeof m.ese === "string" && m.ese.trim()) clean.ese = m.ese.trim();
+      if (
+        m.heldOutcome === "opportunity-identified" ||
+        m.heldOutcome === "future-follow-up" ||
+        m.heldOutcome === "dead-end"
+      ) {
+        clean.heldOutcome = m.heldOutcome;
+      }
       return clean;
     });
 }

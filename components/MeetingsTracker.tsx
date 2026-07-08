@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Building2,
   CalendarClock,
@@ -188,6 +188,27 @@ export function MeetingsTracker({
     );
   };
 
+  const setHeldOutcome = (
+    id: number,
+    outcome: import("@/lib/types").HeldOutcome | null,
+  ) => {
+    onMutateMeetings((prev) =>
+      prev.map((m) =>
+        m.id === id
+          ? outcome
+            ? { ...m, heldOutcome: outcome }
+            : (({ heldOutcome: _drop, ...rest }) => rest as Meeting)(m)
+          : m,
+      ),
+    );
+  };
+
+  const setMeetingNotes = (id: number, notes: string) => {
+    onMutateMeetings((prev) =>
+      prev.map((m) => (m.id === id ? { ...m, notes } : m)),
+    );
+  };
+
   const moveBackToBooked = (id: number) => {
     onMutateMeetings((prev) =>
       prev.map((m) =>
@@ -288,6 +309,8 @@ export function MeetingsTracker({
                 onMoveBack={() => moveBackToBooked(m.id)}
                 onDelete={() => deleteMeeting(m.id)}
                 onSetProspectResponse={(r) => setProspectResponse(m.id, r)}
+                onSetHeldOutcome={(o) => setHeldOutcome(m.id, o)}
+                onSetNotes={(n) => setMeetingNotes(m.id, n)}
               />
             ))}
           </ul>
@@ -324,6 +347,8 @@ export function MeetingsTracker({
                   onMoveBack={() => moveBackToBooked(m.id)}
                   onDelete={() => deleteMeeting(m.id)}
                   onSetProspectResponse={(r) => setProspectResponse(m.id, r)}
+                  onSetHeldOutcome={(o) => setHeldOutcome(m.id, o)}
+                  onSetNotes={(n) => setMeetingNotes(m.id, n)}
                 />
               ))}
             </ul>
@@ -569,6 +594,8 @@ function MeetingCard({
   onMoveBack,
   onDelete,
   onSetProspectResponse,
+  onSetHeldOutcome,
+  onSetNotes,
 }: {
   meeting: Meeting;
   accountNameById: Record<string, string>;
@@ -579,6 +606,10 @@ function MeetingCard({
   onSetProspectResponse: (
     r: import("@/lib/types").ProspectResponse,
   ) => void;
+  onSetHeldOutcome: (
+    o: import("@/lib/types").HeldOutcome | null,
+  ) => void;
+  onSetNotes: (notes: string) => void;
 }) {
   const fullName =
     `${meeting.firstName} ${meeting.lastName}`.trim() || "(unnamed contact)";
@@ -691,11 +722,17 @@ function MeetingCard({
         </div>
       </div>
 
-      {meeting.notes && (
-        <p className="text-xs text-slate-600 whitespace-pre-wrap bg-slate-50 border border-slate-200 rounded-md p-2 leading-relaxed">
-          {meeting.notes}
-        </p>
+      {meeting.status === "held" && (
+        <HeldOutcomePicker
+          value={meeting.heldOutcome ?? null}
+          onChange={onSetHeldOutcome}
+        />
       )}
+
+      <InlineNotesEditor
+        value={meeting.notes}
+        onSave={onSetNotes}
+      />
 
       <div className="flex flex-wrap items-center gap-2 pt-1">
         <button
@@ -1194,6 +1231,107 @@ function ProspectResponsePicker({
         <option value="declined">Prospect declined</option>
       </select>
     </label>
+  );
+}
+
+const HELD_OUTCOME_LABEL: Record<import("@/lib/types").HeldOutcome, string> = {
+  "opportunity-identified": "Opportunity identified",
+  "future-follow-up": "Future follow-up",
+  "dead-end": "Dead end",
+};
+
+const HELD_OUTCOME_STYLE: Record<import("@/lib/types").HeldOutcome, string> = {
+  "opportunity-identified":
+    "bg-emerald-100 text-emerald-800 border-emerald-300",
+  "future-follow-up": "bg-amber-100 text-amber-800 border-amber-300",
+  "dead-end": "bg-slate-100 text-slate-700 border-slate-300",
+};
+
+function HeldOutcomePicker({
+  value,
+  onChange,
+}: {
+  value: import("@/lib/types").HeldOutcome | null;
+  onChange: (o: import("@/lib/types").HeldOutcome | null) => void;
+}) {
+  const options: import("@/lib/types").HeldOutcome[] = [
+    "opportunity-identified",
+    "future-follow-up",
+    "dead-end",
+  ];
+  return (
+    <div className="flex items-center gap-2 flex-wrap">
+      <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 shrink-0">
+        Outcome:
+      </span>
+      <div className="flex flex-wrap gap-1">
+        {options.map((opt) => {
+          const active = value === opt;
+          return (
+            <button
+              key={opt}
+              onClick={() => onChange(active ? null : opt)}
+              className={`text-[10px] font-semibold px-2 py-0.5 rounded border transition-colors ${
+                active
+                  ? HELD_OUTCOME_STYLE[opt]
+                  : "bg-white text-slate-500 border-slate-200 hover:border-slate-300 hover:text-slate-700"
+              }`}
+              title={active ? "Click again to clear" : `Set outcome to "${HELD_OUTCOME_LABEL[opt]}"`}
+            >
+              {HELD_OUTCOME_LABEL[opt]}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function InlineNotesEditor({
+  value,
+  onSave,
+}: {
+  value: string;
+  onSave: (next: string) => void;
+}) {
+  const [draft, setDraft] = useState(value);
+  const dirtyRef = useRef(false);
+
+  // Re-sync from the source when it changes underneath us, unless the
+  // user has unsaved edits in progress.
+  useEffect(() => {
+    if (!dirtyRef.current) setDraft(value);
+  }, [value]);
+
+  const flush = () => {
+    if (draft !== value) onSave(draft);
+    dirtyRef.current = false;
+  };
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-1">
+        <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+          Notes
+        </span>
+        {dirtyRef.current && draft !== value && (
+          <span className="text-[10px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded">
+            Unsaved — click outside to save
+          </span>
+        )}
+      </div>
+      <textarea
+        value={draft}
+        onChange={(e) => {
+          dirtyRef.current = true;
+          setDraft(e.target.value);
+        }}
+        onBlur={flush}
+        placeholder="Context, mutual connections, agenda, follow-up items..."
+        rows={2}
+        className="w-full text-xs text-slate-700 bg-slate-50 border border-slate-200 focus:border-blue-300 focus:ring-2 focus:ring-blue-200 outline-none p-2 rounded resize-y custom-scrollbar leading-relaxed"
+      />
+    </div>
   );
 }
 

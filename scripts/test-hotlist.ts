@@ -1427,6 +1427,85 @@ section("meetings: cleanMeetings drops accountId when it's not a non-empty strin
   );
 }
 
+section("meetings: cleanMeetings preserves valid heldOutcome and drops invalid");
+
+{
+  memStorage.clear();
+  const raw = {
+    meetings: [
+      {
+        id: 30,
+        firstName: "A",
+        lastName: "B",
+        title: "",
+        linkedinUrl: "",
+        scheduledFor: "",
+        notes: "",
+        status: "held",
+        createdAt: 1,
+        heldAt: 2,
+        heldOutcome: "opportunity-identified",
+      },
+      {
+        id: 31,
+        firstName: "C",
+        lastName: "D",
+        title: "",
+        linkedinUrl: "",
+        scheduledFor: "",
+        notes: "",
+        status: "held",
+        createdAt: 3,
+        heldAt: 4,
+        heldOutcome: "future-follow-up",
+      },
+      {
+        id: 32,
+        firstName: "E",
+        lastName: "F",
+        title: "",
+        linkedinUrl: "",
+        scheduledFor: "",
+        notes: "",
+        status: "held",
+        createdAt: 5,
+        heldAt: 6,
+        heldOutcome: "dead-end",
+      },
+      {
+        id: 33,
+        firstName: "G",
+        lastName: "H",
+        title: "",
+        linkedinUrl: "",
+        scheduledFor: "",
+        notes: "",
+        status: "held",
+        createdAt: 7,
+        heldAt: 8,
+        heldOutcome: "not-a-real-outcome",
+      },
+    ],
+  };
+  memStorage.setItem("toptal-sdr-engine::app", JSON.stringify(raw));
+  const loaded = loadAppState();
+  eq(
+    loaded.meetings[0].heldOutcome,
+    "opportunity-identified",
+    "opportunity-identified preserved",
+  );
+  eq(
+    loaded.meetings[1].heldOutcome,
+    "future-follow-up",
+    "future-follow-up preserved",
+  );
+  eq(loaded.meetings[2].heldOutcome, "dead-end", "dead-end preserved");
+  ok(
+    loaded.meetings[3].heldOutcome === undefined,
+    "invalid heldOutcome dropped",
+  );
+}
+
 section("meetings: cleanMeetings preserves ese when non-empty string, drops otherwise");
 
 {

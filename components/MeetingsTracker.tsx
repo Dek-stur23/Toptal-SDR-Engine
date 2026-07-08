@@ -92,6 +92,7 @@ const PROSPECT_RESPONSE_LABEL: Record<
   accepted: "Prospect accepted",
   declined: "Prospect declined",
   "no-response": "No response yet",
+  "no-show": "Prospect no-showed",
 };
 
 // Chip color classes per response — matches the platform's existing
@@ -103,6 +104,7 @@ const PROSPECT_RESPONSE_BADGE: Record<
   accepted: "bg-emerald-50 text-emerald-700 border-emerald-200",
   declined: "bg-red-50 text-red-700 border-red-200",
   "no-response": "bg-slate-50 text-slate-600 border-slate-200",
+  "no-show": "bg-amber-50 text-amber-700 border-amber-200",
 };
 
 export function MeetingsTracker({
@@ -559,18 +561,30 @@ function MeetingChip({
   const isHeld = meeting.status === "held";
   const declined = meeting.prospectResponse === "declined";
   const accepted = meeting.prospectResponse === "accepted";
+  const noShow = meeting.prospectResponse === "no-show";
 
-  // Color: held=emerald, declined=red, accepted booked=blue-strong,
-  // no-response booked=blue-soft.
+  // Color: held=emerald, declined=red, no-show=amber, accepted
+  // booked=blue-strong, no-response booked=blue-soft.
   const cls = isHeld
     ? "bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100"
     : declined
       ? "bg-red-50 text-red-800 border-red-200 hover:bg-red-100"
-      : accepted
-        ? "bg-blue-100 text-blue-900 border-blue-300 hover:bg-blue-200"
-        : "bg-blue-50 text-blue-800 border-blue-200 hover:bg-blue-100";
+      : noShow
+        ? "bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100"
+        : accepted
+          ? "bg-blue-100 text-blue-900 border-blue-300 hover:bg-blue-200"
+          : "bg-blue-50 text-blue-800 border-blue-200 hover:bg-blue-100";
 
-  const title = `${name}${meeting.title ? " · " + meeting.title : ""}${accountName ? " @ " + accountName : ""}${time ? " · " + time : ""}${isHeld ? " · Held" : declined ? " · Declined" : accepted ? " · Accepted" : ""}`;
+  const responseLabel = isHeld
+    ? " · Held"
+    : declined
+      ? " · Declined"
+      : noShow
+        ? " · No-showed"
+        : accepted
+          ? " · Accepted"
+          : "";
+  const title = `${name}${meeting.title ? " · " + meeting.title : ""}${accountName ? " @ " + accountName : ""}${time ? " · " + time : ""}${responseLabel}`;
 
   return (
     <button
@@ -1229,6 +1243,7 @@ function ProspectResponsePicker({
         <option value="no-response">No response yet</option>
         <option value="accepted">Prospect accepted</option>
         <option value="declined">Prospect declined</option>
+        <option value="no-show">Prospect no-showed</option>
       </select>
     </label>
   );

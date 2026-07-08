@@ -440,7 +440,11 @@ export type MeetingStatus = "booked" | "held";
 // Whether the prospect has replied to the booked meeting invite. Only
 // meaningful while status === "booked"; the field is preserved on held
 // meetings for history.
-export type ProspectResponse = "no-response" | "accepted" | "declined";
+export type ProspectResponse =
+  | "no-response"
+  | "accepted"
+  | "declined"
+  | "no-show";
 
 // Outcome the SDR marks on a held meeting to categorize how it went.
 // Only meaningful while status === "held"; preserved if the meeting is

@@ -280,7 +280,8 @@ function cleanMeetings(raw: unknown): Meeting[] {
       if (
         m.prospectResponse === "accepted" ||
         m.prospectResponse === "declined" ||
-        m.prospectResponse === "no-response"
+        m.prospectResponse === "no-response" ||
+        m.prospectResponse === "no-show"
       ) {
         clean.prospectResponse = m.prospectResponse;
       }

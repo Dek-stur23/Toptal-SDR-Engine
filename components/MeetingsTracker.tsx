@@ -911,16 +911,58 @@ function MeetingModal({
     onSave(meeting);
   };
 
+  // Guard against accidental data loss — closing the modal via the
+  // backdrop, X button, Cancel, or Escape confirms first if the user
+  // has typed anything (create mode) or made any change (edit mode).
+  const isDirty = () => {
+    if (isEdit && source) {
+      return (
+        firstName !== source.firstName ||
+        lastName !== source.lastName ||
+        title !== source.title ||
+        linkedinUrl !== source.linkedinUrl ||
+        (accountId || undefined) !== source.accountId ||
+        (ese || undefined) !== source.ese ||
+        scheduledFor !== source.scheduledFor ||
+        notes !== source.notes ||
+        image !== (source.image ?? null)
+      );
+    }
+    return (
+      firstName.trim() !== "" ||
+      lastName.trim() !== "" ||
+      title.trim() !== "" ||
+      linkedinUrl.trim() !== "" ||
+      !!accountId ||
+      !!ese ||
+      scheduledFor.trim() !== "" ||
+      notes.trim() !== "" ||
+      image !== null
+    );
+  };
+
+  const guardedClose = () => {
+    if (
+      isDirty() &&
+      !window.confirm(
+        "Discard your changes? Everything you've typed in this form will be lost.",
+      )
+    ) {
+      return;
+    }
+    onClose();
+  };
+
   return (
     <div
       className="fixed inset-0 z-50 bg-slate-900/70 flex items-center justify-center p-4"
-      onClick={onClose}
+      onClick={guardedClose}
     >
       <div
         className="bg-white rounded-xl shadow-xl max-w-lg w-full p-5 space-y-4 text-slate-800"
         onClick={(e) => e.stopPropagation()}
         onKeyDown={(e) => {
-          if (e.key === "Escape") onClose();
+          if (e.key === "Escape") guardedClose();
           if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
             e.preventDefault();
             submit();
@@ -937,7 +979,7 @@ function MeetingModal({
             </h3>
           </div>
           <button
-            onClick={onClose}
+            onClick={guardedClose}
             className="text-slate-400 hover:text-slate-700"
             aria-label="Close"
           >
@@ -1109,7 +1151,7 @@ function MeetingModal({
 
         <div className="flex justify-end gap-2 pt-1">
           <button
-            onClick={onClose}
+            onClick={guardedClose}
             className="text-xs font-semibold text-slate-600 hover:text-slate-900 bg-slate-50 hover:bg-slate-100 border border-slate-200 px-3 py-1.5 rounded-md"
           >
             Cancel

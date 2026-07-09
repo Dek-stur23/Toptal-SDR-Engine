@@ -12,6 +12,7 @@ import {
   ChevronRight,
   Edit2,
   ExternalLink,
+  Filter,
   Image as ImageIcon,
   List,
   Loader2,
@@ -132,9 +133,44 @@ export function MeetingsTracker({
     [state.accounts],
   );
 
+  // Filter state — session-local, resets on reload. "" means "all".
+  const [filterAccountId, setFilterAccountId] = useState<string>("");
+  const [filterEse, setFilterEse] = useState<string>("");
+  const [filterResponse, setFilterResponse] = useState<
+    import("@/lib/types").ProspectResponse | ""
+  >("");
+  const anyFilterActive =
+    !!filterAccountId || !!filterEse || !!filterResponse;
+  const clearFilters = () => {
+    setFilterAccountId("");
+    setFilterEse("");
+    setFilterResponse("");
+  };
+
+  // Apply filters BEFORE slicing into booked/held so both sections and
+  // the calendar view see the same filtered set.
+  const filteredMeetings = useMemo(() => {
+    if (!anyFilterActive) return state.meetings;
+    return state.meetings.filter((m) => {
+      if (filterAccountId && m.accountId !== filterAccountId) return false;
+      if (filterEse && m.ese !== filterEse) return false;
+      if (filterResponse) {
+        const r = m.prospectResponse ?? "no-response";
+        if (r !== filterResponse) return false;
+      }
+      return true;
+    });
+  }, [
+    state.meetings,
+    anyFilterActive,
+    filterAccountId,
+    filterEse,
+    filterResponse,
+  ]);
+
   const booked = useMemo(
     () =>
-      state.meetings
+      filteredMeetings
         .filter((m) => m.status === "booked")
         .slice()
         .sort((a, b) => {
@@ -143,16 +179,16 @@ export function MeetingsTracker({
           if (!b.scheduledFor) return -1;
           return a.scheduledFor.localeCompare(b.scheduledFor);
         }),
-    [state.meetings],
+    [filteredMeetings],
   );
 
   const held = useMemo(
     () =>
-      state.meetings
+      filteredMeetings
         .filter((m) => m.status === "held")
         .slice()
         .sort((a, b) => (b.heldAt ?? 0) - (a.heldAt ?? 0)),
-    [state.meetings],
+    [filteredMeetings],
   );
 
   const upsertMeeting = (m: Meeting) => {
@@ -281,9 +317,23 @@ export function MeetingsTracker({
         </div>
       </div>
 
+      <FilterBar
+        activeAccounts={activeAccounts}
+        filterAccountId={filterAccountId}
+        onFilterAccount={setFilterAccountId}
+        filterEse={filterEse}
+        onFilterEse={setFilterEse}
+        filterResponse={filterResponse}
+        onFilterResponse={setFilterResponse}
+        anyFilterActive={anyFilterActive}
+        onClear={clearFilters}
+        matchCount={filteredMeetings.length}
+        totalCount={state.meetings.length}
+      />
+
       {meetingsView === "calendar" ? (
         <CalendarView
-          meetings={state.meetings}
+          meetings={filteredMeetings}
           accountNameById={accountNameById}
           onOpenMeeting={(m) => setModalMode({ kind: "edit", meeting: m })}
         />
@@ -1217,6 +1267,138 @@ function MeetingModal({
         </div>
       </div>
     </div>
+  );
+}
+
+function FilterBar({
+  activeAccounts,
+  filterAccountId,
+  onFilterAccount,
+  filterEse,
+  onFilterEse,
+  filterResponse,
+  onFilterResponse,
+  anyFilterActive,
+  onClear,
+  matchCount,
+  totalCount,
+}: {
+  activeAccounts: Account[];
+  filterAccountId: string;
+  onFilterAccount: (v: string) => void;
+  filterEse: string;
+  onFilterEse: (v: string) => void;
+  filterResponse: import("@/lib/types").ProspectResponse | "";
+  onFilterResponse: (
+    v: import("@/lib/types").ProspectResponse | "",
+  ) => void;
+  anyFilterActive: boolean;
+  onClear: () => void;
+  matchCount: number;
+  totalCount: number;
+}) {
+  return (
+    <div className="bg-white border border-slate-200 rounded-lg shadow-sm px-3 py-2 flex flex-wrap items-center gap-3 text-xs">
+      <div className="flex items-center gap-1.5 text-slate-500 font-semibold uppercase tracking-wider">
+        <Filter className="w-3.5 h-3.5" /> Filter
+      </div>
+
+      <FilterSelect
+        label="Account"
+        value={filterAccountId}
+        onChange={onFilterAccount}
+        options={[
+          { value: "", label: "All accounts" },
+          ...activeAccounts.map((a) => ({
+            value: a.id,
+            label: a.name || a.accountData.companyName || "(unnamed)",
+          })),
+        ]}
+      />
+
+      <FilterSelect
+        label="ESE"
+        value={filterEse}
+        onChange={onFilterEse}
+        options={[
+          { value: "", label: "All ESEs" },
+          ...ESE_OPTIONS.map((n) => ({ value: n, label: n })),
+        ]}
+      />
+
+      <FilterSelect
+        label="Response"
+        value={filterResponse}
+        onChange={(v) =>
+          onFilterResponse(v as import("@/lib/types").ProspectResponse | "")
+        }
+        options={[
+          { value: "", label: "All responses" },
+          { value: "no-response", label: "No response yet" },
+          { value: "accepted", label: "Prospect accepted" },
+          { value: "declined", label: "Prospect declined" },
+          { value: "no-show", label: "Prospect no-showed" },
+        ]}
+      />
+
+      <div className="ml-auto flex items-center gap-2 text-slate-500">
+        <span>
+          {anyFilterActive
+            ? `${matchCount} of ${totalCount}`
+            : `${totalCount} meeting${totalCount === 1 ? "" : "s"}`}
+        </span>
+        {anyFilterActive && (
+          <button
+            onClick={onClear}
+            className="text-slate-600 hover:text-slate-900 hover:bg-slate-100 border border-slate-200 rounded-md px-2 py-1 font-semibold flex items-center gap-1"
+          >
+            <X className="w-3 h-3" /> Clear
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function FilterSelect({
+  label,
+  value,
+  onChange,
+  options,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  options: { value: string; label: string }[];
+}) {
+  const active = !!value;
+  return (
+    <label
+      className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-1 transition-colors ${
+        active
+          ? "border-blue-300 bg-blue-50"
+          : "border-slate-200 bg-white hover:border-slate-300"
+      }`}
+    >
+      <span
+        className={`text-[10px] font-semibold uppercase tracking-wider ${
+          active ? "text-blue-700" : "text-slate-500"
+        }`}
+      >
+        {label}
+      </span>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="bg-transparent border-0 outline-none text-xs text-slate-800 font-medium cursor-pointer pr-1"
+      >
+        {options.map((o) => (
+          <option key={o.value} value={o.value}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }
 

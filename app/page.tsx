@@ -462,6 +462,17 @@ export default function App() {
     );
   };
 
+  const handleToggleMeetingsDeadEndSection = () => {
+    setState((prev) =>
+      prev
+        ? {
+            ...prev,
+            isMeetingsDeadEndSectionOpen: !prev.isMeetingsDeadEndSectionOpen,
+          }
+        : prev,
+    );
+  };
+
   const handleSetMeetingsView = (
     view: import("@/lib/types").MeetingsView,
   ) => {
@@ -682,6 +693,8 @@ export default function App() {
               onMutateMeetings={mutateMeetings}
               isHeldSectionOpen={state.isMeetingsHeldSectionOpen}
               onToggleHeldSection={handleToggleMeetingsHeldSection}
+              isDeadEndSectionOpen={state.isMeetingsDeadEndSectionOpen}
+              onToggleDeadEndSection={handleToggleMeetingsDeadEndSection}
               meetingsView={state.meetingsView}
               onSetMeetingsView={handleSetMeetingsView}
             />

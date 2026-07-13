@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  Ban,
   Building2,
   CalendarClock,
   CalendarDays,
@@ -34,6 +35,8 @@ interface Props {
   onMutateMeetings: (updater: (prev: Meeting[]) => Meeting[]) => void;
   isHeldSectionOpen: boolean;
   onToggleHeldSection: () => void;
+  isDeadEndSectionOpen: boolean;
+  onToggleDeadEndSection: () => void;
   meetingsView: import("@/lib/types").MeetingsView;
   onSetMeetingsView: (
     view: import("@/lib/types").MeetingsView,
@@ -117,6 +120,8 @@ export function MeetingsTracker({
   onMutateMeetings,
   isHeldSectionOpen,
   onToggleHeldSection,
+  isDeadEndSectionOpen,
+  onToggleDeadEndSection,
   meetingsView,
   onSetMeetingsView,
 }: Props) {
@@ -219,6 +224,15 @@ export function MeetingsTracker({
     [filteredMeetings],
   );
 
+  const deadEnd = useMemo(
+    () =>
+      filteredMeetings
+        .filter((m) => m.status === "dead-end")
+        .slice()
+        .sort((a, b) => (b.deadEndedAt ?? 0) - (a.deadEndedAt ?? 0)),
+    [filteredMeetings],
+  );
+
   const upsertMeeting = (m: Meeting) => {
     onMutateMeetings((prev) => {
       const idx = prev.findIndex((x) => x.id === m.id);
@@ -241,6 +255,23 @@ export function MeetingsTracker({
     onMutateMeetings((prev) =>
       prev.map((m) =>
         m.id === id ? { ...m, status: "held", heldAt: Date.now() } : m,
+      ),
+    );
+  };
+
+  const markDeadEnd = (id: number) => {
+    if (
+      !window.confirm(
+        "Mark this meeting as a dead end? It will move to the Dead End section with no further next steps.",
+      )
+    ) {
+      return;
+    }
+    onMutateMeetings((prev) =>
+      prev.map((m) =>
+        m.id === id
+          ? { ...m, status: "dead-end", deadEndedAt: Date.now() }
+          : m,
       ),
     );
   };
@@ -310,7 +341,12 @@ export function MeetingsTracker({
     onMutateMeetings((prev) =>
       prev.map((m) =>
         m.id === id
-          ? { ...m, status: "booked", heldAt: undefined }
+          ? {
+              ...m,
+              status: "booked",
+              heldAt: undefined,
+              deadEndedAt: undefined,
+            }
           : m,
       ),
     );
@@ -419,6 +455,7 @@ export function MeetingsTracker({
                 accountNameById={accountNameById}
                 onEdit={() => setModalMode({ kind: "edit", meeting: m })}
                 onConvert={() => convertToHeld(m.id)}
+                onMarkDeadEnd={() => markDeadEnd(m.id)}
                 onMoveBack={() => moveBackToBooked(m.id)}
                 onDelete={() => deleteMeeting(m.id)}
                 onSetProspectResponse={(r) => setProspectResponse(m.id, r)}
@@ -459,6 +496,50 @@ export function MeetingsTracker({
                   accountNameById={accountNameById}
                   onEdit={() => setModalMode({ kind: "edit", meeting: m })}
                   onConvert={() => convertToHeld(m.id)}
+                  onMarkDeadEnd={() => markDeadEnd(m.id)}
+                  onMoveBack={() => moveBackToBooked(m.id)}
+                  onDelete={() => deleteMeeting(m.id)}
+                  onSetProspectResponse={(r) => setProspectResponse(m.id, r)}
+                  onSetHeldOutcome={(o) => setHeldOutcome(m.id, o)}
+                  onSetNotes={(n) => setMeetingNotes(m.id, n)}
+                  onAddUpdate={(t) => addMeetingUpdate(m.id, t)}
+                  onRemoveUpdate={(uid) => removeMeetingUpdate(m.id, uid)}
+                />
+              ))}
+            </ul>
+          )
+        )}
+      </section>
+
+      {/* Dead End (collapsible) */}
+      <section className="space-y-3">
+        <button
+          onClick={onToggleDeadEndSection}
+          className="w-full flex items-center justify-between text-sm font-bold text-slate-700 uppercase tracking-wider hover:text-slate-900 transition-colors"
+        >
+          <span>Dead End ({deadEnd.length})</span>
+          {isDeadEndSectionOpen ? (
+            <ChevronDown className="w-4 h-4" />
+          ) : (
+            <ChevronRight className="w-4 h-4" />
+          )}
+        </button>
+        {isDeadEndSectionOpen && (
+          deadEnd.length === 0 ? (
+            <p className="text-sm text-slate-500 italic">
+              No dead-end meetings. Meetings you mark as dead ends will
+              land here.
+            </p>
+          ) : (
+            <ul className="space-y-2">
+              {deadEnd.map((m) => (
+                <MeetingCard
+                  key={m.id}
+                  meeting={m}
+                  accountNameById={accountNameById}
+                  onEdit={() => setModalMode({ kind: "edit", meeting: m })}
+                  onConvert={() => convertToHeld(m.id)}
+                  onMarkDeadEnd={() => markDeadEnd(m.id)}
                   onMoveBack={() => moveBackToBooked(m.id)}
                   onDelete={() => deleteMeeting(m.id)}
                   onSetProspectResponse={(r) => setProspectResponse(m.id, r)}
@@ -674,36 +755,44 @@ function MeetingChip({
     ? (accountNameById[meeting.accountId] ?? "")
     : "";
   const isHeld = meeting.status === "held";
+  const isDeadEnd = meeting.status === "dead-end";
   const declined = meeting.prospectResponse === "declined";
   const accepted = meeting.prospectResponse === "accepted";
   const noShow = meeting.prospectResponse === "no-show";
   const rescheduled = meeting.prospectResponse === "rescheduled";
 
-  // Color: held=emerald, declined=red, no-show=amber, rescheduled=sky,
-  // accepted booked=blue-strong, no-response booked=blue-soft.
-  const cls = isHeld
-    ? "bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100"
-    : declined
-      ? "bg-red-50 text-red-800 border-red-200 hover:bg-red-100"
-      : noShow
-        ? "bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100"
-        : rescheduled
-          ? "bg-sky-50 text-sky-800 border-sky-200 hover:bg-sky-100"
-          : accepted
-            ? "bg-blue-100 text-blue-900 border-blue-300 hover:bg-blue-200"
-            : "bg-blue-50 text-blue-800 border-blue-200 hover:bg-blue-100";
+  // Color:
+  //   dead-end=slate (closed, no next step)
+  //   held=emerald
+  //   declined=red, no-show=amber, rescheduled=sky
+  //   accepted booked=blue-strong, no-response booked=blue-soft.
+  const cls = isDeadEnd
+    ? "bg-slate-100 text-slate-600 border-slate-300 hover:bg-slate-200 line-through decoration-slate-400"
+    : isHeld
+      ? "bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100"
+      : declined
+        ? "bg-red-50 text-red-800 border-red-200 hover:bg-red-100"
+        : noShow
+          ? "bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100"
+          : rescheduled
+            ? "bg-sky-50 text-sky-800 border-sky-200 hover:bg-sky-100"
+            : accepted
+              ? "bg-blue-100 text-blue-900 border-blue-300 hover:bg-blue-200"
+              : "bg-blue-50 text-blue-800 border-blue-200 hover:bg-blue-100";
 
-  const responseLabel = isHeld
-    ? " · Held"
-    : declined
-      ? " · Declined"
-      : noShow
-        ? " · No-showed"
-        : rescheduled
-          ? " · Rescheduled"
-          : accepted
-            ? " · Accepted"
-            : "";
+  const responseLabel = isDeadEnd
+    ? " · Dead End"
+    : isHeld
+      ? " · Held"
+      : declined
+        ? " · Declined"
+        : noShow
+          ? " · No-showed"
+          : rescheduled
+            ? " · Rescheduled"
+            : accepted
+              ? " · Accepted"
+              : "";
   const title = `${name}${meeting.title ? " · " + meeting.title : ""}${accountName ? " @ " + accountName : ""}${time ? " · " + time : ""}${responseLabel}`;
 
   return (
@@ -732,6 +821,7 @@ function MeetingCard({
   onSetNotes,
   onAddUpdate,
   onRemoveUpdate,
+  onMarkDeadEnd,
 }: {
   meeting: Meeting;
   accountNameById: Record<string, string>;
@@ -739,6 +829,7 @@ function MeetingCard({
   onConvert: () => void;
   onMoveBack: () => void;
   onDelete: () => void;
+  onMarkDeadEnd: () => void;
   onSetProspectResponse: (
     r: import("@/lib/types").ProspectResponse,
   ) => void;
@@ -809,6 +900,18 @@ function MeetingCard({
                 <CalendarClock className="w-3 h-3" />
                 {monthDay(meeting.scheduledFor)}
               </span>
+            )}
+            {meeting.status === "dead-end" && (
+              <>
+                <span className="flex items-center gap-1 line-through decoration-slate-400">
+                  <CalendarClock className="w-3 h-3" />
+                  {monthDay(meeting.scheduledFor)}
+                </span>
+                <span className="text-[10px] font-semibold bg-slate-100 text-slate-600 border border-slate-300 px-1.5 py-0.5 rounded flex items-center gap-1">
+                  <Ban className="w-2.5 h-2.5" />
+                  Dead End{meeting.deadEndedAt ? ` · ${heldStamp(meeting.deadEndedAt)}` : ""}
+                </span>
+              </>
             )}
             {meeting.status === "held" && (
               <>
@@ -885,14 +988,25 @@ function MeetingCard({
         >
           <Edit2 className="w-3 h-3" /> Edit
         </button>
-        {meeting.status === "booked" ? (
-          <button
-            onClick={onConvert}
-            className="text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 flex items-center gap-1 px-2.5 py-1.5 rounded shadow-sm"
-          >
-            <CheckCircle2 className="w-3 h-3" /> Convert to Held
-          </button>
-        ) : (
+        {meeting.status === "booked" && (
+          <>
+            <button
+              onClick={onConvert}
+              className="text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 flex items-center gap-1 px-2.5 py-1.5 rounded shadow-sm"
+            >
+              <CheckCircle2 className="w-3 h-3" /> Convert to Held
+            </button>
+            <button
+              onClick={onMarkDeadEnd}
+              className="text-xs font-semibold text-white bg-red-600 hover:bg-red-700 flex items-center gap-1 px-2.5 py-1.5 rounded shadow-sm"
+              title="Move to Dead End — nowhere else this meeting can go"
+            >
+              <Ban className="w-3 h-3" /> Dead End
+            </button>
+          </>
+        )}
+        {(meeting.status === "held" ||
+          meeting.status === "dead-end") && (
           <button
             onClick={onMoveBack}
             className="text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 flex items-center gap-1 px-2.5 py-1.5 rounded"
@@ -1399,6 +1513,7 @@ function FilterBar({
         options={[
           { value: "booked", label: "Booked" },
           { value: "held", label: "Held" },
+          { value: "dead-end", label: "Dead End" },
         ]}
       />
 

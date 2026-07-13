@@ -416,6 +416,7 @@ export interface AppState {
   isAccountsSectionOpen: boolean;
   isArchivedSectionOpen: boolean;
   isMeetingsHeldSectionOpen: boolean;
+  isMeetingsDeadEndSectionOpen: boolean;
   engineCollapsed: {
     software: boolean;
     procurement: boolean;
@@ -435,7 +436,7 @@ export type AppView = "account" | "goals" | "meetings";
 // Meetings Tracker — booked/held meetings, account-agnostic.
 // ============================================================
 
-export type MeetingStatus = "booked" | "held";
+export type MeetingStatus = "booked" | "held" | "dead-end";
 
 // Whether the prospect has replied to the booked meeting invite. Only
 // meaningful while status === "booked"; the field is preserved on held
@@ -471,6 +472,7 @@ export interface Meeting {
   status: MeetingStatus;
   createdAt: number;    // ms epoch
   heldAt?: number;      // ms epoch, populated on convert-to-held
+  deadEndedAt?: number; // ms epoch, populated when marked dead-end
   // Opaque image ref (idb:<uuid> or legacy inline data: URL). Used for
   // the LinkedIn screenshot uploaded in the modal.
   image?: string | null;

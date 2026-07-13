@@ -234,6 +234,7 @@ function emptyApp(): AppState {
     isAccountsSectionOpen: true,
     isArchivedSectionOpen: false,
     isMeetingsHeldSectionOpen: true,
+    isMeetingsDeadEndSectionOpen: false,
     engineCollapsed: { software: false, procurement: false, product: false },
     currentView: "account",
     goals: emptyGoalsState(),
@@ -255,7 +256,11 @@ function cleanMeetings(raw: unknown): Meeting[] {
     )
     .map((m): Meeting => {
       const status: MeetingStatus =
-        m.status === "held" ? "held" : "booked";
+        m.status === "held"
+          ? "held"
+          : m.status === "dead-end"
+            ? "dead-end"
+            : "booked";
       const clean: Meeting = {
         id: m.id,
         firstName: typeof m.firstName === "string" ? m.firstName : "",
@@ -276,6 +281,12 @@ function cleanMeetings(raw: unknown): Meeting[] {
         Number.isFinite(m.heldAt)
       )
         clean.heldAt = m.heldAt;
+      if (
+        status === "dead-end" &&
+        typeof m.deadEndedAt === "number" &&
+        Number.isFinite(m.deadEndedAt)
+      )
+        clean.deadEndedAt = m.deadEndedAt;
       if (typeof m.image === "string" && m.image) clean.image = m.image;
       if (
         m.prospectResponse === "accepted" ||
@@ -497,6 +508,10 @@ export function loadAppState(): AppState {
         typeof parsed.isMeetingsHeldSectionOpen === "boolean"
           ? parsed.isMeetingsHeldSectionOpen
           : true,
+      isMeetingsDeadEndSectionOpen:
+        typeof parsed.isMeetingsDeadEndSectionOpen === "boolean"
+          ? parsed.isMeetingsDeadEndSectionOpen
+          : false,
       engineCollapsed: {
         software: parsed.engineCollapsed?.software ?? false,
         procurement: parsed.engineCollapsed?.procurement ?? false,
@@ -889,6 +904,10 @@ export function parseImportedAppState(json: string): AppState {
       typeof candidate.isMeetingsHeldSectionOpen === "boolean"
         ? candidate.isMeetingsHeldSectionOpen
         : true,
+    isMeetingsDeadEndSectionOpen:
+      typeof candidate.isMeetingsDeadEndSectionOpen === "boolean"
+        ? candidate.isMeetingsDeadEndSectionOpen
+        : false,
     engineCollapsed: {
       software: candidate.engineCollapsed?.software ?? false,
       procurement: candidate.engineCollapsed?.procurement ?? false,

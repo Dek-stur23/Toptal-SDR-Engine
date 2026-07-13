@@ -247,6 +247,37 @@ export function MeetingsTracker({
     );
   };
 
+  const addMeetingUpdate = (id: number, text: string) => {
+    const clean = text.trim();
+    if (!clean) return;
+    onMutateMeetings((prev) =>
+      prev.map((m) =>
+        m.id === id
+          ? {
+              ...m,
+              updates: [
+                ...(m.updates ?? []),
+                { id: genId(), timestamp: Date.now(), text: clean },
+              ],
+            }
+          : m,
+      ),
+    );
+  };
+
+  const removeMeetingUpdate = (meetingId: number, updateId: number) => {
+    onMutateMeetings((prev) =>
+      prev.map((m) =>
+        m.id === meetingId
+          ? {
+              ...m,
+              updates: (m.updates ?? []).filter((u) => u.id !== updateId),
+            }
+          : m,
+      ),
+    );
+  };
+
   const moveBackToBooked = (id: number) => {
     onMutateMeetings((prev) =>
       prev.map((m) =>
@@ -363,6 +394,8 @@ export function MeetingsTracker({
                 onSetProspectResponse={(r) => setProspectResponse(m.id, r)}
                 onSetHeldOutcome={(o) => setHeldOutcome(m.id, o)}
                 onSetNotes={(n) => setMeetingNotes(m.id, n)}
+                onAddUpdate={(t) => addMeetingUpdate(m.id, t)}
+                onRemoveUpdate={(uid) => removeMeetingUpdate(m.id, uid)}
               />
             ))}
           </ul>
@@ -401,6 +434,8 @@ export function MeetingsTracker({
                   onSetProspectResponse={(r) => setProspectResponse(m.id, r)}
                   onSetHeldOutcome={(o) => setHeldOutcome(m.id, o)}
                   onSetNotes={(n) => setMeetingNotes(m.id, n)}
+                  onAddUpdate={(t) => addMeetingUpdate(m.id, t)}
+                  onRemoveUpdate={(uid) => removeMeetingUpdate(m.id, uid)}
                 />
               ))}
             </ul>
@@ -660,6 +695,8 @@ function MeetingCard({
   onSetProspectResponse,
   onSetHeldOutcome,
   onSetNotes,
+  onAddUpdate,
+  onRemoveUpdate,
 }: {
   meeting: Meeting;
   accountNameById: Record<string, string>;
@@ -674,6 +711,8 @@ function MeetingCard({
     o: import("@/lib/types").HeldOutcome | null,
   ) => void;
   onSetNotes: (notes: string) => void;
+  onAddUpdate: (text: string) => void;
+  onRemoveUpdate: (id: number) => void;
 }) {
   const fullName =
     `${meeting.firstName} ${meeting.lastName}`.trim() || "(unnamed contact)";
@@ -796,6 +835,12 @@ function MeetingCard({
       <InlineNotesEditor
         value={meeting.notes}
         onSave={onSetNotes}
+      />
+
+      <MeetingUpdatesSection
+        updates={meeting.updates ?? []}
+        onAdd={onAddUpdate}
+        onRemove={onRemoveUpdate}
       />
 
       <div className="flex flex-wrap items-center gap-2 pt-1">
@@ -1528,6 +1573,99 @@ function InlineNotesEditor({
         rows={2}
         className="w-full text-xs text-slate-700 bg-slate-50 border border-slate-200 focus:border-blue-300 focus:ring-2 focus:ring-blue-200 outline-none p-2 rounded resize-y custom-scrollbar leading-relaxed"
       />
+    </div>
+  );
+}
+
+function formatUpdateTimestamp(ms: number): string {
+  const d = new Date(ms);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function MeetingUpdatesSection({
+  updates,
+  onAdd,
+  onRemove,
+}: {
+  updates: import("@/lib/types").MeetingUpdate[];
+  onAdd: (text: string) => void;
+  onRemove: (id: number) => void;
+}) {
+  const [draft, setDraft] = useState("");
+  const submit = () => {
+    const clean = draft.trim();
+    if (!clean) return;
+    onAdd(clean);
+    setDraft("");
+  };
+  const sorted = [...updates].sort((a, b) => b.timestamp - a.timestamp);
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-1">
+        <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+          Updates{updates.length > 0 ? ` (${updates.length})` : ""}
+        </span>
+      </div>
+      <div className="flex gap-2 mb-2">
+        <textarea
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+              e.preventDefault();
+              submit();
+            }
+          }}
+          placeholder="Log a dated update (e.g. left voicemail, confirmed via email, sent follow-up)…"
+          rows={1}
+          className="flex-1 text-xs text-slate-700 bg-slate-50 border border-slate-200 focus:border-blue-300 focus:ring-2 focus:ring-blue-200 outline-none p-2 rounded resize-y custom-scrollbar leading-relaxed"
+        />
+        <button
+          onClick={submit}
+          disabled={!draft.trim()}
+          className="shrink-0 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed px-3 py-1.5 rounded-md shadow-sm flex items-center gap-1 self-start"
+          title="Log update (Cmd/Ctrl+Enter)"
+        >
+          <Plus className="w-3 h-3" /> Log
+        </button>
+      </div>
+      {sorted.length > 0 && (
+        <ul className="space-y-1.5">
+          {sorted.map((u) => (
+            <li
+              key={u.id}
+              className="flex items-start gap-2 text-xs bg-white border border-slate-200 rounded-md p-2"
+            >
+              <div className="flex-1 min-w-0">
+                <div className="text-[10px] text-slate-500 font-semibold mb-0.5">
+                  {formatUpdateTimestamp(u.timestamp)}
+                </div>
+                <div className="text-slate-700 whitespace-pre-wrap leading-relaxed">
+                  {u.text}
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  if (window.confirm("Delete this update?")) onRemove(u.id);
+                }}
+                className="text-slate-400 hover:text-red-600 shrink-0"
+                title="Delete update"
+                aria-label="Delete update"
+              >
+                <Trash2 className="w-3 h-3" />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

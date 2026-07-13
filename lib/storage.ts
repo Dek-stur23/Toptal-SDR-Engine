@@ -293,6 +293,28 @@ function cleanMeetings(raw: unknown): Meeting[] {
       ) {
         clean.heldOutcome = m.heldOutcome;
       }
+      if (Array.isArray(m.updates)) {
+        const updates = m.updates
+          .filter(
+            (u): u is import("./types").MeetingUpdate =>
+              !!u &&
+              typeof u === "object" &&
+              typeof (u as import("./types").MeetingUpdate).id === "number" &&
+              Number.isFinite(
+                (u as import("./types").MeetingUpdate).id,
+              ) &&
+              typeof (u as import("./types").MeetingUpdate).timestamp ===
+                "number" &&
+              Number.isFinite(
+                (u as import("./types").MeetingUpdate).timestamp,
+              ) &&
+              typeof (u as import("./types").MeetingUpdate).text ===
+                "string" &&
+              (u as import("./types").MeetingUpdate).text.trim() !== "",
+          )
+          .map((u) => ({ id: u.id, timestamp: u.timestamp, text: u.text }));
+        if (updates.length > 0) clean.updates = updates;
+      }
       return clean;
     });
 }

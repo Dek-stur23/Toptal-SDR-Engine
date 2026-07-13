@@ -480,6 +480,16 @@ export interface Meeting {
   ese?: string;
   // Outcome of a held meeting. Optional; defaults to unset.
   heldOutcome?: HeldOutcome;
+  // Append-only log of dated updates. Each entry is timestamped when
+  // added so the card shows a running history of what happened between
+  // now and the meeting.
+  updates?: MeetingUpdate[];
+}
+
+export interface MeetingUpdate {
+  id: number;
+  timestamp: number; // ms epoch
+  text: string;
 }
 
 // ============================================================

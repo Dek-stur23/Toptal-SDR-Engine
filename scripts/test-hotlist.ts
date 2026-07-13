@@ -1427,6 +1427,66 @@ section("meetings: cleanMeetings drops accountId when it's not a non-empty strin
   );
 }
 
+section("meetings: cleanMeetings preserves updates array with valid entries");
+
+{
+  memStorage.clear();
+  const raw = {
+    meetings: [
+      {
+        id: 40,
+        firstName: "A",
+        lastName: "",
+        title: "",
+        linkedinUrl: "",
+        scheduledFor: "",
+        notes: "",
+        status: "booked",
+        createdAt: 1,
+        updates: [
+          { id: 1, timestamp: 1_700_000_000_000, text: "First outreach sent" },
+          { id: 2, timestamp: 1_700_500_000_000, text: "Voicemail left" },
+          // Malformed entries below — should be dropped
+          { id: 3, timestamp: 1_700_600_000_000, text: "   " }, // whitespace-only
+          { timestamp: 1_700_700_000_000, text: "no id" }, // missing id
+          { id: 4, text: "no timestamp" }, // missing timestamp
+          "not an object",
+          null,
+        ],
+      },
+      {
+        id: 41,
+        firstName: "B",
+        lastName: "",
+        title: "",
+        linkedinUrl: "",
+        scheduledFor: "",
+        notes: "",
+        status: "booked",
+        createdAt: 2,
+        updates: "not an array",
+      },
+    ],
+  };
+  memStorage.setItem("toptal-sdr-engine::app", JSON.stringify(raw));
+  const loaded = loadAppState();
+  eq(loaded.meetings[0].updates?.length, 2, "2 valid updates preserved");
+  eq(
+    loaded.meetings[0].updates?.[0].text,
+    "First outreach sent",
+    "first update text preserved",
+  );
+  eq(
+    loaded.meetings[0].updates?.[1].timestamp,
+    1_700_500_000_000,
+    "second update timestamp preserved",
+  );
+  ok(
+    loaded.meetings[1].updates === undefined,
+    "non-array updates dropped entirely",
+  );
+}
+
 section("meetings: cleanMeetings preserves valid heldOutcome and drops invalid");
 
 {

@@ -94,10 +94,13 @@ const PROSPECT_RESPONSE_LABEL: Record<
   declined: "Prospect declined",
   "no-response": "No response yet",
   "no-show": "Prospect no-showed",
+  rescheduled: "Prospect rescheduled",
 };
 
 // Chip color classes per response — matches the platform's existing
-// green/red/slate accent palette.
+// green/red/slate accent palette. Rescheduled uses sky (bright blue)
+// so it stands apart from accepted (emerald), declined (red), no-show
+// (amber), and no-response (slate).
 const PROSPECT_RESPONSE_BADGE: Record<
   import("@/lib/types").ProspectResponse,
   string
@@ -106,6 +109,7 @@ const PROSPECT_RESPONSE_BADGE: Record<
   declined: "bg-red-50 text-red-700 border-red-200",
   "no-response": "bg-slate-50 text-slate-600 border-slate-200",
   "no-show": "bg-amber-50 text-amber-700 border-amber-200",
+  rescheduled: "bg-sky-50 text-sky-700 border-sky-200",
 };
 
 export function MeetingsTracker({
@@ -139,12 +143,16 @@ export function MeetingsTracker({
   const [filterResponse, setFilterResponse] = useState<
     import("@/lib/types").ProspectResponse | ""
   >("");
+  const [filterStatus, setFilterStatus] = useState<
+    import("@/lib/types").MeetingStatus | ""
+  >("");
   const anyFilterActive =
-    !!filterAccountId || !!filterEse || !!filterResponse;
+    !!filterAccountId || !!filterEse || !!filterResponse || !!filterStatus;
   const clearFilters = () => {
     setFilterAccountId("");
     setFilterEse("");
     setFilterResponse("");
+    setFilterStatus("");
   };
 
   // Apply filters BEFORE slicing into booked/held so both sections and
@@ -154,6 +162,7 @@ export function MeetingsTracker({
     return state.meetings.filter((m) => {
       if (filterAccountId && m.accountId !== filterAccountId) return false;
       if (filterEse && m.ese !== filterEse) return false;
+      if (filterStatus && m.status !== filterStatus) return false;
       if (filterResponse) {
         const r = m.prospectResponse ?? "no-response";
         if (r !== filterResponse) return false;
@@ -166,6 +175,7 @@ export function MeetingsTracker({
     filterAccountId,
     filterEse,
     filterResponse,
+    filterStatus,
   ]);
 
   const booked = useMemo(
@@ -356,6 +366,8 @@ export function MeetingsTracker({
         onFilterEse={setFilterEse}
         filterResponse={filterResponse}
         onFilterResponse={setFilterResponse}
+        filterStatus={filterStatus}
+        onFilterStatus={setFilterStatus}
         anyFilterActive={anyFilterActive}
         onClear={clearFilters}
         matchCount={filteredMeetings.length}
@@ -647,18 +659,21 @@ function MeetingChip({
   const declined = meeting.prospectResponse === "declined";
   const accepted = meeting.prospectResponse === "accepted";
   const noShow = meeting.prospectResponse === "no-show";
+  const rescheduled = meeting.prospectResponse === "rescheduled";
 
-  // Color: held=emerald, declined=red, no-show=amber, accepted
-  // booked=blue-strong, no-response booked=blue-soft.
+  // Color: held=emerald, declined=red, no-show=amber, rescheduled=sky,
+  // accepted booked=blue-strong, no-response booked=blue-soft.
   const cls = isHeld
     ? "bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100"
     : declined
       ? "bg-red-50 text-red-800 border-red-200 hover:bg-red-100"
       : noShow
         ? "bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100"
-        : accepted
-          ? "bg-blue-100 text-blue-900 border-blue-300 hover:bg-blue-200"
-          : "bg-blue-50 text-blue-800 border-blue-200 hover:bg-blue-100";
+        : rescheduled
+          ? "bg-sky-50 text-sky-800 border-sky-200 hover:bg-sky-100"
+          : accepted
+            ? "bg-blue-100 text-blue-900 border-blue-300 hover:bg-blue-200"
+            : "bg-blue-50 text-blue-800 border-blue-200 hover:bg-blue-100";
 
   const responseLabel = isHeld
     ? " · Held"
@@ -666,9 +681,11 @@ function MeetingChip({
       ? " · Declined"
       : noShow
         ? " · No-showed"
-        : accepted
-          ? " · Accepted"
-          : "";
+        : rescheduled
+          ? " · Rescheduled"
+          : accepted
+            ? " · Accepted"
+            : "";
   const title = `${name}${meeting.title ? " · " + meeting.title : ""}${accountName ? " @ " + accountName : ""}${time ? " · " + time : ""}${responseLabel}`;
 
   return (
@@ -1323,6 +1340,8 @@ function FilterBar({
   onFilterEse,
   filterResponse,
   onFilterResponse,
+  filterStatus,
+  onFilterStatus,
   anyFilterActive,
   onClear,
   matchCount,
@@ -1337,6 +1356,10 @@ function FilterBar({
   onFilterResponse: (
     v: import("@/lib/types").ProspectResponse | "",
   ) => void;
+  filterStatus: import("@/lib/types").MeetingStatus | "";
+  onFilterStatus: (
+    v: import("@/lib/types").MeetingStatus | "",
+  ) => void;
   anyFilterActive: boolean;
   onClear: () => void;
   matchCount: number;
@@ -1347,6 +1370,19 @@ function FilterBar({
       <div className="flex items-center gap-1.5 text-slate-500 font-semibold uppercase tracking-wider">
         <Filter className="w-3.5 h-3.5" /> Filter
       </div>
+
+      <FilterSelect
+        label="Status"
+        value={filterStatus}
+        onChange={(v) =>
+          onFilterStatus(v as import("@/lib/types").MeetingStatus | "")
+        }
+        options={[
+          { value: "", label: "All" },
+          { value: "booked", label: "Booked" },
+          { value: "held", label: "Held" },
+        ]}
+      />
 
       <FilterSelect
         label="Account"
@@ -1383,6 +1419,7 @@ function FilterBar({
           { value: "accepted", label: "Prospect accepted" },
           { value: "declined", label: "Prospect declined" },
           { value: "no-show", label: "Prospect no-showed" },
+          { value: "rescheduled", label: "Prospect rescheduled" },
         ]}
       />
 
@@ -1471,6 +1508,7 @@ function ProspectResponsePicker({
         <option value="accepted">Prospect accepted</option>
         <option value="declined">Prospect declined</option>
         <option value="no-show">Prospect no-showed</option>
+        <option value="rescheduled">Prospect rescheduled</option>
       </select>
     </label>
   );

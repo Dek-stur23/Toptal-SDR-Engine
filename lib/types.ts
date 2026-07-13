@@ -444,7 +444,8 @@ export type ProspectResponse =
   | "no-response"
   | "accepted"
   | "declined"
-  | "no-show";
+  | "no-show"
+  | "rescheduled";
 
 // Outcome the SDR marks on a held meeting to categorize how it went.
 // Only meaningful while status === "held"; preserved if the meeting is

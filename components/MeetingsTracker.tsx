@@ -137,22 +137,25 @@ export function MeetingsTracker({
     [state.accounts],
   );
 
-  // Filter state — session-local, resets on reload. "" means "all".
-  const [filterAccountId, setFilterAccountId] = useState<string>("");
-  const [filterEse, setFilterEse] = useState<string>("");
-  const [filterResponse, setFilterResponse] = useState<
-    import("@/lib/types").ProspectResponse | ""
-  >("");
-  const [filterStatus, setFilterStatus] = useState<
-    import("@/lib/types").MeetingStatus | ""
-  >("");
+  // Filter state — session-local, resets on reload. Empty array = "all".
+  const [filterAccountIds, setFilterAccountIds] = useState<string[]>([]);
+  const [filterEses, setFilterEses] = useState<string[]>([]);
+  const [filterResponses, setFilterResponses] = useState<
+    import("@/lib/types").ProspectResponse[]
+  >([]);
+  const [filterStatuses, setFilterStatuses] = useState<
+    import("@/lib/types").MeetingStatus[]
+  >([]);
   const anyFilterActive =
-    !!filterAccountId || !!filterEse || !!filterResponse || !!filterStatus;
+    filterAccountIds.length > 0 ||
+    filterEses.length > 0 ||
+    filterResponses.length > 0 ||
+    filterStatuses.length > 0;
   const clearFilters = () => {
-    setFilterAccountId("");
-    setFilterEse("");
-    setFilterResponse("");
-    setFilterStatus("");
+    setFilterAccountIds([]);
+    setFilterEses([]);
+    setFilterResponses([]);
+    setFilterStatuses([]);
   };
 
   // Apply filters BEFORE slicing into booked/held so both sections and
@@ -160,22 +163,37 @@ export function MeetingsTracker({
   const filteredMeetings = useMemo(() => {
     if (!anyFilterActive) return state.meetings;
     return state.meetings.filter((m) => {
-      if (filterAccountId && m.accountId !== filterAccountId) return false;
-      if (filterEse && m.ese !== filterEse) return false;
-      if (filterStatus && m.status !== filterStatus) return false;
-      if (filterResponse) {
+      if (
+        filterAccountIds.length > 0 &&
+        !(m.accountId && filterAccountIds.includes(m.accountId))
+      ) {
+        return false;
+      }
+      if (
+        filterEses.length > 0 &&
+        !(m.ese && filterEses.includes(m.ese))
+      ) {
+        return false;
+      }
+      if (
+        filterStatuses.length > 0 &&
+        !filterStatuses.includes(m.status)
+      ) {
+        return false;
+      }
+      if (filterResponses.length > 0) {
         const r = m.prospectResponse ?? "no-response";
-        if (r !== filterResponse) return false;
+        if (!filterResponses.includes(r)) return false;
       }
       return true;
     });
   }, [
     state.meetings,
     anyFilterActive,
-    filterAccountId,
-    filterEse,
-    filterResponse,
-    filterStatus,
+    filterAccountIds,
+    filterEses,
+    filterResponses,
+    filterStatuses,
   ]);
 
   const booked = useMemo(
@@ -360,14 +378,14 @@ export function MeetingsTracker({
 
       <FilterBar
         activeAccounts={activeAccounts}
-        filterAccountId={filterAccountId}
-        onFilterAccount={setFilterAccountId}
-        filterEse={filterEse}
-        onFilterEse={setFilterEse}
-        filterResponse={filterResponse}
-        onFilterResponse={setFilterResponse}
-        filterStatus={filterStatus}
-        onFilterStatus={setFilterStatus}
+        filterAccountIds={filterAccountIds}
+        onFilterAccounts={setFilterAccountIds}
+        filterEses={filterEses}
+        onFilterEses={setFilterEses}
+        filterResponses={filterResponses}
+        onFilterResponses={setFilterResponses}
+        filterStatuses={filterStatuses}
+        onFilterStatuses={setFilterStatuses}
         anyFilterActive={anyFilterActive}
         onClear={clearFilters}
         matchCount={filteredMeetings.length}
@@ -1334,31 +1352,31 @@ function MeetingModal({
 
 function FilterBar({
   activeAccounts,
-  filterAccountId,
-  onFilterAccount,
-  filterEse,
-  onFilterEse,
-  filterResponse,
-  onFilterResponse,
-  filterStatus,
-  onFilterStatus,
+  filterAccountIds,
+  onFilterAccounts,
+  filterEses,
+  onFilterEses,
+  filterResponses,
+  onFilterResponses,
+  filterStatuses,
+  onFilterStatuses,
   anyFilterActive,
   onClear,
   matchCount,
   totalCount,
 }: {
   activeAccounts: Account[];
-  filterAccountId: string;
-  onFilterAccount: (v: string) => void;
-  filterEse: string;
-  onFilterEse: (v: string) => void;
-  filterResponse: import("@/lib/types").ProspectResponse | "";
-  onFilterResponse: (
-    v: import("@/lib/types").ProspectResponse | "",
+  filterAccountIds: string[];
+  onFilterAccounts: (v: string[]) => void;
+  filterEses: string[];
+  onFilterEses: (v: string[]) => void;
+  filterResponses: import("@/lib/types").ProspectResponse[];
+  onFilterResponses: (
+    v: import("@/lib/types").ProspectResponse[],
   ) => void;
-  filterStatus: import("@/lib/types").MeetingStatus | "";
-  onFilterStatus: (
-    v: import("@/lib/types").MeetingStatus | "",
+  filterStatuses: import("@/lib/types").MeetingStatus[];
+  onFilterStatuses: (
+    v: import("@/lib/types").MeetingStatus[],
   ) => void;
   anyFilterActive: boolean;
   onClear: () => void;
@@ -1371,50 +1389,46 @@ function FilterBar({
         <Filter className="w-3.5 h-3.5" /> Filter
       </div>
 
-      <FilterSelect
+      <FilterMultiSelect
         label="Status"
-        value={filterStatus}
-        onChange={(v) =>
-          onFilterStatus(v as import("@/lib/types").MeetingStatus | "")
+        allLabel="All"
+        selected={filterStatuses}
+        onChange={(vs) =>
+          onFilterStatuses(vs as import("@/lib/types").MeetingStatus[])
         }
         options={[
-          { value: "", label: "All" },
           { value: "booked", label: "Booked" },
           { value: "held", label: "Held" },
         ]}
       />
 
-      <FilterSelect
+      <FilterMultiSelect
         label="Account"
-        value={filterAccountId}
-        onChange={onFilterAccount}
-        options={[
-          { value: "", label: "All accounts" },
-          ...activeAccounts.map((a) => ({
-            value: a.id,
-            label: a.name || a.accountData.companyName || "(unnamed)",
-          })),
-        ]}
+        allLabel="All accounts"
+        selected={filterAccountIds}
+        onChange={onFilterAccounts}
+        options={activeAccounts.map((a) => ({
+          value: a.id,
+          label: a.name || a.accountData.companyName || "(unnamed)",
+        }))}
       />
 
-      <FilterSelect
+      <FilterMultiSelect
         label="ESE"
-        value={filterEse}
-        onChange={onFilterEse}
-        options={[
-          { value: "", label: "All ESEs" },
-          ...ESE_OPTIONS.map((n) => ({ value: n, label: n })),
-        ]}
+        allLabel="All ESEs"
+        selected={filterEses}
+        onChange={onFilterEses}
+        options={ESE_OPTIONS.map((n) => ({ value: n, label: n }))}
       />
 
-      <FilterSelect
+      <FilterMultiSelect
         label="Response"
-        value={filterResponse}
-        onChange={(v) =>
-          onFilterResponse(v as import("@/lib/types").ProspectResponse | "")
+        allLabel="All responses"
+        selected={filterResponses}
+        onChange={(vs) =>
+          onFilterResponses(vs as import("@/lib/types").ProspectResponse[])
         }
         options={[
-          { value: "", label: "All responses" },
           { value: "no-response", label: "No response yet" },
           { value: "accepted", label: "Prospect accepted" },
           { value: "declined", label: "Prospect declined" },
@@ -1442,45 +1456,126 @@ function FilterBar({
   );
 }
 
-function FilterSelect({
+// Multi-select filter chip. Click to open a checkbox popover; each
+// checkbox toggles that option in/out of the selected array. Empty
+// selection is treated as "no filter" (match all). Chip label shows
+// the count when >0 selected and lists the values when 1-2 selected.
+function FilterMultiSelect({
   label,
-  value,
+  allLabel,
+  selected,
   onChange,
   options,
 }: {
   label: string;
-  value: string;
-  onChange: (v: string) => void;
+  allLabel: string;
+  selected: string[];
+  onChange: (v: string[]) => void;
   options: { value: string; label: string }[];
 }) {
-  const active = !!value;
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (!rootRef.current) return;
+      if (!rootRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  const active = selected.length > 0;
+  const toggle = (v: string) => {
+    if (selected.includes(v)) onChange(selected.filter((x) => x !== v));
+    else onChange([...selected, v]);
+  };
+
+  const summary = (() => {
+    if (selected.length === 0) return allLabel;
+    if (selected.length === 1) {
+      const opt = options.find((o) => o.value === selected[0]);
+      return opt?.label ?? selected[0];
+    }
+    if (selected.length === 2) {
+      const parts = selected.map(
+        (v) => options.find((o) => o.value === v)?.label ?? v,
+      );
+      return parts.join(", ");
+    }
+    return `${selected.length} selected`;
+  })();
+
   return (
-    <label
-      className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-1 transition-colors ${
-        active
-          ? "border-blue-300 bg-blue-50"
-          : "border-slate-200 bg-white hover:border-slate-300"
-      }`}
-    >
-      <span
-        className={`text-[10px] font-semibold uppercase tracking-wider ${
-          active ? "text-blue-700" : "text-slate-500"
+    <div className="relative" ref={rootRef}>
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-1 transition-colors ${
+          active
+            ? "border-blue-300 bg-blue-50"
+            : "border-slate-200 bg-white hover:border-slate-300"
         }`}
       >
-        {label}
-      </span>
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="bg-transparent border-0 outline-none text-xs text-slate-800 font-medium cursor-pointer pr-1"
-      >
-        {options.map((o) => (
-          <option key={o.value} value={o.value}>
-            {o.label}
-          </option>
-        ))}
-      </select>
-    </label>
+        <span
+          className={`text-[10px] font-semibold uppercase tracking-wider ${
+            active ? "text-blue-700" : "text-slate-500"
+          }`}
+        >
+          {label}
+          {active && ` (${selected.length})`}
+        </span>
+        <span className="text-xs text-slate-800 font-medium max-w-40 truncate">
+          {summary}
+        </span>
+        <ChevronDown
+          className={`w-3 h-3 text-slate-500 transition-transform ${
+            open ? "rotate-180" : ""
+          }`}
+        />
+      </button>
+      {open && (
+        <div className="absolute left-0 top-full mt-1 z-30 w-56 bg-white border border-slate-200 rounded-md shadow-lg overflow-hidden">
+          {options.length === 0 ? (
+            <p className="text-[11px] text-slate-500 italic p-3">
+              No options available.
+            </p>
+          ) : (
+            <>
+              <div className="flex items-center justify-between border-b border-slate-100 px-2.5 py-1.5 text-[10px] font-semibold text-slate-500 uppercase tracking-wider">
+                <span>{label}</span>
+                {active && (
+                  <button
+                    onClick={() => onChange([])}
+                    className="text-blue-700 hover:text-blue-900 normal-case"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+              <ul className="max-h-64 overflow-y-auto custom-scrollbar py-1">
+                {options.map((o) => {
+                  const on = selected.includes(o.value);
+                  return (
+                    <li key={o.value}>
+                      <label className="flex items-center gap-2 px-2.5 py-1.5 hover:bg-slate-50 cursor-pointer text-xs text-slate-700">
+                        <input
+                          type="checkbox"
+                          checked={on}
+                          onChange={() => toggle(o.value)}
+                          className="w-3.5 h-3.5 accent-blue-600 cursor-pointer"
+                        />
+                        <span className="flex-1 truncate">{o.label}</span>
+                      </label>
+                    </li>
+                  );
+                })}
+              </ul>
+            </>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 

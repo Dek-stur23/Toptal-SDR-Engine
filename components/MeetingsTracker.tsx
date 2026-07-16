@@ -137,12 +137,18 @@ const PROSPECT_RESPONSE_LABEL: Record<
   "no-response": "No response yet",
   "no-show": "Prospect no-showed",
   rescheduled: "Prospect rescheduled",
+  "still-scheduling": "Still scheduling",
 };
 
-// Chip color classes per response — matches the platform's existing
-// green/red/slate accent palette. Rescheduled uses sky (bright blue)
-// so it stands apart from accepted (emerald), declined (red), no-show
-// (amber), and no-response (slate).
+// Chip color classes per response. Each state gets its own accent so
+// they're distinguishable at a glance in the list and calendar views:
+//   accepted → emerald
+//   declined → red
+//   no-response → slate
+//   no-show → amber
+//   rescheduled → sky
+//   still-scheduling → teal (in-progress positive; between emerald and
+//                            sky semantically)
 const PROSPECT_RESPONSE_BADGE: Record<
   import("@/lib/types").ProspectResponse,
   string
@@ -152,6 +158,7 @@ const PROSPECT_RESPONSE_BADGE: Record<
   "no-response": "bg-slate-50 text-slate-600 border-slate-200",
   "no-show": "bg-amber-50 text-amber-700 border-amber-200",
   rescheduled: "bg-sky-50 text-sky-700 border-sky-200",
+  "still-scheduling": "bg-teal-50 text-teal-700 border-teal-200",
 };
 
 export function MeetingsTracker({
@@ -837,11 +844,12 @@ function MeetingChip({
   const accepted = meeting.prospectResponse === "accepted";
   const noShow = meeting.prospectResponse === "no-show";
   const rescheduled = meeting.prospectResponse === "rescheduled";
+  const stillScheduling = meeting.prospectResponse === "still-scheduling";
 
   // Color:
   //   dead-end=slate (closed, no next step)
   //   held=emerald
-  //   declined=red, no-show=amber, rescheduled=sky
+  //   declined=red, no-show=amber, rescheduled=sky, still-scheduling=teal
   //   accepted booked=blue-strong, no-response booked=blue-soft.
   const cls = isDeadEnd
     ? "bg-slate-100 text-slate-600 border-slate-300 hover:bg-slate-200 line-through decoration-slate-400"
@@ -853,9 +861,11 @@ function MeetingChip({
           ? "bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100"
           : rescheduled
             ? "bg-sky-50 text-sky-800 border-sky-200 hover:bg-sky-100"
-            : accepted
-              ? "bg-blue-100 text-blue-900 border-blue-300 hover:bg-blue-200"
-              : "bg-blue-50 text-blue-800 border-blue-200 hover:bg-blue-100";
+            : stillScheduling
+              ? "bg-teal-50 text-teal-800 border-teal-200 hover:bg-teal-100"
+              : accepted
+                ? "bg-blue-100 text-blue-900 border-blue-300 hover:bg-blue-200"
+                : "bg-blue-50 text-blue-800 border-blue-200 hover:bg-blue-100";
 
   const responseLabel = isDeadEnd
     ? " · Dead End"
@@ -867,9 +877,11 @@ function MeetingChip({
           ? " · No-showed"
           : rescheduled
             ? " · Rescheduled"
-            : accepted
-              ? " · Accepted"
-              : "";
+            : stillScheduling
+              ? " · Still scheduling"
+              : accepted
+                ? " · Accepted"
+                : "";
   const title = `${name}${meeting.title ? " · " + meeting.title : ""}${accountName ? " @ " + accountName : ""}${time ? " · " + time : ""}${responseLabel}`;
 
   return (
@@ -1626,6 +1638,7 @@ function FilterBar({
           { value: "declined", label: "Prospect declined" },
           { value: "no-show", label: "Prospect no-showed" },
           { value: "rescheduled", label: "Prospect rescheduled" },
+          { value: "still-scheduling", label: "Still scheduling" },
         ]}
       />
 
@@ -1796,6 +1809,7 @@ function ProspectResponsePicker({
         <option value="declined">Prospect declined</option>
         <option value="no-show">Prospect no-showed</option>
         <option value="rescheduled">Prospect rescheduled</option>
+        <option value="still-scheduling">Still scheduling</option>
       </select>
     </label>
   );

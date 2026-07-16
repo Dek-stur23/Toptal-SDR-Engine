@@ -493,6 +493,10 @@ export interface MeetingUpdate {
   id: number;
   timestamp: number; // ms epoch
   text: string;
+  // Marks entries that were auto-logged by the tracker (creation,
+  // response change, status transition, edit) so the UI can distinguish
+  // them from updates the user typed manually.
+  system?: boolean;
 }
 
 // ============================================================

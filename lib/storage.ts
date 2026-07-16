@@ -324,7 +324,15 @@ function cleanMeetings(raw: unknown): Meeting[] {
                 "string" &&
               (u as import("./types").MeetingUpdate).text.trim() !== "",
           )
-          .map((u) => ({ id: u.id, timestamp: u.timestamp, text: u.text }));
+          .map((u) => {
+            const cleanU: import("./types").MeetingUpdate = {
+              id: u.id,
+              timestamp: u.timestamp,
+              text: u.text,
+            };
+            if (u.system === true) cleanU.system = true;
+            return cleanU;
+          });
         if (updates.length > 0) clean.updates = updates;
       }
       return clean;

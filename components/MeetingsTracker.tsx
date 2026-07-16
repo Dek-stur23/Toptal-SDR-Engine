@@ -72,6 +72,45 @@ const linkHref = (raw: string): string => {
   return t.startsWith("http") ? t : `https://${t}`;
 };
 
+// Append an auto-logged update entry to a meeting. Used by every
+// mutation path so the update log builds a running history without
+// the user having to type anything.
+function withAutoUpdate(m: Meeting, text: string): Meeting {
+  return {
+    ...m,
+    updates: [
+      ...(m.updates ?? []),
+      { id: genId(), timestamp: Date.now(), text, system: true },
+    ],
+  };
+}
+
+// Returns a short human-readable summary of what changed between two
+// versions of the same meeting, for the auto-log entry that fires when
+// the user saves the Edit meeting modal. Empty string if nothing
+// changed (which suppresses the auto-log).
+function describeMeetingChanges(before: Meeting, after: Meeting): string {
+  const changed: string[] = [];
+  if (
+    before.firstName !== after.firstName ||
+    before.lastName !== after.lastName
+  )
+    changed.push("name");
+  if (before.title !== after.title) changed.push("title");
+  if (before.linkedinUrl !== after.linkedinUrl)
+    changed.push("LinkedIn URL");
+  if ((before.accountId ?? "") !== (after.accountId ?? ""))
+    changed.push("account");
+  if ((before.ese ?? "") !== (after.ese ?? "")) changed.push("ESE");
+  if (before.scheduledFor !== after.scheduledFor)
+    changed.push("scheduled time");
+  if (before.notes !== after.notes) changed.push("notes");
+  if ((before.image ?? null) !== (after.image ?? null))
+    changed.push("screenshot");
+  if (changed.length === 0) return "";
+  return `Meeting details updated: ${changed.join(", ")}`;
+}
+
 function isPastDue(iso: string, now: Date = new Date()): boolean {
   if (!iso) return false;
   const d = new Date(iso);
@@ -236,9 +275,15 @@ export function MeetingsTracker({
   const upsertMeeting = (m: Meeting) => {
     onMutateMeetings((prev) => {
       const idx = prev.findIndex((x) => x.id === m.id);
-      if (idx === -1) return [...prev, m];
+      if (idx === -1) {
+        // New meeting — auto-log its creation.
+        return [...prev, withAutoUpdate(m, "Meeting logged")];
+      }
+      const existing = prev[idx];
+      const change = describeMeetingChanges(existing, m);
+      const nextEntry = change ? withAutoUpdate(m, change) : m;
       const next = prev.slice();
-      next[idx] = m;
+      next[idx] = nextEntry;
       return next;
     });
     setModalMode(null);
@@ -254,7 +299,12 @@ export function MeetingsTracker({
     }
     onMutateMeetings((prev) =>
       prev.map((m) =>
-        m.id === id ? { ...m, status: "held", heldAt: Date.now() } : m,
+        m.id === id
+          ? withAutoUpdate(
+              { ...m, status: "held", heldAt: Date.now() },
+              "Marked as held",
+            )
+          : m,
       ),
     );
   };
@@ -270,7 +320,10 @@ export function MeetingsTracker({
     onMutateMeetings((prev) =>
       prev.map((m) =>
         m.id === id
-          ? { ...m, status: "dead-end", deadEndedAt: Date.now() }
+          ? withAutoUpdate(
+              { ...m, status: "dead-end", deadEndedAt: Date.now() },
+              "Marked as dead end",
+            )
           : m,
       ),
     );
@@ -281,7 +334,15 @@ export function MeetingsTracker({
     response: import("@/lib/types").ProspectResponse,
   ) => {
     onMutateMeetings((prev) =>
-      prev.map((m) => (m.id === id ? { ...m, prospectResponse: response } : m)),
+      prev.map((m) => {
+        if (m.id !== id) return m;
+        const previous = m.prospectResponse ?? "no-response";
+        if (previous === response) return m;
+        return withAutoUpdate(
+          { ...m, prospectResponse: response },
+          `Response set to "${PROSPECT_RESPONSE_LABEL[response]}"`,
+        );
+      }),
     );
   };
 
@@ -290,13 +351,20 @@ export function MeetingsTracker({
     outcome: import("@/lib/types").HeldOutcome | null,
   ) => {
     onMutateMeetings((prev) =>
-      prev.map((m) =>
-        m.id === id
-          ? outcome
-            ? { ...m, heldOutcome: outcome }
-            : (({ heldOutcome: _drop, ...rest }) => rest as Meeting)(m)
-          : m,
-      ),
+      prev.map((m) => {
+        if (m.id !== id) return m;
+        const previous = m.heldOutcome ?? null;
+        if (previous === outcome) return m;
+        const patched = outcome
+          ? { ...m, heldOutcome: outcome }
+          : (({ heldOutcome: _drop, ...rest }) => rest as Meeting)(m);
+        return withAutoUpdate(
+          patched,
+          outcome
+            ? `Held outcome set to "${HELD_OUTCOME_LABEL[outcome]}"`
+            : "Held outcome cleared",
+        );
+      }),
     );
   };
 
@@ -339,16 +407,25 @@ export function MeetingsTracker({
 
   const moveBackToBooked = (id: number) => {
     onMutateMeetings((prev) =>
-      prev.map((m) =>
-        m.id === id
-          ? {
-              ...m,
-              status: "booked",
-              heldAt: undefined,
-              deadEndedAt: undefined,
-            }
-          : m,
-      ),
+      prev.map((m) => {
+        if (m.id !== id) return m;
+        const from =
+          m.status === "held"
+            ? "Held"
+            : m.status === "dead-end"
+              ? "Dead End"
+              : "Booked";
+        if (from === "Booked") return m;
+        return withAutoUpdate(
+          {
+            ...m,
+            status: "booked",
+            heldAt: undefined,
+            deadEndedAt: undefined,
+          },
+          `Moved from ${from} back to Booked`,
+        );
+      }),
     );
   };
 
@@ -1890,13 +1967,31 @@ function MeetingUpdatesSection({
           {sorted.map((u) => (
             <li
               key={u.id}
-              className="flex items-start gap-2 text-xs bg-white border border-slate-200 rounded-md p-2"
+              className={`flex items-start gap-2 text-xs border rounded-md p-2 ${
+                u.system
+                  ? "bg-slate-50 border-slate-200"
+                  : "bg-white border-slate-200"
+              }`}
             >
               <div className="flex-1 min-w-0">
-                <div className="text-[10px] text-slate-500 font-semibold mb-0.5">
+                <div className="text-[10px] text-slate-500 font-semibold mb-0.5 flex items-center gap-1.5">
+                  {u.system && (
+                    <span
+                      className="inline-flex items-center gap-0.5 bg-slate-200 text-slate-600 uppercase tracking-wider text-[9px] font-bold px-1 py-px rounded"
+                      title="Auto-logged by the tracker"
+                    >
+                      Auto
+                    </span>
+                  )}
                   {formatUpdateTimestamp(u.timestamp)}
                 </div>
-                <div className="text-slate-700 whitespace-pre-wrap leading-relaxed">
+                <div
+                  className={`whitespace-pre-wrap leading-relaxed ${
+                    u.system
+                      ? "text-slate-600 italic"
+                      : "text-slate-700"
+                  }`}
+                >
                   {u.text}
                 </div>
               </div>

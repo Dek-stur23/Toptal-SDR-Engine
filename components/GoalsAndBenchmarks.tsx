@@ -5,6 +5,7 @@ import {
   Building2,
   CalendarCheck,
   CalendarPlus,
+  Calculator,
   CheckCircle2,
   ChevronDown,
   ChevronRight,
@@ -97,6 +98,7 @@ export function GoalsAndBenchmarks({ state, setGoals }: Props) {
     defaultQuarterlyGoals(year, quarter);
 
   const [editingGoals, setEditingGoals] = useState(false);
+  const [calculatingGoals, setCalculatingGoals] = useState(false);
   const [periodKind, setPeriodKind] = useState<ViewPeriodKind>("this-week");
   const period = useMemo(() => resolveViewPeriod(periodKind, now), [
     periodKind,
@@ -204,12 +206,21 @@ export function GoalsAndBenchmarks({ state, setGoals }: Props) {
             Q{quarter} {year} · goals apply across every account.
           </p>
         </div>
-        <button
-          onClick={() => setEditingGoals(true)}
-          className="text-xs font-semibold text-slate-700 hover:text-slate-900 flex items-center gap-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 px-3 py-2 rounded-lg shadow-sm"
-        >
-          <Edit2 className="w-3.5 h-3.5" /> Edit goals
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setCalculatingGoals(true)}
+            className="text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 flex items-center gap-1.5 px-3 py-2 rounded-lg shadow-sm"
+            title="Back-calculate weekly goals from your historical performance and a meetings-held target"
+          >
+            <Calculator className="w-3.5 h-3.5" /> Calculate goals
+          </button>
+          <button
+            onClick={() => setEditingGoals(true)}
+            className="text-xs font-semibold text-slate-700 hover:text-slate-900 flex items-center gap-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 px-3 py-2 rounded-lg shadow-sm"
+          >
+            <Edit2 className="w-3.5 h-3.5" /> Edit goals
+          </button>
+        </div>
       </div>
 
       {/* Filter + rollup cards */}
@@ -333,6 +344,24 @@ export function GoalsAndBenchmarks({ state, setGoals }: Props) {
           onSave={(next) => {
             setGoals((prev) => upsertQuarterlyGoals(prev, next));
             setEditingGoals(false);
+          }}
+        />
+      )}
+
+      {calculatingGoals && (
+        <CalculateGoalsModal
+          onClose={() => setCalculatingGoals(false)}
+          onApply={(suggested) => {
+            setGoals((prev) =>
+              upsertQuarterlyGoals(prev, {
+                ...currentQuarterGoals,
+                weeklyDialsGoal: suggested.dials,
+                weeklyProspectsGoal: suggested.prospects,
+                weeklyMeetingsBookedGoal: suggested.meetingsBooked,
+                weeklyMeetingsHeldGoal: suggested.meetingsHeldTarget,
+              }),
+            );
+            setCalculatingGoals(false);
           }}
         />
       )}
@@ -1000,6 +1029,246 @@ function LogEntryModal({
         </div>
       </div>
     </div>
+  );
+}
+
+interface CalculatedSuggestion {
+  dials: number;
+  connects: number;
+  prospects: number;
+  meetingsBooked: number;
+  meetingsHeldTarget: number;
+}
+
+function CalculateGoalsModal({
+  onClose,
+  onApply,
+}: {
+  onClose: () => void;
+  onApply: (s: CalculatedSuggestion) => void;
+}) {
+  const [dials, setDials] = useState("");
+  const [connects, setConnects] = useState("");
+  const [prospects, setProspects] = useState("");
+  const [meetingsBooked, setMeetingsBooked] = useState("");
+  const [meetingsHeld, setMeetingsHeld] = useState("");
+  const [target, setTarget] = useState("");
+
+  const parse = (s: string) => {
+    const n = Number.parseFloat(s);
+    return Number.isFinite(n) && n >= 0 ? n : 0;
+  };
+
+  const nDials = parse(dials);
+  const nConnects = parse(connects);
+  const nProspects = parse(prospects);
+  const nMeetingsBooked = parse(meetingsBooked);
+  const nMeetingsHeld = parse(meetingsHeld);
+  const nTarget = parse(target);
+
+  // We can compute a suggestion once we have (a) all five historical
+  // numbers > 0 and (b) a target > 0. The ratios all scale linearly:
+  // to hit `target` meetings held per week, you need every other
+  // stat scaled by (target / historicalHeld).
+  const canCompute =
+    nMeetingsHeld > 0 &&
+    nTarget > 0 &&
+    (nDials > 0 || nConnects > 0 || nProspects > 0 || nMeetingsBooked > 0);
+  const ratio = canCompute ? nTarget / nMeetingsHeld : 0;
+  const suggested: CalculatedSuggestion | null = canCompute
+    ? {
+        dials: Math.ceil(nDials * ratio),
+        connects: Math.ceil(nConnects * ratio),
+        prospects: Math.ceil(nProspects * ratio),
+        meetingsBooked: Math.ceil(nMeetingsBooked * ratio),
+        meetingsHeldTarget: nTarget,
+      }
+    : null;
+
+  // Derived ratios for display, if the inputs support them.
+  const pct = (numer: number, denom: number): string =>
+    denom > 0 ? `${((numer / denom) * 100).toFixed(1)}%` : "—";
+  const contactRate = pct(nConnects, nDials);
+  const dialsPerBooked = nMeetingsBooked > 0 ? (nDials / nMeetingsBooked).toFixed(0) : "—";
+  const bookingRate = pct(nMeetingsBooked, nProspects);
+  const heldRate = pct(nMeetingsHeld, nMeetingsBooked);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 bg-slate-900/70 flex items-center justify-center p-4"
+    >
+      <div
+        className="bg-white rounded-xl shadow-xl max-w-lg w-full p-5 space-y-4 max-h-[90vh] overflow-y-auto custom-scrollbar"
+      >
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-blue-50 text-blue-600">
+              <Calculator className="w-4 h-4" />
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-slate-900">
+                Calculate goals
+              </h3>
+              <p className="text-[11px] text-slate-500 mt-0.5">
+                Enter your historical weekly numbers, then a target for
+                meetings held.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="text-slate-400 hover:text-slate-700"
+            aria-label="Close"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="space-y-3">
+          <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+            Historical weekly average
+          </p>
+          <div className="grid grid-cols-2 gap-3">
+            <NumberField
+              label="Dials"
+              value={parse(dials)}
+              onChange={(v) => setDials(String(v))}
+            />
+            <NumberField
+              label="Connects"
+              value={parse(connects)}
+              onChange={(v) => setConnects(String(v))}
+            />
+            <NumberField
+              label="Prospects dialed"
+              value={parse(prospects)}
+              onChange={(v) => setProspects(String(v))}
+            />
+            <NumberField
+              label="Meetings booked"
+              value={parse(meetingsBooked)}
+              onChange={(v) => setMeetingsBooked(String(v))}
+            />
+            <NumberField
+              label="Meetings held"
+              value={parse(meetingsHeld)}
+              onChange={(v) => setMeetingsHeld(String(v))}
+            />
+          </div>
+
+          <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider pt-2">
+            Weekly target
+          </p>
+          <NumberField
+            label="Meetings held — target"
+            value={parse(target)}
+            onChange={(v) => setTarget(String(v))}
+          />
+        </div>
+
+        {(nDials > 0 || nConnects > 0 || nProspects > 0 || nMeetingsBooked > 0) &&
+          nMeetingsHeld > 0 && (
+            <div className="bg-slate-50 border border-slate-200 rounded-md p-3 text-xs space-y-1">
+              <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1">
+                Your funnel ratios
+              </p>
+              <p>
+                <span className="text-slate-500">Contact rate:</span>{" "}
+                <span className="font-semibold text-slate-800">
+                  {contactRate}
+                </span>{" "}
+                <span className="text-slate-400">(connects ÷ dials)</span>
+              </p>
+              <p>
+                <span className="text-slate-500">Dials per meeting booked:</span>{" "}
+                <span className="font-semibold text-slate-800">
+                  {dialsPerBooked}
+                </span>
+              </p>
+              <p>
+                <span className="text-slate-500">Booking rate:</span>{" "}
+                <span className="font-semibold text-slate-800">
+                  {bookingRate}
+                </span>{" "}
+                <span className="text-slate-400">(booked ÷ prospects)</span>
+              </p>
+              <p>
+                <span className="text-slate-500">Show rate:</span>{" "}
+                <span className="font-semibold text-slate-800">
+                  {heldRate}
+                </span>{" "}
+                <span className="text-slate-400">(held ÷ booked)</span>
+              </p>
+            </div>
+          )}
+
+        {suggested && (
+          <div className="bg-blue-50 border border-blue-200 rounded-md p-3 space-y-2">
+            <p className="text-[10px] font-semibold text-blue-700 uppercase tracking-wider">
+              Suggested weekly goals to hit {suggested.meetingsHeldTarget}{" "}
+              meetings held
+            </p>
+            <table className="w-full text-xs">
+              <tbody>
+                <SuggestRow label="Dials / week" value={suggested.dials} />
+                <SuggestRow label="Connects / week" value={suggested.connects} />
+                <SuggestRow
+                  label="Prospects dialed / week"
+                  value={suggested.prospects}
+                />
+                <SuggestRow
+                  label="Meetings booked / week"
+                  value={suggested.meetingsBooked}
+                />
+                <SuggestRow
+                  label="Meetings held / week"
+                  value={suggested.meetingsHeldTarget}
+                />
+              </tbody>
+            </table>
+            <p className="text-[10px] text-blue-700/80 italic pt-1">
+              Note: Connects is used for the calc but isn&apos;t stored as a
+              quarterly goal — the other four update the current quarter&apos;s
+              weekly goals when you Apply.
+            </p>
+          </div>
+        )}
+
+        {!suggested && (
+          <p className="text-[11px] text-slate-500 italic">
+            Fill in at least Meetings held (historical) plus the Target, and
+            one of the funnel numbers, to see a suggestion.
+          </p>
+        )}
+
+        <div className="flex justify-end gap-2 pt-1">
+          <button
+            onClick={onClose}
+            className="text-xs font-semibold text-slate-600 hover:text-slate-900 bg-slate-50 hover:bg-slate-100 border border-slate-200 px-3 py-1.5 rounded-md"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={() => suggested && onApply(suggested)}
+            disabled={!suggested}
+            className="text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed px-3 py-1.5 rounded-md shadow-sm"
+          >
+            Apply as weekly goals
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SuggestRow({ label, value }: { label: string; value: number }) {
+  return (
+    <tr>
+      <td className="text-slate-700 py-0.5">{label}</td>
+      <td className="text-right font-bold text-slate-900 py-0.5 tabular-nums">
+        {value}
+      </td>
+    </tr>
   );
 }
 

@@ -102,6 +102,8 @@ function describeMeetingChanges(before: Meeting, after: Meeting): string {
   if ((before.accountId ?? "") !== (after.accountId ?? ""))
     changed.push("account");
   if ((before.ese ?? "") !== (after.ese ?? "")) changed.push("ESE");
+  if ((before.bookedCategory ?? "") !== (after.bookedCategory ?? ""))
+    changed.push("booked category");
   if (before.scheduledFor !== after.scheduledFor)
     changed.push("scheduled time");
   if (before.notes !== after.notes) changed.push("notes");
@@ -984,6 +986,24 @@ function MeetingCard({
                 ESE: {meeting.ese}
               </span>
             )}
+            {meeting.bookedCategory && (
+              <span
+                className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border ${
+                  meeting.bookedCategory === "confirmed"
+                    ? "bg-indigo-100 text-indigo-800 border-indigo-300"
+                    : "bg-yellow-50 text-yellow-800 border-yellow-300"
+                }`}
+                title={
+                  meeting.bookedCategory === "confirmed"
+                    ? "Time locked in"
+                    : "Tentative — time not yet firm"
+                }
+              >
+                {meeting.bookedCategory === "confirmed"
+                  ? "Confirmed Booked"
+                  : "Soft Booked"}
+              </span>
+            )}
             {meeting.status === "booked" && (
               <span className="flex items-center gap-1">
                 <CalendarClock className="w-3 h-3" />
@@ -1161,6 +1181,9 @@ function MeetingModal({
   const [linkedinUrl, setLinkedinUrl] = useState(source?.linkedinUrl ?? "");
   const [accountId, setAccountId] = useState(source?.accountId ?? "");
   const [ese, setEse] = useState(source?.ese ?? "");
+  const [bookedCategory, setBookedCategory] = useState<
+    import("@/lib/types").BookedCategory | ""
+  >(source?.bookedCategory ?? "");
   const [scheduledFor, setScheduledFor] = useState(source?.scheduledFor ?? "");
   const [notes, setNotes] = useState(source?.notes ?? "");
   const [image, setImage] = useState<string | null>(source?.image ?? null);
@@ -1292,6 +1315,7 @@ function MeetingModal({
     if (source?.heldAt) meeting.heldAt = source.heldAt;
     if (image) meeting.image = image;
     if (ese) meeting.ese = ese;
+    if (bookedCategory) meeting.bookedCategory = bookedCategory;
     onSave(meeting);
   };
 
@@ -1500,6 +1524,22 @@ function MeetingModal({
                 {name}
               </option>
             ))}
+          </select>
+        </Field>
+
+        <Field label="Booked category">
+          <select
+            value={bookedCategory}
+            onChange={(e) =>
+              setBookedCategory(
+                e.target.value as import("@/lib/types").BookedCategory | "",
+              )
+            }
+            className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+          >
+            <option value="">— Not set —</option>
+            <option value="confirmed">Confirmed Booked</option>
+            <option value="soft">Soft Booked</option>
           </select>
         </Field>
 

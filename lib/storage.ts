@@ -306,6 +306,9 @@ function cleanMeetings(raw: unknown): Meeting[] {
       ) {
         clean.heldOutcome = m.heldOutcome;
       }
+      if (m.bookedCategory === "confirmed" || m.bookedCategory === "soft") {
+        clean.bookedCategory = m.bookedCategory;
+      }
       if (Array.isArray(m.updates)) {
         const updates = m.updates
           .filter(

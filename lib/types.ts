@@ -438,6 +438,11 @@ export type AppView = "account" | "goals" | "meetings";
 
 export type MeetingStatus = "booked" | "held" | "dead-end";
 
+// Whether the meeting time is fully locked in ("confirmed") or still
+// tentative ("soft"). Applies to booked meetings; preserved on held /
+// dead-end meetings for history.
+export type BookedCategory = "confirmed" | "soft";
+
 // Whether the prospect has replied to the booked meeting invite. Only
 // meaningful while status === "booked"; the field is preserved on held
 // meetings for history.
@@ -484,6 +489,9 @@ export interface Meeting {
   ese?: string;
   // Outcome of a held meeting. Optional; defaults to unset.
   heldOutcome?: HeldOutcome;
+  // Confidence in the meeting time: confirmed (locked in) vs soft
+  // (tentative). Optional.
+  bookedCategory?: BookedCategory;
   // Append-only log of dated updates. Each entry is timestamped when
   // added so the card shows a running history of what happened between
   // now and the meeting.

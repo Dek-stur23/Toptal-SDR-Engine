@@ -156,6 +156,28 @@ export async function deleteGoalLog(
   if (error) throw error;
 }
 
+// Partial update. `note`/`accountId`/`count` — pass undefined to leave
+// a field alone, or the new value to overwrite it (empty string on
+// note/accountId is stored as null).
+export async function updateGoalLog(
+  supabase: SupabaseClient,
+  id: string,
+  patch: { count?: number; note?: string | null; accountId?: string | null }
+): Promise<GoalLogEntry> {
+  const dbPatch: Record<string, unknown> = {};
+  if (patch.count !== undefined) dbPatch.count = patch.count;
+  if (patch.note !== undefined) dbPatch.note = patch.note || null;
+  if (patch.accountId !== undefined) dbPatch.account_id = patch.accountId || null;
+  const { data, error } = await supabase
+    .from("goal_logs")
+    .update(dbPatch)
+    .eq("id", id)
+    .select(LOG_COLS)
+    .single();
+  if (error) throw error;
+  return toGoalLog(data as GoalLogRow);
+}
+
 // ---------- saved_weeks ----------
 
 interface SavedWeekRow {

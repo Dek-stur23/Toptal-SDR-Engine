@@ -864,11 +864,16 @@ function MeetingChip({
   const rescheduled = meeting.prospectResponse === "rescheduled";
   const stillScheduling = meeting.prospectResponse === "still-scheduling";
 
-  // Color:
-  //   dead-end=slate (closed, no next step)
-  //   held=emerald
-  //   declined=red, no-show=amber, rescheduled=sky, still-scheduling=teal
-  //   accepted booked=blue-strong, no-response booked=blue-soft.
+  // Color palette matches the list-view response chip mapping so the
+  // same meeting reads the same at a glance across views:
+  //   dead-end       → slate strike-through (matches list card)
+  //   held           → emerald (matches list "Held" chip)
+  //   declined       → red
+  //   no-show        → amber
+  //   rescheduled    → sky
+  //   still-scheduling → teal
+  //   accepted booked  → emerald (matches list response chip)
+  //   no-response      → slate (matches list response chip)
   const cls = isDeadEnd
     ? "bg-slate-100 text-slate-600 border-slate-300 hover:bg-slate-200 line-through decoration-slate-400"
     : isHeld
@@ -882,8 +887,8 @@ function MeetingChip({
             : stillScheduling
               ? "bg-teal-50 text-teal-800 border-teal-200 hover:bg-teal-100"
               : accepted
-                ? "bg-blue-100 text-blue-900 border-blue-300 hover:bg-blue-200"
-                : "bg-blue-50 text-blue-800 border-blue-200 hover:bg-blue-100";
+                ? "bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100"
+                : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100";
 
   const responseLabel = isDeadEnd
     ? " · Dead End"

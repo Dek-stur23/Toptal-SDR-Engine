@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BarChart3, CalendarClock, ShieldCheck } from "lucide-react";
+import { BarChart3, Building2, CalendarClock, ShieldCheck } from "lucide-react";
 import { clsx } from "clsx";
 import type { Profile } from "@/lib/types";
 
@@ -24,6 +24,7 @@ export function AppShell({
   const tabs = [
     { href: "/goals", label: "Goals & Metrics", icon: BarChart3 },
     { href: "/meetings", label: "Meetings Tracker", icon: CalendarClock },
+    { href: "/accounts", label: "Accounts", icon: Building2 },
   ];
   if (profile?.isAdmin) {
     tabs.push({ href: "/admin/invites", label: "Admin", icon: ShieldCheck });

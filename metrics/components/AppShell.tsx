@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BarChart3, Building2, CalendarClock, ShieldCheck } from "lucide-react";
+import { BarChart3, Building2, CalendarClock, Settings as SettingsIcon, ShieldCheck } from "lucide-react";
 import { clsx } from "clsx";
 import type { Profile } from "@/lib/types";
 import { OnboardingModal } from "@/components/OnboardingModal";
@@ -67,6 +67,14 @@ export function AppShell({
             <span className="hidden text-xs text-slate-500 sm:inline">
               {profile?.displayName || email}
             </span>
+            <Link
+              href="/settings"
+              className="rounded border border-slate-300 p-1 text-slate-600 hover:bg-slate-100"
+              title="Settings"
+              aria-label="Settings"
+            >
+              <SettingsIcon className="w-3.5 h-3.5" />
+            </Link>
             <form action="/auth/signout" method="post">
               <button
                 type="submit"

@@ -1053,6 +1053,15 @@ function CalculateGoalsModal({
   const [meetingsBooked, setMeetingsBooked] = useState("");
   const [meetingsHeld, setMeetingsHeld] = useState("");
   const [target, setTarget] = useState("");
+  // Period the historical numbers + target cover. Weekly = 1, monthly
+  // ≈ 4.33 weeks, quarterly = 13. Used to convert the suggestion to
+  // a weekly breakdown for the "Check" action + Apply.
+  const [period, setPeriod] = useState<"weekly" | "monthly" | "quarterly">(
+    "weekly",
+  );
+  const [showWeekly, setShowWeekly] = useState(false);
+  const weeksInPeriod =
+    period === "weekly" ? 1 : period === "monthly" ? 4.33 : 13;
 
   const parse = (s: string) => {
     const n = Number.parseFloat(s);
@@ -1082,6 +1091,21 @@ function CalculateGoalsModal({
         prospects: Math.ceil(nProspects * ratio),
         meetingsBooked: Math.ceil(nMeetingsBooked * ratio),
         meetingsHeldTarget: nTarget,
+      }
+    : null;
+
+  // Weekly breakdown of the suggestion — divide each value by the
+  // number of weeks the entered period covers. When the user picks
+  // "weekly", this matches the same-period suggestion exactly.
+  const weekly: CalculatedSuggestion | null = suggested
+    ? {
+        dials: Math.ceil(suggested.dials / weeksInPeriod),
+        connects: Math.ceil(suggested.connects / weeksInPeriod),
+        prospects: Math.ceil(suggested.prospects / weeksInPeriod),
+        meetingsBooked: Math.ceil(suggested.meetingsBooked / weeksInPeriod),
+        meetingsHeldTarget: Math.ceil(
+          suggested.meetingsHeldTarget / weeksInPeriod,
+        ),
       }
     : null;
 
@@ -1129,9 +1153,30 @@ function CalculateGoalsModal({
         </div>
 
         <div className="space-y-3">
-          <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
-            Historical average
-          </p>
+          <div className="flex items-center justify-between">
+            <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+              Historical average
+            </p>
+            <label className="inline-flex items-center gap-1.5 text-[11px] text-slate-500">
+              <span className="uppercase tracking-wider font-semibold">
+                Period
+              </span>
+              <select
+                value={period}
+                onChange={(e) => {
+                  setPeriod(
+                    e.target.value as "weekly" | "monthly" | "quarterly",
+                  );
+                  setShowWeekly(false);
+                }}
+                className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs text-slate-800 focus:ring-2 focus:ring-blue-500 outline-none"
+              >
+                <option value="weekly">Weekly</option>
+                <option value="monthly">Monthly</option>
+                <option value="quarterly">Quarterly</option>
+              </select>
+            </label>
+          </div>
           <div className="grid grid-cols-2 gap-3">
             <NumberField
               label="Dials"
@@ -1217,32 +1262,97 @@ function CalculateGoalsModal({
 
         {suggested && (
           <div className="bg-blue-50 border border-blue-200 rounded-md p-3 space-y-2">
-            <p className="text-[10px] font-semibold text-blue-700 uppercase tracking-wider">
-              Suggested goals to hit {suggested.meetingsHeldTarget} meetings
-              held
-            </p>
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <p className="text-[10px] font-semibold text-blue-700 uppercase tracking-wider">
+                Suggested goals to hit {suggested.meetingsHeldTarget}{" "}
+                meetings held
+                {period !== "weekly" && (
+                  <span className="normal-case font-normal text-blue-700/70">
+                    {" "}
+                    (per {period.replace(/ly$/, "")})
+                  </span>
+                )}
+              </p>
+              <button
+                onClick={() => setShowWeekly((v) => !v)}
+                className="text-[10px] font-semibold text-blue-700 hover:text-white hover:bg-blue-600 border border-blue-300 hover:border-blue-600 px-2 py-0.5 rounded transition-colors"
+              >
+                {showWeekly ? "Hide weekly breakdown" : "Check weekly breakdown"}
+              </button>
+            </div>
             <table className="w-full text-xs">
+              <thead>
+                {showWeekly && weekly && period !== "weekly" && (
+                  <tr className="text-[10px] uppercase tracking-wider text-blue-700/70">
+                    <th className="text-left font-semibold py-1"></th>
+                    <th className="text-right font-semibold py-1">
+                      Per {period.replace(/ly$/, "")}
+                    </th>
+                    <th className="text-right font-semibold py-1 pl-3">
+                      Per week
+                    </th>
+                  </tr>
+                )}
+              </thead>
               <tbody>
-                <SuggestRow label="Dials" value={suggested.dials} />
-                <SuggestRow label="Connects" value={suggested.connects} />
+                <SuggestRow
+                  label="Dials"
+                  value={suggested.dials}
+                  weeklyValue={
+                    showWeekly && weekly && period !== "weekly"
+                      ? weekly.dials
+                      : undefined
+                  }
+                />
+                <SuggestRow
+                  label="Connects"
+                  value={suggested.connects}
+                  weeklyValue={
+                    showWeekly && weekly && period !== "weekly"
+                      ? weekly.connects
+                      : undefined
+                  }
+                />
                 <SuggestRow
                   label="Prospects dialed"
                   value={suggested.prospects}
+                  weeklyValue={
+                    showWeekly && weekly && period !== "weekly"
+                      ? weekly.prospects
+                      : undefined
+                  }
                 />
                 <SuggestRow
                   label="Meetings booked"
                   value={suggested.meetingsBooked}
+                  weeklyValue={
+                    showWeekly && weekly && period !== "weekly"
+                      ? weekly.meetingsBooked
+                      : undefined
+                  }
                 />
                 <SuggestRow
                   label="Meetings held"
                   value={suggested.meetingsHeldTarget}
+                  weeklyValue={
+                    showWeekly && weekly && period !== "weekly"
+                      ? weekly.meetingsHeldTarget
+                      : undefined
+                  }
                 />
               </tbody>
             </table>
+            {showWeekly && weekly && period === "weekly" && (
+              <p className="text-[10px] text-blue-700/80 italic">
+                You entered weekly numbers, so the weekly breakdown matches
+                the suggestion above 1:1.
+              </p>
+            )}
             <p className="text-[10px] text-blue-700/80 italic pt-1">
               Note: Connects is used for the calc but isn&apos;t stored as a
               quarterly goal — the other four update the current
-              quarter&apos;s goals when you Apply.
+              quarter&apos;s goals when you Apply (using the weekly
+              breakdown, since goals are stored weekly).
             </p>
           </div>
         )}
@@ -1262,8 +1372,8 @@ function CalculateGoalsModal({
             Cancel
           </button>
           <button
-            onClick={() => suggested && onApply(suggested)}
-            disabled={!suggested}
+            onClick={() => weekly && onApply(weekly)}
+            disabled={!weekly}
             className="text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed px-3 py-1.5 rounded-md shadow-sm"
           >
             Apply as weekly goals
@@ -1274,13 +1384,26 @@ function CalculateGoalsModal({
   );
 }
 
-function SuggestRow({ label, value }: { label: string; value: number }) {
+function SuggestRow({
+  label,
+  value,
+  weeklyValue,
+}: {
+  label: string;
+  value: number;
+  weeklyValue?: number;
+}) {
   return (
     <tr>
       <td className="text-slate-700 py-0.5">{label}</td>
       <td className="text-right font-bold text-slate-900 py-0.5 tabular-nums">
         {value}
       </td>
+      {weeklyValue !== undefined && (
+        <td className="text-right font-bold text-blue-700 py-0.5 tabular-nums pl-3">
+          {weeklyValue}
+        </td>
+      )}
     </tr>
   );
 }

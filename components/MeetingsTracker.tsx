@@ -176,6 +176,16 @@ export function MeetingsTracker({
   const [modalMode, setModalMode] = useState<
     { kind: "create" } | { kind: "edit"; meeting: Meeting } | null
   >(null);
+  // Details popup shown when a calendar chip is clicked. Holds a
+  // meeting id (not the meeting itself) so it stays in sync as the
+  // user mutates the meeting via the card controls inside it.
+  const [viewingMeetingId, setViewingMeetingId] = useState<number | null>(
+    null,
+  );
+  const viewingMeeting =
+    viewingMeetingId !== null
+      ? state.meetings.find((x) => x.id === viewingMeetingId) ?? null
+      : null;
 
   const accountNameById = useMemo(() => {
     const m: Record<string, string> = {};
@@ -534,7 +544,7 @@ export function MeetingsTracker({
         <CalendarView
           meetings={filteredMeetings}
           accountNameById={accountNameById}
-          onOpenMeeting={(m) => setModalMode({ kind: "edit", meeting: m })}
+          onOpenMeeting={(m) => setViewingMeetingId(m.id)}
         />
       ) : (
       <>
@@ -664,6 +674,34 @@ export function MeetingsTracker({
           accounts={activeAccounts}
           onClose={() => setModalMode(null)}
           onSave={upsertMeeting}
+        />
+      )}
+
+      {viewingMeeting && (
+        <MeetingDetailsModal
+          meeting={viewingMeeting}
+          accountNameById={accountNameById}
+          onClose={() => setViewingMeetingId(null)}
+          onEdit={() => {
+            setModalMode({ kind: "edit", meeting: viewingMeeting });
+            setViewingMeetingId(null);
+          }}
+          onConvert={() => convertToHeld(viewingMeeting.id)}
+          onMarkDeadEnd={() => markDeadEnd(viewingMeeting.id)}
+          onMoveBack={() => moveBackToBooked(viewingMeeting.id)}
+          onDelete={() => {
+            deleteMeeting(viewingMeeting.id);
+            setViewingMeetingId(null);
+          }}
+          onSetProspectResponse={(r) =>
+            setProspectResponse(viewingMeeting.id, r)
+          }
+          onSetHeldOutcome={(o) => setHeldOutcome(viewingMeeting.id, o)}
+          onSetNotes={(n) => setMeetingNotes(viewingMeeting.id, n)}
+          onAddUpdate={(t) => addMeetingUpdate(viewingMeeting.id, t)}
+          onRemoveUpdate={(uid) =>
+            removeMeetingUpdate(viewingMeeting.id, uid)
+          }
         />
       )}
     </div>
@@ -918,6 +956,99 @@ function MeetingChip({
       )}
       <span className="truncate">{name}</span>
     </button>
+  );
+}
+
+// Details popup shown when a calendar chip is clicked. Wraps a
+// MeetingCard so every interaction from the list view (change
+// response, add updates, edit fields, convert to held, delete, ...)
+// works the same way inside the modal. Backdrop-clickable to close
+// since it's primarily a viewer, not a form.
+function MeetingDetailsModal({
+  meeting,
+  accountNameById,
+  onClose,
+  onEdit,
+  onConvert,
+  onMarkDeadEnd,
+  onMoveBack,
+  onDelete,
+  onSetProspectResponse,
+  onSetHeldOutcome,
+  onSetNotes,
+  onAddUpdate,
+  onRemoveUpdate,
+}: {
+  meeting: Meeting;
+  accountNameById: Record<string, string>;
+  onClose: () => void;
+  onEdit: () => void;
+  onConvert: () => void;
+  onMarkDeadEnd: () => void;
+  onMoveBack: () => void;
+  onDelete: () => void;
+  onSetProspectResponse: (
+    r: import("@/lib/types").ProspectResponse,
+  ) => void;
+  onSetHeldOutcome: (
+    o: import("@/lib/types").HeldOutcome | null,
+  ) => void;
+  onSetNotes: (notes: string) => void;
+  onAddUpdate: (text: string) => void;
+  onRemoveUpdate: (id: number) => void;
+}) {
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [onClose]);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 bg-slate-900/70 flex items-start justify-center p-4 overflow-y-auto"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white rounded-xl shadow-xl max-w-2xl w-full my-8"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-blue-50 text-blue-600">
+              <CalendarDays className="w-4 h-4" />
+            </div>
+            <h3 className="text-base font-bold text-slate-900">
+              Meeting details
+            </h3>
+          </div>
+          <button
+            onClick={onClose}
+            className="text-slate-400 hover:text-slate-700"
+            aria-label="Close"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+        <div className="p-4">
+          <MeetingCard
+            meeting={meeting}
+            accountNameById={accountNameById}
+            onEdit={onEdit}
+            onConvert={onConvert}
+            onMarkDeadEnd={onMarkDeadEnd}
+            onMoveBack={onMoveBack}
+            onDelete={onDelete}
+            onSetProspectResponse={onSetProspectResponse}
+            onSetHeldOutcome={onSetHeldOutcome}
+            onSetNotes={onSetNotes}
+            onAddUpdate={onAddUpdate}
+            onRemoveUpdate={onRemoveUpdate}
+          />
+        </div>
+      </div>
+    </div>
   );
 }
 

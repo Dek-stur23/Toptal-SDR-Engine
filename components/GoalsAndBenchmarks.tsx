@@ -1110,7 +1110,7 @@ function CalculateGoalsModal({
                 Calculate goals
               </h3>
               <p className="text-[11px] text-slate-500 mt-0.5">
-                Enter your historical weekly numbers, then a target for
+                Enter your historical numbers, then a target for
                 meetings held.
               </p>
             </div>
@@ -1126,7 +1126,7 @@ function CalculateGoalsModal({
 
         <div className="space-y-3">
           <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
-            Historical weekly average
+            Historical average
           </p>
           <div className="grid grid-cols-2 gap-3">
             <NumberField
@@ -1157,7 +1157,7 @@ function CalculateGoalsModal({
           </div>
 
           <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider pt-2">
-            Weekly target
+            Target
           </p>
           <NumberField
             label="Meetings held — target"
@@ -1205,31 +1205,31 @@ function CalculateGoalsModal({
         {suggested && (
           <div className="bg-blue-50 border border-blue-200 rounded-md p-3 space-y-2">
             <p className="text-[10px] font-semibold text-blue-700 uppercase tracking-wider">
-              Suggested weekly goals to hit {suggested.meetingsHeldTarget}{" "}
-              meetings held
+              Suggested goals to hit {suggested.meetingsHeldTarget} meetings
+              held
             </p>
             <table className="w-full text-xs">
               <tbody>
-                <SuggestRow label="Dials / week" value={suggested.dials} />
-                <SuggestRow label="Connects / week" value={suggested.connects} />
+                <SuggestRow label="Dials" value={suggested.dials} />
+                <SuggestRow label="Connects" value={suggested.connects} />
                 <SuggestRow
-                  label="Prospects dialed / week"
+                  label="Prospects dialed"
                   value={suggested.prospects}
                 />
                 <SuggestRow
-                  label="Meetings booked / week"
+                  label="Meetings booked"
                   value={suggested.meetingsBooked}
                 />
                 <SuggestRow
-                  label="Meetings held / week"
+                  label="Meetings held"
                   value={suggested.meetingsHeldTarget}
                 />
               </tbody>
             </table>
             <p className="text-[10px] text-blue-700/80 italic pt-1">
               Note: Connects is used for the calc but isn&apos;t stored as a
-              quarterly goal — the other four update the current quarter&apos;s
-              weekly goals when you Apply.
+              quarterly goal — the other four update the current
+              quarter&apos;s goals when you Apply.
             </p>
           </div>
         )}

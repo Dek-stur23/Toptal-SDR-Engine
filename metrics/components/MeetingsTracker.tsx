@@ -14,6 +14,7 @@ import {
   Edit2,
   ExternalLink,
   Filter,
+  Image as ImageIcon,
   List,
   Plus,
   RotateCcw,
@@ -21,6 +22,11 @@ import {
   X,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import {
+  deleteMeetingImage,
+  uploadMeetingImage,
+} from "@/lib/storage/images";
+import { useImage } from "@/lib/hooks/useImage";
 import { listAccounts } from "@/lib/data/accounts";
 import {
   addMeetingUpdate,
@@ -446,6 +452,14 @@ export function MeetingsTracker() {
         : "this meeting";
     if (!window.confirm(`Delete meeting with ${label}?`)) return;
     await deleteMeetingRow(supabase, id);
+    if (m?.imageKey) {
+      try {
+        await deleteMeetingImage(supabase, m.imageKey);
+      } catch {
+        // Best-effort: leave the object orphaned rather than block the
+        // delete on a storage error.
+      }
+    }
     setMeetings((prev) => prev.filter((x) => x.id !== id));
     setUpdatesById((prev) => {
       const next = { ...prev };
@@ -1015,10 +1029,29 @@ function MeetingCard({
     ? accountNameById[meeting.accountId] ?? "(deleted account)"
     : null;
   const pastDue = meeting.status === "booked" && isPastDue(meeting.scheduledFor);
+  const imageSrc = useImage(meeting.imageKey);
+  const [viewingImage, setViewingImage] = useState(false);
 
   return (
     <li className="bg-white border border-slate-200 rounded-lg shadow-sm p-4 space-y-2.5 list-none">
       <div className="flex items-start justify-between gap-3">
+        {meeting.imageKey && (
+          <button
+            onClick={() => setViewingImage(true)}
+            className="shrink-0 w-12 h-12 rounded-md overflow-hidden border border-slate-200 hover:border-blue-400 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 bg-slate-100"
+            title="View saved screenshot"
+            aria-label="View saved screenshot"
+          >
+            {imageSrc && (
+              /* eslint-disable-next-line @next/next/no-img-element */
+              <img
+                src={imageSrc}
+                alt={`Screenshot for ${fullName}`}
+                className="w-full h-full object-cover"
+              />
+            )}
+          </button>
+        )}
         <div className="min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="font-semibold text-sm text-slate-900 truncate">
@@ -1185,6 +1218,32 @@ function MeetingCard({
           <Trash2 className="w-3 h-3" /> Delete
         </button>
       </div>
+
+      {viewingImage && meeting.imageKey && (
+        <div
+          onClick={() => setViewingImage(false)}
+          className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4"
+          role="dialog"
+          aria-modal="true"
+        >
+          {imageSrc && (
+            /* eslint-disable-next-line @next/next/no-img-element */
+            <img
+              src={imageSrc}
+              alt={`Screenshot for ${fullName}`}
+              className="max-w-full max-h-full object-contain rounded shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            />
+          )}
+          <button
+            onClick={() => setViewingImage(false)}
+            className="absolute top-4 right-4 text-white/80 hover:text-white bg-black/40 hover:bg-black/60 rounded-full w-10 h-10 flex items-center justify-center transition-colors"
+            aria-label="Close image preview"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+      )}
     </li>
   );
 }
@@ -1218,8 +1277,60 @@ function MeetingModal({
     isoToDatetimeLocal(source?.scheduledFor ?? null)
   );
   const [notes, setNotes] = useState(source?.notes ?? "");
+  const [imageKey, setImageKey] = useState<string | null>(source?.imageKey ?? null);
+  const imageSrc = useImage(imageKey);
+  const [uploading, setUploading] = useState(false);
+  const [imageError, setImageError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  // Track image keys added in this session but not yet saved to the
+  // meeting so we can clean them up on cancel. The one on `source` is
+  // never in this set — it's already persisted.
+  const uploadedKeysRef = useRef<string[]>([]);
+
+  const supabase = useMemo(() => createClient(), []);
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    setImageError(null);
+    try {
+      const key = await uploadMeetingImage(supabase, file);
+      // Best-effort cleanup of the prior in-session upload — the
+      // previously saved key stays if the user cancels.
+      const previous = imageKey;
+      if (previous && uploadedKeysRef.current.includes(previous)) {
+        try {
+          await deleteMeetingImage(supabase, previous);
+        } catch {
+          /* ignore */
+        }
+      }
+      uploadedKeysRef.current.push(key);
+      setImageKey(key);
+    } catch (err) {
+      setImageError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setUploading(false);
+      // Reset the input so re-picking the same file re-fires onChange.
+      e.target.value = "";
+    }
+  };
+
+  const handleRemoveImage = async () => {
+    const previous = imageKey;
+    setImageKey(null);
+    setImageError(null);
+    if (previous && uploadedKeysRef.current.includes(previous)) {
+      try {
+        await deleteMeetingImage(supabase, previous);
+      } catch {
+        /* ignore */
+      }
+    }
+  };
 
   const submit = async () => {
     if (
@@ -1240,7 +1351,7 @@ function MeetingModal({
       scheduledFor: datetimeLocalToIso(scheduledFor),
       notes: notes.trim(),
       status: source?.status ?? "booked",
-      imageKey: source?.imageKey ?? null,
+      imageKey: imageKey,
       prospectResponse: source?.prospectResponse ?? null,
       ese: ese || null,
       heldOutcome: source?.heldOutcome ?? null,
@@ -1249,6 +1360,9 @@ function MeetingModal({
     setBusy(true);
     try {
       await onSave(draft, source?.id ?? null);
+      // Save succeeded — session-uploaded keys are now attached to a
+      // persisted meeting, so drop them from the cleanup list.
+      uploadedKeysRef.current = [];
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
       setBusy(false);
@@ -1266,7 +1380,8 @@ function MeetingModal({
         (ese || null) !== (source.ese ?? null) ||
         (bookedCategory || null) !== (source.bookedCategory ?? null) ||
         datetimeLocalToIso(scheduledFor) !== source.scheduledFor ||
-        notes !== source.notes
+        notes !== source.notes ||
+        imageKey !== (source.imageKey ?? null)
       );
     }
     return (
@@ -1278,11 +1393,12 @@ function MeetingModal({
       !!ese ||
       !!bookedCategory ||
       scheduledFor.trim() !== "" ||
-      notes.trim() !== ""
+      notes.trim() !== "" ||
+      imageKey !== null
     );
   };
 
-  const guardedClose = () => {
+  const guardedClose = async () => {
     if (
       isDirty() &&
       !window.confirm(
@@ -1291,6 +1407,16 @@ function MeetingModal({
     ) {
       return;
     }
+    // Clean up any in-session uploads that never made it onto a saved
+    // meeting. The user's persisted image (if any) is left alone.
+    for (const k of uploadedKeysRef.current) {
+      try {
+        await deleteMeetingImage(supabase, k);
+      } catch {
+        /* ignore */
+      }
+    }
+    uploadedKeysRef.current = [];
     onClose();
   };
 
@@ -1326,8 +1452,58 @@ function MeetingModal({
           </button>
         </div>
 
-        {/* Screenshot + autofill UI lands in a follow-up commit that
-            adds Supabase Storage upload + the /api/generate route. */}
+        {/* Screenshot upload (Supabase Storage). AI autofill from image
+            lands in the /api/generate commit. */}
+        <div>
+          <div className="flex items-center justify-between mb-1">
+            <span className="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider">
+              LinkedIn screenshot (optional)
+            </span>
+          </div>
+          <div className="border-2 border-dashed border-blue-200 rounded-lg h-24 flex items-center justify-center bg-white relative overflow-hidden shadow-sm hover:bg-blue-50/30 transition-colors">
+            {imageKey ? (
+              <div className="w-full h-full relative group">
+                {imageSrc && (
+                  /* eslint-disable-next-line @next/next/no-img-element */
+                  <img
+                    src={imageSrc}
+                    alt="LinkedIn screenshot"
+                    className="w-full h-full object-cover opacity-70"
+                  />
+                )}
+                <button
+                  onClick={() => void handleRemoveImage()}
+                  className="absolute inset-0 flex items-center justify-center text-sm font-semibold text-red-600 bg-white/80 hover:bg-white transition-all opacity-0 group-hover:opacity-100"
+                >
+                  Remove image
+                </button>
+              </div>
+            ) : (
+              <>
+                <input
+                  type="file"
+                  accept="image/*"
+                  id={`meeting-image-upload-${source?.id ?? "new"}`}
+                  className="hidden"
+                  onChange={(e) => void handleImageUpload(e)}
+                  disabled={uploading}
+                />
+                <label
+                  htmlFor={`meeting-image-upload-${source?.id ?? "new"}`}
+                  className="cursor-pointer flex flex-col items-center justify-center w-full h-full text-blue-500 hover:text-blue-700 transition-colors"
+                >
+                  <ImageIcon className="w-5 h-5 mb-1 opacity-80" />
+                  <span className="text-[11px] font-medium">
+                    {uploading ? "Uploading…" : "Click to upload LinkedIn screenshot"}
+                  </span>
+                </label>
+              </>
+            )}
+          </div>
+          {imageError && (
+            <p className="text-xs text-red-600 mt-1">{imageError}</p>
+          )}
+        </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <Field label="First name">

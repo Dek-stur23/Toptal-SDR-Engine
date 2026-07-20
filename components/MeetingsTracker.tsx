@@ -199,16 +199,21 @@ export function MeetingsTracker({
   const [filterStatuses, setFilterStatuses] = useState<
     import("@/lib/types").MeetingStatus[]
   >([]);
+  const [filterBookedCategories, setFilterBookedCategories] = useState<
+    import("@/lib/types").BookedCategory[]
+  >([]);
   const anyFilterActive =
     filterAccountIds.length > 0 ||
     filterEses.length > 0 ||
     filterResponses.length > 0 ||
-    filterStatuses.length > 0;
+    filterStatuses.length > 0 ||
+    filterBookedCategories.length > 0;
   const clearFilters = () => {
     setFilterAccountIds([]);
     setFilterEses([]);
     setFilterResponses([]);
     setFilterStatuses([]);
+    setFilterBookedCategories([]);
   };
 
   // Apply filters BEFORE slicing into booked/held so both sections and
@@ -238,6 +243,14 @@ export function MeetingsTracker({
         const r = m.prospectResponse ?? "no-response";
         if (!filterResponses.includes(r)) return false;
       }
+      if (filterBookedCategories.length > 0) {
+        if (
+          !m.bookedCategory ||
+          !filterBookedCategories.includes(m.bookedCategory)
+        ) {
+          return false;
+        }
+      }
       return true;
     });
   }, [
@@ -247,6 +260,7 @@ export function MeetingsTracker({
     filterEses,
     filterResponses,
     filterStatuses,
+    filterBookedCategories,
   ]);
 
   const booked = useMemo(
@@ -508,6 +522,8 @@ export function MeetingsTracker({
         onFilterResponses={setFilterResponses}
         filterStatuses={filterStatuses}
         onFilterStatuses={setFilterStatuses}
+        filterBookedCategories={filterBookedCategories}
+        onFilterBookedCategories={setFilterBookedCategories}
         anyFilterActive={anyFilterActive}
         onClear={clearFilters}
         matchCount={filteredMeetings.length}
@@ -1603,6 +1619,8 @@ function FilterBar({
   onFilterResponses,
   filterStatuses,
   onFilterStatuses,
+  filterBookedCategories,
+  onFilterBookedCategories,
   anyFilterActive,
   onClear,
   matchCount,
@@ -1620,6 +1638,10 @@ function FilterBar({
   filterStatuses: import("@/lib/types").MeetingStatus[];
   onFilterStatuses: (
     v: import("@/lib/types").MeetingStatus[],
+  ) => void;
+  filterBookedCategories: import("@/lib/types").BookedCategory[];
+  onFilterBookedCategories: (
+    v: import("@/lib/types").BookedCategory[],
   ) => void;
   anyFilterActive: boolean;
   onClear: () => void;
@@ -1643,6 +1665,21 @@ function FilterBar({
           { value: "booked", label: "Booked" },
           { value: "held", label: "Held" },
           { value: "dead-end", label: "Dead End" },
+        ]}
+      />
+
+      <FilterMultiSelect
+        label="Booked category"
+        allLabel="All"
+        selected={filterBookedCategories}
+        onChange={(vs) =>
+          onFilterBookedCategories(
+            vs as import("@/lib/types").BookedCategory[],
+          )
+        }
+        options={[
+          { value: "confirmed", label: "Confirmed Booked" },
+          { value: "soft", label: "Soft Booked" },
         ]}
       />
 

@@ -9,10 +9,12 @@ tools from the SDR Launchpad. Next.js 14 (App Router) on top of Supabase
 1. **Create a Supabase project** at https://supabase.com. Pick the
    nearest region and a strong database password.
 
-2. **Run the initial migration.** Open the Supabase SQL editor, paste
-   the contents of `db/migrations/001_initial.sql`, and run it. This
-   creates all tables, RLS policies, and the invite-gate + auto-profile
-   triggers.
+2. **Run the migrations, in order.** Open the Supabase SQL editor and
+   run each file in `db/migrations/` sequentially:
+   - `001_initial.sql` — tables, RLS policies, invite-gate + auto-
+     profile triggers.
+   - `002_admin_policies.sql` — lets admins manage the invite
+     allowlist from the in-app `/admin/invites` page.
 
 3. **Create the storage bucket** for meeting screenshots. In the
    Supabase dashboard: Storage → New bucket → name `meeting-images`,

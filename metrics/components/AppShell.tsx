@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { BarChart3, Building2, CalendarClock, ShieldCheck } from "lucide-react";
 import { clsx } from "clsx";
 import type { Profile } from "@/lib/types";
+import { OnboardingModal } from "@/components/OnboardingModal";
 
 // Shell rendered by the protected layout. Header with view tabs and a
 // sign-out form; children fill the rest. The current-user profile is
@@ -79,6 +80,13 @@ export function AppShell({
       </header>
 
       <main className="mx-auto max-w-6xl px-6 py-6">{children}</main>
+
+      {profile && profile.onboardedAt === null && (
+        <OnboardingModal
+          initialEmail={email}
+          initialDisplayName={profile.displayName}
+        />
+      )}
     </div>
   );
 }

@@ -52,6 +52,7 @@ interface Props {
   onRestoreBackup: (slot: BackupSlot) => void;
   onSelectGoalsView: () => void;
   onSelectMeetingsView: () => void;
+  onBulkAddAccounts: (names: string[]) => void;
 }
 
 export function Sidebar({
@@ -74,12 +75,14 @@ export function Sidebar({
   onRestoreBackup,
   onSelectGoalsView,
   onSelectMeetingsView,
+  onBulkAddAccounts,
 }: Props) {
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
   const [showBackups, setShowBackups] = useState(false);
   const [backups, setBackups] = useState<BackupSlot[]>([]);
+  const [showBulkAdd, setShowBulkAdd] = useState(false);
   const [storageBytes, setStorageBytes] = useState<number | undefined>(
     undefined,
   );
@@ -286,6 +289,13 @@ export function Sidebar({
         >
           <Plus className="w-4 h-4" /> New Account
         </button>
+        <button
+          onClick={() => setShowBulkAdd(true)}
+          className="w-full text-xs text-slate-400 hover:text-white py-1 flex items-center justify-center gap-1.5 transition-colors"
+          title="Create several accounts at once from a pasted list or file"
+        >
+          <Upload className="w-3 h-3" /> Bulk add accounts
+        </button>
       </div>
 
       <div className="flex-1 overflow-y-auto px-3 pb-4 space-y-1 custom-scrollbar">
@@ -375,6 +385,17 @@ export function Sidebar({
           <History className="w-3.5 h-3.5" /> Restore Snapshot
         </button>
       </div>
+
+      {showBulkAdd && (
+        <BulkAddAccountsModal
+          existingNames={accounts.map((a) => a.name)}
+          onClose={() => setShowBulkAdd(false)}
+          onCreate={(names) => {
+            onBulkAddAccounts(names);
+            setShowBulkAdd(false);
+          }}
+        />
+      )}
 
       {showBackups && (
         <div
@@ -468,6 +489,246 @@ export function Sidebar({
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// Parses pasted / uploaded text into a list of account names.
+// - Newline-separated: one name per line.
+// - CSV with a header row: uses the first column matching name/company/
+//   company name/account (case-insensitive).
+// Blank rows are ignored. Names are trimmed. Order is preserved.
+function parseNamesInput(text: string): string[] {
+  const trimmed = text.trim();
+  if (!trimmed) return [];
+  const lines = trimmed.split(/\r?\n/).filter((l) => l.trim() !== "");
+  if (lines.length === 0) return [];
+
+  // Detect CSV by looking for a comma in the first line and treating the
+  // first line as a header. If any header cell looks like a name-ish
+  // column, use it. Otherwise treat every line as a plain name.
+  if (lines[0].includes(",")) {
+    const parseCsvRow = (row: string): string[] => {
+      const cells: string[] = [];
+      let curr = "";
+      let inQ = false;
+      for (let i = 0; i < row.length; i++) {
+        const ch = row[i];
+        if (ch === '"') {
+          if (inQ && row[i + 1] === '"') {
+            curr += '"';
+            i++;
+          } else {
+            inQ = !inQ;
+          }
+        } else if (ch === "," && !inQ) {
+          cells.push(curr);
+          curr = "";
+        } else {
+          curr += ch;
+        }
+      }
+      cells.push(curr);
+      return cells.map((c) => c.trim());
+    };
+    const nameKeys = ["name", "company", "company name", "account"];
+    const headers = parseCsvRow(lines[0]).map((h) => h.toLowerCase());
+    const nameCol = headers.findIndex((h) => nameKeys.includes(h));
+    if (nameCol !== -1) {
+      return lines
+        .slice(1)
+        .map((line) => parseCsvRow(line)[nameCol] ?? "")
+        .map((s) => s.trim())
+        .filter((s) => s !== "");
+    }
+    // No matching header — fall through and treat every line as-is.
+  }
+  return lines.map((l) => l.trim()).filter((l) => l !== "");
+}
+
+function BulkAddAccountsModal({
+  existingNames,
+  onClose,
+  onCreate,
+}: {
+  existingNames: string[];
+  onClose: () => void;
+  onCreate: (names: string[]) => void;
+}) {
+  const [text, setText] = useState("");
+  const [fileError, setFileError] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement | null>(null);
+
+  const parsed = parseNamesInput(text);
+  const existingLower = new Set(
+    existingNames.map((n) => n.toLowerCase().trim()),
+  );
+  // Dedup within the pasted list too — case-insensitive.
+  const seen = new Set<string>();
+  const toCreate: string[] = [];
+  const duplicatesExisting: string[] = [];
+  const duplicatesWithinInput: string[] = [];
+  for (const name of parsed) {
+    const key = name.toLowerCase();
+    if (existingLower.has(key)) {
+      duplicatesExisting.push(name);
+      continue;
+    }
+    if (seen.has(key)) {
+      duplicatesWithinInput.push(name);
+      continue;
+    }
+    seen.add(key);
+    toCreate.push(name);
+  }
+
+  const handleFile = (file: File) => {
+    setFileError(null);
+    const reader = new FileReader();
+    reader.onerror = () => setFileError("Could not read file.");
+    reader.onload = () => {
+      const raw = reader.result;
+      if (typeof raw !== "string") {
+        setFileError("File is not text.");
+        return;
+      }
+      setText(raw);
+    };
+    reader.readAsText(file);
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 bg-slate-900/70 flex items-start justify-center p-4 overflow-y-auto"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white rounded-xl shadow-xl max-w-lg w-full my-8 text-slate-800"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-blue-50 text-blue-600">
+              <Upload className="w-4 h-4" />
+            </div>
+            <div>
+              <h3 className="text-base font-bold">Bulk add accounts</h3>
+              <p className="text-[11px] text-slate-500 mt-0.5">
+                One account name per line, or a CSV with a name/company
+                column.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="text-slate-400 hover:text-slate-700"
+            aria-label="Close"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="p-4 space-y-4">
+          <textarea
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            placeholder={"Vanta\nLenovo\nCrunchyroll\n..."}
+            rows={8}
+            className="w-full text-sm text-slate-800 border border-slate-300 rounded-md p-2.5 focus:ring-2 focus:ring-blue-500 outline-none resize-y custom-scrollbar leading-relaxed font-mono"
+          />
+
+          <div className="flex items-center justify-between">
+            <input
+              ref={fileRef}
+              type="file"
+              accept=".csv,.txt,text/csv,text/plain"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) handleFile(f);
+                if (fileRef.current) fileRef.current.value = "";
+              }}
+            />
+            <button
+              onClick={() => fileRef.current?.click()}
+              className="text-xs font-semibold text-slate-600 hover:text-slate-900 bg-slate-50 hover:bg-slate-100 border border-slate-200 px-2.5 py-1.5 rounded-md flex items-center gap-1.5"
+            >
+              <Upload className="w-3 h-3" /> Load from file
+            </button>
+            {fileError && (
+              <span className="text-xs text-red-600">{fileError}</span>
+            )}
+          </div>
+
+          {parsed.length > 0 ? (
+            <div className="bg-slate-50 border border-slate-200 rounded-md p-3 text-xs space-y-2">
+              <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">
+                Preview
+              </p>
+              <p className="text-slate-800">
+                <span className="font-bold">{toCreate.length}</span> new{" "}
+                {toCreate.length === 1 ? "account" : "accounts"} will be
+                created.
+              </p>
+              {toCreate.length > 0 && (
+                <ul className="pl-4 text-slate-700 list-disc space-y-0.5 max-h-40 overflow-y-auto custom-scrollbar">
+                  {toCreate.map((n) => (
+                    <li key={n}>{n}</li>
+                  ))}
+                </ul>
+              )}
+              {duplicatesExisting.length > 0 && (
+                <div className="pt-1">
+                  <p className="text-amber-700 font-semibold">
+                    {duplicatesExisting.length} already exist — will be
+                    skipped:
+                  </p>
+                  <ul className="pl-4 text-amber-700 list-disc space-y-0.5 max-h-24 overflow-y-auto custom-scrollbar">
+                    {duplicatesExisting.map((n, i) => (
+                      <li key={`${n}-${i}`}>{n}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {duplicatesWithinInput.length > 0 && (
+                <div className="pt-1">
+                  <p className="text-amber-700 font-semibold">
+                    {duplicatesWithinInput.length} duplicate
+                    {duplicatesWithinInput.length === 1 ? "" : "s"} within
+                    your list — will be de-duped:
+                  </p>
+                  <ul className="pl-4 text-amber-700 list-disc space-y-0.5 max-h-24 overflow-y-auto custom-scrollbar">
+                    {duplicatesWithinInput.map((n, i) => (
+                      <li key={`${n}-${i}`}>{n}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          ) : (
+            <p className="text-xs italic text-slate-500">
+              Paste some names or load a file to see a preview.
+            </p>
+          )}
+
+          <div className="flex justify-end gap-2 pt-1">
+            <button
+              onClick={onClose}
+              className="text-xs font-semibold text-slate-600 hover:text-slate-900 bg-slate-50 hover:bg-slate-100 border border-slate-200 px-3 py-1.5 rounded-md"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={() => onCreate(toCreate)}
+              disabled={toCreate.length === 0}
+              className="text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed px-3 py-1.5 rounded-md shadow-sm"
+            >
+              Create {toCreate.length}{" "}
+              {toCreate.length === 1 ? "account" : "accounts"}
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

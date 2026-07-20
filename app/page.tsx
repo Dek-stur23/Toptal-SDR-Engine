@@ -432,6 +432,32 @@ export default function App() {
             ...prev,
             accounts: [newAcc, ...prev.accounts],
             currentAccountId: newAcc.id,
+            currentView: "account",
+          }
+        : prev,
+    );
+  };
+
+  // Bulk-create accounts from a list of names. Duplicates against any
+  // existing account (active or archived, case-insensitive) are skipped
+  // by the modal's preview; this handler trusts the incoming names and
+  // just creates one Account per name. Auto-selects the first newly
+  // created account.
+  const handleBulkAddAccounts = (names: string[]) => {
+    if (names.length === 0) return;
+    const created = names.map((name) => {
+      const acc = createAccount();
+      acc.name = name;
+      acc.accountData.companyName = name;
+      return acc;
+    });
+    setState((prev) =>
+      prev
+        ? {
+            ...prev,
+            accounts: [...created, ...prev.accounts],
+            currentAccountId: created[0].id,
+            currentView: "account",
           }
         : prev,
     );
@@ -626,6 +652,7 @@ export default function App() {
         currentView={state.currentView}
         onClose={() => handleToggleSidebar(false)}
         onAddAccount={handleAddAccount}
+        onBulkAddAccounts={handleBulkAddAccounts}
         onSelectAccount={handleSelectAccount}
         onRenameAccount={handleRenameAccount}
         onArchiveAccount={handleArchiveAccount}

@@ -1520,11 +1520,17 @@ function NumberField({
   label,
   value,
   onChange,
+  placeholder,
 }: {
   label: string;
   value: number;
   onChange: (v: number) => void;
+  placeholder?: string;
 }) {
+  // Render 0 as an empty string so unfilled fields don't display "0"
+  // and users can type from a clean slate. In every place we use this
+  // component, 0 is semantically equivalent to "not set" — either an
+  // unentered historical stat or an unset goal.
   return (
     <label className="block">
       <span className="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1">
@@ -1533,9 +1539,15 @@ function NumberField({
       <input
         type="number"
         min={0}
-        value={value}
+        value={value === 0 ? "" : value}
+        placeholder={placeholder}
         onChange={(e) => {
-          const n = Number.parseInt(e.target.value, 10);
+          const raw = e.target.value;
+          if (raw === "") {
+            onChange(0);
+            return;
+          }
+          const n = Number.parseFloat(raw);
           onChange(Number.isFinite(n) ? Math.max(0, n) : 0);
         }}
         className="w-full rounded-md border border-slate-300 px-2 py-1.5 focus:ring-2 focus:ring-blue-500 outline-none text-sm"

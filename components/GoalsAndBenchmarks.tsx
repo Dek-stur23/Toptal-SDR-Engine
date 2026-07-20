@@ -1086,12 +1086,16 @@ function CalculateGoalsModal({
     : null;
 
   // Derived ratios for display, if the inputs support them.
+  // Note: "Prospects dialed" is the unique-prospects count — dials
+  // usually exceeds it because a single prospect may take multiple
+  // attempts, so "% of unique dials" = prospects / dials tells you
+  // your redial density.
   const pct = (numer: number, denom: number): string =>
     denom > 0 ? `${((numer / denom) * 100).toFixed(1)}%` : "—";
-  const contactRate = pct(nConnects, nDials);
-  const dialsPerBooked = nMeetingsBooked > 0 ? (nDials / nMeetingsBooked).toFixed(0) : "—";
-  const bookingRate = pct(nMeetingsBooked, nProspects);
-  const heldRate = pct(nMeetingsHeld, nMeetingsBooked);
+  const connectRate = pct(nConnects, nDials);
+  const connectToBookedRate = pct(nMeetingsBooked, nConnects);
+  const bookedToHeldRate = pct(nMeetingsHeld, nMeetingsBooked);
+  const percentUniqueDials = pct(nProspects, nDials);
 
   return (
     <div
@@ -1140,7 +1144,7 @@ function CalculateGoalsModal({
               onChange={(v) => setConnects(String(v))}
             />
             <NumberField
-              label="Prospects dialed"
+              label="Prospects dialed (unique)"
               value={parse(prospects)}
               onChange={(v) => setProspects(String(v))}
             />
@@ -1173,31 +1177,40 @@ function CalculateGoalsModal({
                 Your funnel ratios
               </p>
               <p>
-                <span className="text-slate-500">Contact rate:</span>{" "}
+                <span className="text-slate-500">Connect rate:</span>{" "}
                 <span className="font-semibold text-slate-800">
-                  {contactRate}
+                  {connectRate}
                 </span>{" "}
                 <span className="text-slate-400">(connects ÷ dials)</span>
               </p>
               <p>
-                <span className="text-slate-500">Dials per meeting booked:</span>{" "}
+                <span className="text-slate-500">Connect to booked rate:</span>{" "}
                 <span className="font-semibold text-slate-800">
-                  {dialsPerBooked}
+                  {connectToBookedRate}
+                </span>{" "}
+                <span className="text-slate-400">
+                  (meetings booked ÷ connects)
                 </span>
               </p>
               <p>
-                <span className="text-slate-500">Booking rate:</span>{" "}
+                <span className="text-slate-500">Booked to held rate:</span>{" "}
                 <span className="font-semibold text-slate-800">
-                  {bookingRate}
+                  {bookedToHeldRate}
                 </span>{" "}
-                <span className="text-slate-400">(booked ÷ prospects)</span>
+                <span className="text-slate-400">
+                  (meetings held ÷ meetings booked)
+                </span>
               </p>
               <p>
-                <span className="text-slate-500">Show rate:</span>{" "}
-                <span className="font-semibold text-slate-800">
-                  {heldRate}
+                <span className="text-slate-500">
+                  Percent of unique dials:
                 </span>{" "}
-                <span className="text-slate-400">(held ÷ booked)</span>
+                <span className="font-semibold text-slate-800">
+                  {percentUniqueDials}
+                </span>{" "}
+                <span className="text-slate-400">
+                  (prospects dialed ÷ dials)
+                </span>
               </p>
             </div>
           )}

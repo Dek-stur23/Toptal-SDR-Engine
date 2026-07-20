@@ -16,14 +16,17 @@ import {
   Filter,
   Image as ImageIcon,
   List,
+  Loader2,
   Plus,
   RotateCcw,
   Trash2,
+  Wand2,
   X,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import {
   deleteMeetingImage,
+  downloadMeetingImageAsDataUrl,
   uploadMeetingImage,
 } from "@/lib/storage/images";
 import { useImage } from "@/lib/hooks/useImage";
@@ -1332,6 +1335,78 @@ function MeetingModal({
     }
   };
 
+  const [extracting, setExtracting] = useState(false);
+  const [extractError, setExtractError] = useState<string | null>(null);
+
+  // Fuzzy match an extracted company name to one of the user's
+  // accounts. Same logic as the parent Launchpad's autofill.
+  const matchAccountByCompany = (company: string): string | null => {
+    const target = company.trim().toLowerCase();
+    if (!target) return null;
+    for (const a of accounts) {
+      const c = a.name.toLowerCase();
+      if (c === target || c.includes(target) || target.includes(c)) return a.id;
+    }
+    return null;
+  };
+
+  const autofillFromImage = async () => {
+    if (!imageKey) return;
+    setExtracting(true);
+    setExtractError(null);
+    try {
+      const dataUrl = await downloadMeetingImageAsDataUrl(supabase, imageKey);
+      if (!dataUrl) {
+        setExtractError("Could not read the uploaded image.");
+        return;
+      }
+      const res = await fetch("/api/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ endpoint: "autofill", image: dataUrl }),
+      });
+      const json = (await res.json()) as {
+        result?: {
+          firstName: string;
+          lastName: string;
+          title: string;
+          company: string;
+          linkedinUrl: string;
+        };
+        error?: string;
+        spentCents?: number;
+        capCents?: number;
+      };
+      if (!res.ok) {
+        if (res.status === 429 && json.spentCents != null && json.capCents != null) {
+          setExtractError(
+            `Monthly AI spend cap reached ($${(json.capCents / 100).toFixed(2)}). Ask an admin to raise it or wait for next month.`
+          );
+        } else {
+          setExtractError(json.error ?? "Autofill failed.");
+        }
+        return;
+      }
+      const result = json.result;
+      if (!result) {
+        setExtractError("Autofill returned no result.");
+        return;
+      }
+      if (result.firstName) setFirstName(result.firstName);
+      if (result.lastName) setLastName(result.lastName);
+      if (result.title) setTitle(result.title);
+      if (result.linkedinUrl) setLinkedinUrl(result.linkedinUrl);
+      if (result.company && !accountId) {
+        const matched = matchAccountByCompany(result.company);
+        if (matched) setAccountId(matched);
+      }
+    } catch (err) {
+      setExtractError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setExtracting(false);
+    }
+  };
+
   const submit = async () => {
     if (
       !firstName.trim() &&
@@ -1452,13 +1527,26 @@ function MeetingModal({
           </button>
         </div>
 
-        {/* Screenshot upload (Supabase Storage). AI autofill from image
-            lands in the /api/generate commit. */}
+        {/* Screenshot upload (Supabase Storage) + AI autofill. */}
         <div>
           <div className="flex items-center justify-between mb-1">
             <span className="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider">
               LinkedIn screenshot (optional)
             </span>
+            {imageKey && (
+              <button
+                onClick={() => void autofillFromImage()}
+                disabled={extracting}
+                className="text-[10px] font-bold uppercase tracking-wider bg-blue-100 hover:bg-blue-200 text-blue-700 px-2 py-1 rounded flex items-center gap-1 transition-colors disabled:opacity-50"
+              >
+                {extracting ? (
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                ) : (
+                  <Wand2 className="w-3 h-3" />
+                )}
+                {extracting ? "Extracting..." : "Autofill from image"}
+              </button>
+            )}
           </div>
           <div className="border-2 border-dashed border-blue-200 rounded-lg h-24 flex items-center justify-center bg-white relative overflow-hidden shadow-sm hover:bg-blue-50/30 transition-colors">
             {imageKey ? (
@@ -1502,6 +1590,9 @@ function MeetingModal({
           </div>
           {imageError && (
             <p className="text-xs text-red-600 mt-1">{imageError}</p>
+          )}
+          {extractError && (
+            <p className="text-xs text-red-600 mt-1">{extractError}</p>
           )}
         </div>
 

@@ -201,3 +201,18 @@ export async function deleteMeetingUpdate(
     .eq("id", id);
   if (error) throw error;
 }
+
+// One-shot loader for every update row the caller can see. RLS
+// filters to updates whose parent meeting is owned by the caller, so
+// this stays scoped without any client-side check. Callers group by
+// meetingId to render inline with each meeting card.
+export async function listAllMeetingUpdates(
+  supabase: SupabaseClient
+): Promise<MeetingUpdate[]> {
+  const { data, error } = await supabase
+    .from("meeting_updates")
+    .select("id, meeting_id, logged_at, text, is_system")
+    .order("logged_at", { ascending: false });
+  if (error) throw error;
+  return (data as MeetingUpdateRow[]).map(toMeetingUpdate);
+}

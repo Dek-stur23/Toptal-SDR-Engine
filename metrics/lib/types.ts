@@ -41,6 +41,7 @@ export interface Meeting {
   lastName: string;
   title: string;
   linkedinUrl: string;
+  salesloftUrl: string;
   accountId: string | null;
   // ISO timestamp string. null means "no time set yet".
   scheduledFor: string | null;

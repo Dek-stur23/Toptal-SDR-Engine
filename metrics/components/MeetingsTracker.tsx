@@ -33,6 +33,22 @@ import { useImage } from "@/lib/hooks/useImage";
 import { listAccounts } from "@/lib/data/accounts";
 import { listEses, type Ese } from "@/lib/data/eses";
 import {
+  addOpportunityUpdate,
+  createOpportunity,
+  deleteOpportunity,
+  deleteOpportunityUpdate,
+  listAllOpportunityUpdates,
+  listOpportunities,
+  updateOpportunity,
+} from "@/lib/data/opportunities";
+import {
+  OPPORTUNITY_STATUS_BADGE,
+  OPPORTUNITY_STATUS_LABEL,
+  OpportunitySection,
+  isOverdue,
+  type OpportunityDraftFields,
+} from "@/components/OpportunitySection";
+import {
   addMeetingUpdate,
   createMeeting,
   deleteMeeting as deleteMeetingRow,
@@ -49,6 +65,9 @@ import type {
   Meeting,
   MeetingStatus,
   MeetingUpdate,
+  Opportunity,
+  OpportunityStatus,
+  OpportunityUpdate,
   ProspectResponse,
 } from "@/lib/types";
 
@@ -179,6 +198,15 @@ export function MeetingsTracker() {
   const [eses, setEses] = useState<Ese[]>([]);
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [updatesById, setUpdatesById] = useState<Record<string, MeetingUpdate[]>>({});
+  // Opportunity indexed by meetingId — one per meeting.
+  const [opportunityByMeetingId, setOpportunityByMeetingId] = useState<
+    Record<string, Opportunity>
+  >({});
+  // Updates keyed by opportunityId.
+  const [oppUpdatesByOppId, setOppUpdatesByOppId] = useState<
+    Record<string, OpportunityUpdate[]>
+  >({});
+  const [isClosedOppsSectionOpen, setIsClosedOppsSectionOpen] = useState(false);
 
   const [meetingsView, setMeetingsView] = useState<ViewKind>("list");
   const [isHeldSectionOpen, setIsHeldSectionOpen] = useState(false);
@@ -201,11 +229,13 @@ export function MeetingsTracker() {
     let cancelled = false;
     (async () => {
       try {
-        const [a, e, m, u] = await Promise.all([
+        const [a, e, m, u, opps, oppUps] = await Promise.all([
           listAccounts(supabase),
           listEses(supabase),
           listMeetings(supabase),
           listAllMeetingUpdates(supabase),
+          listOpportunities(supabase),
+          listAllOpportunityUpdates(supabase),
         ]);
         if (cancelled) return;
         setAccounts(a);
@@ -216,6 +246,12 @@ export function MeetingsTracker() {
           (grouped[upd.meetingId] ??= []).push(upd);
         }
         setUpdatesById(grouped);
+        const oppMap: Record<string, Opportunity> = {};
+        for (const o of opps) oppMap[o.meetingId] = o;
+        setOpportunityByMeetingId(oppMap);
+        const oppUpdMap: Record<string, OpportunityUpdate[]> = {};
+        for (const ou of oppUps) (oppUpdMap[ou.opportunityId] ??= []).push(ou);
+        setOppUpdatesByOppId(oppUpdMap);
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : String(e));
       } finally {
@@ -477,7 +513,182 @@ export function MeetingsTracker() {
       delete next[id];
       return next;
     });
+    // Meeting delete cascades to opportunities in the DB; clear local
+    // cache to match.
+    setOpportunityByMeetingId((prev) => {
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
   };
+
+  // ---- Opportunity mutation helpers ----
+
+  const autoLogOpportunity = async (opportunityId: string, text: string) => {
+    const upd = await addOpportunityUpdate(supabase, opportunityId, text, {
+      system: true,
+    });
+    setOppUpdatesByOppId((prev) => ({
+      ...prev,
+      [opportunityId]: [upd, ...(prev[opportunityId] ?? [])],
+    }));
+  };
+
+  const handleCreateOpportunity = async (
+    meetingId: string,
+    draft: OpportunityDraftFields
+  ) => {
+    const saved = await createOpportunity(supabase, {
+      meetingId,
+      title: draft.title,
+      pain: draft.pain,
+      solutionArea: draft.solutionArea,
+      timeline: draft.timeline,
+      nextStepText: draft.nextStepText,
+      nextStepOwner: draft.nextStepOwner,
+      status: "open",
+    });
+    setOpportunityByMeetingId((prev) => ({ ...prev, [meetingId]: saved }));
+    await autoLogOpportunity(saved.id, "Opportunity created");
+  };
+
+  const handleUpdateOpportunity = async (
+    id: string,
+    patch: Partial<OpportunityDraftFields>
+  ) => {
+    const before = Object.values(opportunityByMeetingId).find(
+      (o) => o.id === id
+    );
+    const saved = await updateOpportunity(supabase, id, patch);
+    setOpportunityByMeetingId((prev) => {
+      const next = { ...prev };
+      next[saved.meetingId] = saved;
+      return next;
+    });
+    if (before) {
+      const changes: string[] = [];
+      if (patch.title !== undefined && patch.title !== before.title)
+        changes.push("title");
+      if (patch.pain !== undefined && patch.pain !== before.pain)
+        changes.push("pain");
+      if (
+        patch.solutionArea !== undefined &&
+        patch.solutionArea !== before.solutionArea
+      )
+        changes.push("solution area");
+      if (patch.timeline !== undefined && patch.timeline !== before.timeline)
+        changes.push("timeline");
+      if (
+        patch.nextStepText !== undefined &&
+        patch.nextStepText !== before.nextStepText
+      )
+        changes.push("next step");
+      if (
+        patch.nextStepOwner !== undefined &&
+        patch.nextStepOwner !== before.nextStepOwner
+      )
+        changes.push("next-step owner");
+      if (changes.length > 0) {
+        await autoLogOpportunity(
+          saved.id,
+          `Opportunity updated: ${changes.join(", ")}`
+        );
+      }
+    }
+  };
+
+  const handleSetOpportunityStatus = async (
+    id: string,
+    status: OpportunityStatus
+  ) => {
+    const saved = await updateOpportunity(supabase, id, { status });
+    setOpportunityByMeetingId((prev) => {
+      const next = { ...prev };
+      next[saved.meetingId] = saved;
+      return next;
+    });
+    await autoLogOpportunity(
+      saved.id,
+      `Status changed to "${OPPORTUNITY_STATUS_LABEL[status]}"`
+    );
+  };
+
+  const handleDeleteOpportunity = async (id: string) => {
+    const target = Object.values(opportunityByMeetingId).find((o) => o.id === id);
+    if (!target) return;
+    await deleteOpportunity(supabase, id);
+    setOpportunityByMeetingId((prev) => {
+      const next = { ...prev };
+      delete next[target.meetingId];
+      return next;
+    });
+    setOppUpdatesByOppId((prev) => {
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+  };
+
+  const handleAddOpportunityUpdate = async (
+    opportunityId: string,
+    text: string
+  ) => {
+    const clean = text.trim();
+    if (!clean) return;
+    const upd = await addOpportunityUpdate(supabase, opportunityId, clean);
+    setOppUpdatesByOppId((prev) => ({
+      ...prev,
+      [opportunityId]: [upd, ...(prev[opportunityId] ?? [])],
+    }));
+  };
+
+  const handleRemoveOpportunityUpdate = async (
+    opportunityId: string,
+    updateId: string
+  ) => {
+    await deleteOpportunityUpdate(supabase, updateId);
+    setOppUpdatesByOppId((prev) => ({
+      ...prev,
+      [opportunityId]: (prev[opportunityId] ?? []).filter(
+        (u) => u.id !== updateId
+      ),
+    }));
+  };
+
+  // Shared opportunity props for a given meeting — kept as a helper
+  // so all three MeetingCard render sites (booked / held / dead-end)
+  // plus the details modal wire the same handlers.
+  const opportunityPropsFor = (m: Meeting) => {
+    const opp = opportunityByMeetingId[m.id] ?? null;
+    return {
+      opportunity: opp,
+      opportunityUpdates: opp ? oppUpdatesByOppId[opp.id] ?? [] : [],
+      onOpportunityCreate: (draft: OpportunityDraftFields) =>
+        handleCreateOpportunity(m.id, draft),
+      onOpportunityUpdate: (id: string, patch: Partial<OpportunityDraftFields>) =>
+        handleUpdateOpportunity(id, patch),
+      onOpportunitySetStatus: handleSetOpportunityStatus,
+      onOpportunityDelete: handleDeleteOpportunity,
+      onOpportunityAddUpdate: handleAddOpportunityUpdate,
+      onOpportunityRemoveUpdate: handleRemoveOpportunityUpdate,
+    };
+  };
+
+  // Flat list of closed opportunities (won-sta, won-job, lost). Sorted
+  // most-recently-touched first. Rendered as its own collapsible
+  // section below Dead End so nothing gets buried on the meeting card.
+  const closedOpportunities = useMemo(() => {
+    const rows: { opportunity: Opportunity; meeting: Meeting }[] = [];
+    for (const opp of Object.values(opportunityByMeetingId)) {
+      if (opp.status === "open") continue;
+      const m = meetings.find((x) => x.id === opp.meetingId);
+      if (m) rows.push({ opportunity: opp, meeting: m });
+    }
+    rows.sort((a, b) =>
+      b.opportunity.updatedAt.localeCompare(a.opportunity.updatedAt)
+    );
+    return rows;
+  }, [opportunityByMeetingId, meetings]);
 
   if (loading) return <p className="text-sm text-slate-500">Loading…</p>;
   if (error)
@@ -586,6 +797,7 @@ export function MeetingsTracker() {
                     onSetNotes={(n) => setMeetingNotes(m.id, n)}
                     onAddUpdate={(t) => addUpdate(m.id, t)}
                     onRemoveUpdate={(uid) => removeUpdate(m.id, uid)}
+                    {...opportunityPropsFor(m)}
                   />
                 ))}
               </ul>
@@ -627,6 +839,7 @@ export function MeetingsTracker() {
                       onSetNotes={(n) => setMeetingNotes(m.id, n)}
                       onAddUpdate={(t) => addUpdate(m.id, t)}
                       onRemoveUpdate={(uid) => removeUpdate(m.id, uid)}
+                      {...opportunityPropsFor(m)}
                     />
                   ))}
                 </ul>
@@ -668,7 +881,62 @@ export function MeetingsTracker() {
                       onSetNotes={(n) => setMeetingNotes(m.id, n)}
                       onAddUpdate={(t) => addUpdate(m.id, t)}
                       onRemoveUpdate={(uid) => removeUpdate(m.id, uid)}
+                      {...opportunityPropsFor(m)}
                     />
+                  ))}
+                </ul>
+              ))}
+          </section>
+
+          <section className="space-y-3">
+            <button
+              onClick={() => setIsClosedOppsSectionOpen((v) => !v)}
+              className="w-full flex items-center justify-between text-sm font-bold text-slate-700 uppercase tracking-wider hover:text-slate-900 transition-colors"
+            >
+              <span>Closed Opportunities ({closedOpportunities.length})</span>
+              {isClosedOppsSectionOpen ? (
+                <ChevronDown className="w-4 h-4" />
+              ) : (
+                <ChevronRight className="w-4 h-4" />
+              )}
+            </button>
+            {isClosedOppsSectionOpen &&
+              (closedOpportunities.length === 0 ? (
+                <p className="text-sm text-slate-500 italic">
+                  No closed opportunities yet. STA Opp / Job Started / Closed
+                  Lost meetings will land here.
+                </p>
+              ) : (
+                <ul className="space-y-1.5">
+                  {closedOpportunities.map(({ opportunity, meeting }) => (
+                    <li
+                      key={opportunity.id}
+                      className="bg-white border border-slate-200 rounded-md px-3 py-2 text-xs flex items-center gap-2"
+                    >
+                      <button
+                        onClick={() => setViewingMeetingId(meeting.id)}
+                        className="flex-1 text-left min-w-0 hover:text-blue-700"
+                        title="Open the parent meeting"
+                      >
+                        <div className="font-semibold text-slate-800 truncate">
+                          {opportunity.title || "Untitled opportunity"}
+                        </div>
+                        <div className="text-slate-500 truncate">
+                          {`${meeting.firstName} ${meeting.lastName}`.trim() ||
+                            "(unnamed contact)"}
+                          {accountNameById[meeting.accountId ?? ""] &&
+                            ` · ${accountNameById[meeting.accountId ?? ""]}`}
+                        </div>
+                      </button>
+                      <span
+                        className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border shrink-0 ${OPPORTUNITY_STATUS_BADGE[opportunity.status]}`}
+                      >
+                        {OPPORTUNITY_STATUS_LABEL[opportunity.status]}
+                      </span>
+                      <span className="text-[10px] text-slate-500 shrink-0">
+                        {new Date(opportunity.updatedAt).toLocaleDateString()}
+                      </span>
+                    </li>
                   ))}
                 </ul>
               ))}
@@ -719,6 +987,7 @@ export function MeetingsTracker() {
           onSetNotes={(n) => setMeetingNotes(viewingMeeting.id, n)}
           onAddUpdate={(t) => addUpdate(viewingMeeting.id, t)}
           onRemoveUpdate={(uid) => removeUpdate(viewingMeeting.id, uid)}
+          {...opportunityPropsFor(viewingMeeting)}
         />
       )}
     </div>
@@ -961,6 +1230,29 @@ function MeetingChip({
 
 // ---- Meeting details modal + card ---------------------------------
 
+interface OpportunityCardProps {
+  opportunity: Opportunity | null;
+  opportunityUpdates: OpportunityUpdate[];
+  onOpportunityCreate: (draft: OpportunityDraftFields) => void | Promise<void>;
+  onOpportunityUpdate: (
+    id: string,
+    patch: Partial<OpportunityDraftFields>
+  ) => void | Promise<void>;
+  onOpportunitySetStatus: (
+    id: string,
+    status: OpportunityStatus
+  ) => void | Promise<void>;
+  onOpportunityDelete: (id: string) => void | Promise<void>;
+  onOpportunityAddUpdate: (
+    opportunityId: string,
+    text: string
+  ) => void | Promise<void>;
+  onOpportunityRemoveUpdate: (
+    opportunityId: string,
+    updateId: string
+  ) => void | Promise<void>;
+}
+
 function MeetingDetailsModal(props: {
   meeting: Meeting;
   updates: MeetingUpdate[];
@@ -977,7 +1269,7 @@ function MeetingDetailsModal(props: {
   onSetNotes: (notes: string) => void;
   onAddUpdate: (text: string) => void;
   onRemoveUpdate: (id: string) => void;
-}) {
+} & OpportunityCardProps) {
   const { onClose, justConverted } = props;
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -1041,6 +1333,14 @@ function MeetingCard({
   onAddUpdate,
   onRemoveUpdate,
   onMarkDeadEnd,
+  opportunity,
+  opportunityUpdates,
+  onOpportunityCreate,
+  onOpportunityUpdate,
+  onOpportunitySetStatus,
+  onOpportunityDelete,
+  onOpportunityAddUpdate,
+  onOpportunityRemoveUpdate,
 }: {
   meeting: Meeting;
   updates: MeetingUpdate[];
@@ -1055,7 +1355,7 @@ function MeetingCard({
   onSetNotes: (notes: string) => void;
   onAddUpdate: (text: string) => void;
   onRemoveUpdate: (id: string) => void;
-}) {
+} & OpportunityCardProps) {
   const fullName =
     `${meeting.firstName} ${meeting.lastName}`.trim() || "(unnamed contact)";
   const accountName = meeting.accountId
@@ -1202,6 +1502,21 @@ function MeetingCard({
           onChange={onSetHeldOutcome}
         />
       )}
+
+      {meeting.status === "held" &&
+        meeting.heldOutcome === "opportunity-identified" && (
+          <OpportunitySection
+            meeting={meeting}
+            opportunity={opportunity}
+            updates={opportunityUpdates}
+            onCreate={onOpportunityCreate}
+            onUpdate={onOpportunityUpdate}
+            onSetStatus={onOpportunitySetStatus}
+            onDelete={onOpportunityDelete}
+            onAddUpdate={onOpportunityAddUpdate}
+            onRemoveUpdate={onOpportunityRemoveUpdate}
+          />
+        )}
 
       <InlineNotesEditor value={meeting.notes} onSave={onSetNotes} />
 

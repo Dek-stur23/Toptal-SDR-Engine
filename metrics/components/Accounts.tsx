@@ -12,6 +12,7 @@ import {
   Search,
   Trash2,
   Upload,
+  UserRound,
   X,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
@@ -23,6 +24,7 @@ import {
   renameAccount,
   setAccountArchived,
 } from "@/lib/data/accounts";
+import { createEse, deleteEse, listEses, type Ese } from "@/lib/data/eses";
 import type { Account } from "@/lib/types";
 
 export function Accounts() {
@@ -223,7 +225,129 @@ export function Accounts() {
           existingLowercase={new Set(accounts.map((a) => a.name.toLowerCase()))}
         />
       )}
+
+      <EseSection />
     </div>
+  );
+}
+
+function EseSection() {
+  const supabase = useMemo(() => createClient(), []);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [eses, setEses] = useState<Ese[]>([]);
+  const [draft, setDraft] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const rows = await listEses(supabase);
+        if (!cancelled) setEses(rows);
+      } catch (e) {
+        if (!cancelled) setError(e instanceof Error ? e.message : String(e));
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [supabase]);
+
+  const add = async () => {
+    const name = draft.trim();
+    if (!name) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const created = await createEse(supabase, name);
+      setEses((prev) =>
+        [...prev, created].sort((a, b) => a.name.localeCompare(b.name))
+      );
+      setDraft("");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const remove = async (id: string, name: string) => {
+    if (
+      !window.confirm(
+        `Remove "${name}" from your ESE list? Meetings already tagged with this ESE keep the tag.`
+      )
+    )
+      return;
+    await deleteEse(supabase, id);
+    setEses((prev) => prev.filter((e) => e.id !== id));
+  };
+
+  return (
+    <section className="space-y-3 pt-4">
+      <div className="flex items-center gap-2">
+        <UserRound className="w-4 h-4 text-slate-500" />
+        <h2 className="text-sm font-bold text-slate-700 uppercase tracking-wider">
+          ESEs ({eses.length})
+        </h2>
+      </div>
+      <p className="text-xs text-slate-500 -mt-1">
+        Enterprise Sales Executives you can tag meetings against. Changes show
+        up immediately in the Meetings Tracker dropdowns.
+      </p>
+
+      <section className="bg-white border border-slate-200 rounded-xl shadow-sm p-4 space-y-3">
+        <div className="flex items-center gap-2">
+          <input
+            type="text"
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") void add();
+            }}
+            placeholder="Add an ESE (e.g. Dan Weldon)"
+            className="flex-1 rounded-md border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+          />
+          <button
+            onClick={() => void add()}
+            disabled={busy || !draft.trim()}
+            className="text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 flex items-center gap-1.5 px-3 py-2 rounded-md shadow-sm"
+          >
+            <Plus className="w-3.5 h-3.5" /> Add
+          </button>
+        </div>
+        {error && <p className="text-xs text-red-600">{error}</p>}
+      </section>
+
+      {loading ? (
+        <p className="text-sm text-slate-500 italic">Loading…</p>
+      ) : eses.length === 0 ? (
+        <p className="text-sm text-slate-500 italic">
+          No ESEs yet. Add one above and it&apos;ll show up in the Meetings
+          Tracker.
+        </p>
+      ) : (
+        <ul className="space-y-1.5">
+          {eses.map((e) => (
+            <li
+              key={e.id}
+              className="flex items-center gap-2 text-sm bg-white border border-slate-200 rounded-md px-3 py-2"
+            >
+              <span className="flex-1 text-slate-800 truncate">{e.name}</span>
+              <button
+                onClick={() => void remove(e.id, e.name)}
+                className="text-slate-400 hover:text-red-600 p-1"
+                title="Remove"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }
 

@@ -31,6 +31,7 @@ import {
 } from "@/lib/storage/images";
 import { useImage } from "@/lib/hooks/useImage";
 import { listAccounts } from "@/lib/data/accounts";
+import { listEses, type Ese } from "@/lib/data/eses";
 import {
   addMeetingUpdate,
   createMeeting,
@@ -112,14 +113,8 @@ function datetimeLocalToIso(v: string): string | null {
   return d.toISOString();
 }
 
-// Enterprise Sales Executives that meetings can be tagged to. Same
-// hardcoded list as the parent Launchpad.
-const ESE_OPTIONS = [
-  "Dan Weldon",
-  "Ryan Abraham",
-  "Blake Harvey",
-  "Matt Schneider",
-] as const;
+// ESE (Enterprise Sales Executive) options come from the per-user
+// eses table, populated + edited on the Accounts page.
 
 const PROSPECT_RESPONSE_LABEL: Record<ProspectResponse, string> = {
   accepted: "Prospect accepted",
@@ -181,6 +176,7 @@ export function MeetingsTracker() {
   const [error, setError] = useState<string | null>(null);
 
   const [accounts, setAccounts] = useState<Account[]>([]);
+  const [eses, setEses] = useState<Ese[]>([]);
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [updatesById, setUpdatesById] = useState<Record<string, MeetingUpdate[]>>({});
 
@@ -201,13 +197,15 @@ export function MeetingsTracker() {
     let cancelled = false;
     (async () => {
       try {
-        const [a, m, u] = await Promise.all([
+        const [a, e, m, u] = await Promise.all([
           listAccounts(supabase),
+          listEses(supabase),
           listMeetings(supabase),
           listAllMeetingUpdates(supabase),
         ]);
         if (cancelled) return;
         setAccounts(a);
+        setEses(e);
         setMeetings(m);
         const grouped: Record<string, MeetingUpdate[]> = {};
         for (const upd of u) {
@@ -527,6 +525,7 @@ export function MeetingsTracker() {
 
       <FilterBar
         activeAccounts={activeAccounts}
+        eses={eses}
         filterAccountIds={filterAccountIds}
         onFilterAccounts={setFilterAccountIds}
         filterEses={filterEses}
@@ -671,6 +670,7 @@ export function MeetingsTracker() {
         <MeetingModal
           mode={modalMode}
           accounts={activeAccounts}
+          eses={eses}
           onClose={() => setModalMode(null)}
           onSave={(draft, editingId) => upsertMeetingFromModal(draft, editingId)}
         />
@@ -1256,11 +1256,13 @@ function MeetingCard({
 function MeetingModal({
   mode,
   accounts,
+  eses,
   onClose,
   onSave,
 }: {
   mode: { kind: "create" } | { kind: "edit"; meeting: Meeting };
   accounts: Account[];
+  eses: Ese[];
   onClose: () => void;
   onSave: (draft: MeetingDraft, editingId: string | null) => void | Promise<void>;
 }) {
@@ -1654,11 +1656,16 @@ function MeetingModal({
             className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
           >
             <option value="">— No ESE —</option>
-            {ESE_OPTIONS.map((name) => (
-              <option key={name} value={name}>
-                {name}
+            {eses.map((e) => (
+              <option key={e.id} value={e.name}>
+                {e.name}
               </option>
             ))}
+            {/* Preserve the currently-selected ESE even if it's since
+                been removed from the user's list. */}
+            {ese && !eses.some((e) => e.name === ese) && (
+              <option value={ese}>{ese} (removed)</option>
+            )}
           </select>
         </Field>
 
@@ -1729,6 +1736,7 @@ function MeetingModal({
 
 function FilterBar(props: {
   activeAccounts: Account[];
+  eses: Ese[];
   filterAccountIds: string[];
   onFilterAccounts: (v: string[]) => void;
   filterEses: string[];
@@ -1746,6 +1754,7 @@ function FilterBar(props: {
 }) {
   const {
     activeAccounts,
+    eses,
     filterAccountIds,
     onFilterAccounts,
     filterEses,
@@ -1803,7 +1812,7 @@ function FilterBar(props: {
         allLabel="All ESEs"
         selected={filterEses}
         onChange={onFilterEses}
-        options={ESE_OPTIONS.map((n) => ({ value: n, label: n }))}
+        options={eses.map((e) => ({ value: e.name, label: e.name }))}
       />
       <FilterMultiSelect
         label="Response"

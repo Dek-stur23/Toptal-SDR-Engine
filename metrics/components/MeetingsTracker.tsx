@@ -188,6 +188,10 @@ export function MeetingsTracker() {
     { kind: "create" } | { kind: "edit"; meeting: Meeting } | null
   >(null);
   const [viewingMeetingId, setViewingMeetingId] = useState<string | null>(null);
+  // Meeting we just converted from Booked → Held. Used to render the
+  // "please set an outcome" nudge inside the details modal. Cleared
+  // when the user picks an outcome or dismisses the modal.
+  const [justConvertedId, setJustConvertedId] = useState<string | null>(null);
   const viewingMeeting =
     viewingMeetingId !== null
       ? meetings.find((x) => x.id === viewingMeetingId) ?? null
@@ -365,6 +369,12 @@ export function MeetingsTracker() {
     });
     setMeetings((prev) => prev.map((m) => (m.id === id ? saved : m)));
     await autoLog(id, "Marked as held");
+    // Route the user to where the meeting now sits and nudge them to
+    // record an outcome: expand the Held section (so it's visible when
+    // they dismiss the modal) and open the meeting-details modal.
+    setIsHeldSectionOpen(true);
+    setJustConvertedId(id);
+    setViewingMeetingId(id);
   };
 
   const markDeadEnd = async (id: string) => {
@@ -681,10 +691,15 @@ export function MeetingsTracker() {
           meeting={viewingMeeting}
           updates={updatesById[viewingMeeting.id] ?? []}
           accountNameById={accountNameById}
-          onClose={() => setViewingMeetingId(null)}
+          justConverted={justConvertedId === viewingMeeting.id}
+          onClose={() => {
+            setViewingMeetingId(null);
+            setJustConvertedId(null);
+          }}
           onEdit={() => {
             setModalMode({ kind: "edit", meeting: viewingMeeting });
             setViewingMeetingId(null);
+            setJustConvertedId(null);
           }}
           onConvert={() => convertToHeld(viewingMeeting.id)}
           onMarkDeadEnd={() => markDeadEnd(viewingMeeting.id)}
@@ -692,9 +707,15 @@ export function MeetingsTracker() {
           onDelete={() => {
             handleDeleteMeeting(viewingMeeting.id);
             setViewingMeetingId(null);
+            setJustConvertedId(null);
           }}
           onSetProspectResponse={(r) => setProspectResponse(viewingMeeting.id, r)}
-          onSetHeldOutcome={(o) => setHeldOutcome(viewingMeeting.id, o)}
+          onSetHeldOutcome={(o) => {
+            setHeldOutcome(viewingMeeting.id, o);
+            // Picking an outcome fulfills the nudge — drop the banner
+            // but leave the modal open so the user can review.
+            setJustConvertedId(null);
+          }}
           onSetNotes={(n) => setMeetingNotes(viewingMeeting.id, n)}
           onAddUpdate={(t) => addUpdate(viewingMeeting.id, t)}
           onRemoveUpdate={(uid) => removeUpdate(viewingMeeting.id, uid)}
@@ -944,6 +965,7 @@ function MeetingDetailsModal(props: {
   meeting: Meeting;
   updates: MeetingUpdate[];
   accountNameById: Record<string, string>;
+  justConverted?: boolean;
   onClose: () => void;
   onEdit: () => void;
   onConvert: () => void;
@@ -956,7 +978,7 @@ function MeetingDetailsModal(props: {
   onAddUpdate: (text: string) => void;
   onRemoveUpdate: (id: string) => void;
 }) {
-  const { onClose } = props;
+  const { onClose, justConverted } = props;
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
@@ -989,7 +1011,15 @@ function MeetingDetailsModal(props: {
             <X className="w-4 h-4" />
           </button>
         </div>
-        <div className="p-4">
+        <div className="p-4 space-y-3">
+          {justConverted && (
+            <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800 flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 shrink-0" />
+              <span>
+                Marked as held — pick the outcome below to record how it went.
+              </span>
+            </div>
+          )}
           <MeetingCard {...props} />
         </div>
       </div>

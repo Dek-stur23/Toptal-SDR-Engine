@@ -7,7 +7,11 @@ import {
   MEETING_AUTOFILL_SYSTEM,
   MEETING_AUTOFILL_TOOL_SCHEMA,
   MEETING_AUTOFILL_USER_PROMPT,
+  OPPORTUNITY_NEXT_STEP_SYSTEM,
+  OPPORTUNITY_NEXT_STEP_TOOL_SCHEMA,
+  buildOpportunityNextStepUserPrompt,
   type MeetingAutofillResult,
+  type OpportunityNextStepResult,
 } from "@/lib/ai/prompts";
 
 export const runtime = "nodejs";
@@ -61,13 +65,17 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Not signed in" }, { status: 401 });
   }
 
-  let body: { endpoint?: string; image?: string };
+  let body: {
+    endpoint?: string;
+    image?: string;
+    context?: Parameters<typeof buildOpportunityNextStepUserPrompt>[0];
+  };
   try {
-    body = (await req.json()) as { endpoint?: string; image?: string };
+    body = (await req.json()) as typeof body;
   } catch {
     return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
   }
-  if (body.endpoint !== "autofill") {
+  if (body.endpoint !== "autofill" && body.endpoint !== "opportunity-next-step") {
     return NextResponse.json({ error: "Unknown endpoint." }, { status: 400 });
   }
 
@@ -80,55 +88,95 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const image = body.image;
-  const match =
-    typeof image === "string" ? image.match(/^data:([^;]+);base64,(.+)$/) : null;
-  if (!match) {
-    return NextResponse.json(
-      { error: "Missing or malformed image." },
-      { status: 400 }
-    );
-  }
-  const mediaType = match[1] as "image/jpeg" | "image/png" | "image/gif" | "image/webp";
-  const base64 = match[2];
-
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  const endpoint = body.endpoint;
 
   let response: Anthropic.Message;
   try {
-    response = await client.messages.create({
-      model: MODEL,
-      max_tokens: 1024,
-      system: [
-        {
-          type: "text",
-          text: MEETING_AUTOFILL_SYSTEM,
-          cache_control: { type: "ephemeral" },
-        },
-      ],
-      messages: [
-        {
-          role: "user",
-          content: [
-            {
-              type: "image",
-              source: { type: "base64", media_type: mediaType, data: base64 },
-            },
-            { type: "text", text: MEETING_AUTOFILL_USER_PROMPT },
-          ],
-        },
-      ],
-      tools: [
-        {
-          name: "submit_result",
-          description: "Submit the extracted contact fields.",
-          input_schema: MEETING_AUTOFILL_TOOL_SCHEMA as Anthropic.Tool.InputSchema,
-        },
-      ],
-      tool_choice: { type: "tool", name: "submit_result" },
-    });
+    if (endpoint === "autofill") {
+      const image = body.image;
+      const match =
+        typeof image === "string"
+          ? image.match(/^data:([^;]+);base64,(.+)$/)
+          : null;
+      if (!match) {
+        return NextResponse.json(
+          { error: "Missing or malformed image." },
+          { status: 400 }
+        );
+      }
+      const mediaType = match[1] as
+        | "image/jpeg"
+        | "image/png"
+        | "image/gif"
+        | "image/webp";
+      const base64 = match[2];
+      response = await client.messages.create({
+        model: MODEL,
+        max_tokens: 1024,
+        system: [
+          {
+            type: "text",
+            text: MEETING_AUTOFILL_SYSTEM,
+            cache_control: { type: "ephemeral" },
+          },
+        ],
+        messages: [
+          {
+            role: "user",
+            content: [
+              {
+                type: "image",
+                source: { type: "base64", media_type: mediaType, data: base64 },
+              },
+              { type: "text", text: MEETING_AUTOFILL_USER_PROMPT },
+            ],
+          },
+        ],
+        tools: [
+          {
+            name: "submit_result",
+            description: "Submit the extracted contact fields.",
+            input_schema:
+              MEETING_AUTOFILL_TOOL_SCHEMA as Anthropic.Tool.InputSchema,
+          },
+        ],
+        tool_choice: { type: "tool", name: "submit_result" },
+      });
+    } else {
+      // opportunity-next-step
+      const context = body.context;
+      if (!context || typeof context.title !== "string") {
+        return NextResponse.json(
+          { error: "Missing or malformed opportunity context." },
+          { status: 400 }
+        );
+      }
+      const userPrompt = buildOpportunityNextStepUserPrompt(context);
+      response = await client.messages.create({
+        model: MODEL,
+        max_tokens: 256,
+        system: [
+          {
+            type: "text",
+            text: OPPORTUNITY_NEXT_STEP_SYSTEM,
+            cache_control: { type: "ephemeral" },
+          },
+        ],
+        messages: [{ role: "user", content: userPrompt }],
+        tools: [
+          {
+            name: "submit_result",
+            description: "Submit the single recommended next step.",
+            input_schema:
+              OPPORTUNITY_NEXT_STEP_TOOL_SCHEMA as Anthropic.Tool.InputSchema,
+          },
+        ],
+        tool_choice: { type: "tool", name: "submit_result" },
+      });
+    }
   } catch (err) {
-    console.error("Autofill error:", err);
+    console.error(`${endpoint} error:`, err);
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Anthropic call failed." },
       { status: 502 }
@@ -146,7 +194,10 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const result = toolUse.input as MeetingAutofillResult;
+  const result =
+    endpoint === "autofill"
+      ? (toolUse.input as MeetingAutofillResult)
+      : (toolUse.input as OpportunityNextStepResult);
   const tokensIn = response.usage?.input_tokens ?? 0;
   const tokensOut = response.usage?.output_tokens ?? 0;
   const costCents = estimateCostCents(tokensIn, tokensOut);
@@ -158,14 +209,12 @@ export async function POST(req: NextRequest) {
     const service = createServiceClient();
     await insertAiUsage(service, {
       userId: user.id,
-      endpoint: "autofill",
+      endpoint,
       tokensIn,
       tokensOut,
       estimatedCostCents: costCents,
     });
   } catch (err) {
-    // If usage logging fails we still return the result — it's a
-    // metering miss, not a user-visible error. Surface it in logs.
     console.error("ai_usage insert failed:", err);
   }
 

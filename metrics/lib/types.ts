@@ -104,6 +104,40 @@ export interface SavedWeek {
   kind: SavedWeekKind;
 }
 
+// ---------- Opportunities ----------
+
+export type OpportunitySolutionArea =
+  | "staff-augmentation"
+  | "professional-services";
+
+export type OpportunityTimeline = "now" | "next-month" | "next-quarter";
+
+export type OpportunityNextStepOwner = "SDR" | "ESE";
+
+export type OpportunityStatus = "open" | "won-sta" | "won-job" | "lost";
+
+export interface Opportunity {
+  id: string;
+  meetingId: string;
+  title: string;
+  pain: string;
+  solutionArea: OpportunitySolutionArea | null;
+  timeline: OpportunityTimeline | null;
+  nextStepText: string;
+  nextStepOwner: OpportunityNextStepOwner | null;
+  status: OpportunityStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface OpportunityUpdate {
+  id: string;
+  opportunityId: string;
+  loggedAt: string;
+  text: string;
+  isSystem: boolean;
+}
+
 // ---------- Profile ----------
 
 export interface Profile {
@@ -116,9 +150,11 @@ export interface Profile {
 
 // ---------- AI usage ----------
 
+export type AiEndpoint = "autofill" | "opportunity-next-step";
+
 export interface AiUsageEntry {
   id: string;
-  endpoint: "autofill";
+  endpoint: AiEndpoint;
   tokensIn: number;
   tokensOut: number;
   estimatedCostCents: number;

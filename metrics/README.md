@@ -19,6 +19,11 @@ tools from the SDR Launchpad. Next.js 14 (App Router) on top of Supabase
      every insert so RLS accepts writes from the app.
    - `004_eses.sql` — per-user ESE list backing the Meetings
      Tracker dropdowns, managed from the Accounts page.
+   - `005_opportunities.sql` — opportunities + opportunity_updates
+     tables for the workflow that opens under a held meeting when
+     the outcome is "Opportunity identified".
+   - `006_ai_endpoints.sql` — expands the ai_usage endpoint check to
+     cover the "opportunity-next-step" AI call.
 
 3. **Create the storage bucket** for meeting screenshots. In the
    Supabase dashboard: Storage → New bucket → name `meeting-images`,

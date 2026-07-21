@@ -65,7 +65,7 @@ export function OnboardingModal({
           <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-blue-50 text-blue-600">
             <UserRound className="w-4 h-4" />
           </div>
-          <h3 className="text-base font-bold text-slate-900">Welcome to SDR Metrics</h3>
+          <h3 className="text-base font-bold text-slate-900">Welcome to SDR Sidekick</h3>
         </div>
         <p className="text-sm text-slate-600">
           What should we call you? This shows up in the header and helps

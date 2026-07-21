@@ -1,4 +1,4 @@
-# SDR Metrics
+# SDR Sidekick
 
 Standalone multi-user version of the Goals & Metrics + Meetings Tracker
 tools from the SDR Launchpad. Next.js 14 (App Router) on top of Supabase

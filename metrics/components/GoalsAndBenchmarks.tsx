@@ -1127,9 +1127,25 @@ function CalculateGoalsModal({
   const [meetingsBooked, setMeetingsBooked] = useState("");
   const [meetingsHeld, setMeetingsHeld] = useState("");
   const [target, setTarget] = useState("");
-  const [period, setPeriod] = useState<"weekly" | "monthly" | "quarterly">("weekly");
+  const [period, setPeriod] = useState<
+    "weekly" | "monthly" | "quarterly" | "historical"
+  >("weekly");
   const [showWeekly, setShowWeekly] = useState(false);
-  const weeksInPeriod = period === "weekly" ? 1 : period === "monthly" ? 4.33 : 13;
+  // "historical" carries no built-in timespan — treat the entered
+  // numbers as a single-period reference like weekly (no scaling).
+  const weeksInPeriod =
+    period === "weekly" || period === "historical"
+      ? 1
+      : period === "monthly"
+        ? 4.33
+        : 13;
+  // Weekly + Historical share the "1 week per bucket" math, so the
+  // weekly breakdown matches the suggestion 1:1 for both.
+  const isSinglePeriod = period === "weekly" || period === "historical";
+  // Human-readable "per X" label. Only used when isSinglePeriod is
+  // false, so we don't have to handle historical here.
+  const periodShortLabel =
+    period === "monthly" ? "month" : period === "quarterly" ? "quarter" : period;
 
   const parse = (s: string) => {
     const n = Number.parseFloat(s);
@@ -1209,7 +1225,9 @@ function CalculateGoalsModal({
               <select
                 value={period}
                 onChange={(e) => {
-                  setPeriod(e.target.value as "weekly" | "monthly" | "quarterly");
+                  setPeriod(
+                    e.target.value as "weekly" | "monthly" | "quarterly" | "historical"
+                  );
                   setShowWeekly(false);
                 }}
                 className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs text-slate-800 focus:ring-2 focus:ring-blue-500 outline-none"
@@ -1217,6 +1235,7 @@ function CalculateGoalsModal({
                 <option value="weekly">Weekly</option>
                 <option value="monthly">Monthly</option>
                 <option value="quarterly">Quarterly</option>
+                <option value="historical">Historical</option>
               </select>
             </label>
           </div>
@@ -1288,10 +1307,10 @@ function CalculateGoalsModal({
             <div className="flex items-center justify-between gap-2 flex-wrap">
               <p className="text-[10px] font-semibold text-blue-700 uppercase tracking-wider">
                 Suggested goals to hit {suggested.meetingsHeldTarget} meetings held
-                {period !== "weekly" && (
+                {!isSinglePeriod && (
                   <span className="normal-case font-normal text-blue-700/70">
                     {" "}
-                    (per {period.replace(/ly$/, "")})
+                    (per {periodShortLabel})
                   </span>
                 )}
               </p>
@@ -1304,11 +1323,11 @@ function CalculateGoalsModal({
             </div>
             <table className="w-full text-xs">
               <thead>
-                {showWeekly && weekly && period !== "weekly" && (
+                {showWeekly && weekly && !isSinglePeriod && (
                   <tr className="text-[10px] uppercase tracking-wider text-blue-700/70">
                     <th className="text-left font-semibold py-1"></th>
                     <th className="text-right font-semibold py-1">
-                      Per {period.replace(/ly$/, "")}
+                      Per {periodShortLabel}
                     </th>
                     <th className="text-right font-semibold py-1 pl-3">Per week</th>
                   </tr>
@@ -1319,45 +1338,46 @@ function CalculateGoalsModal({
                   label="Dials"
                   value={suggested.dials}
                   weeklyValue={
-                    showWeekly && weekly && period !== "weekly" ? weekly.dials : undefined
+                    showWeekly && weekly && !isSinglePeriod ? weekly.dials : undefined
                   }
                 />
                 <SuggestRow
                   label="Connects"
                   value={suggested.connects}
                   weeklyValue={
-                    showWeekly && weekly && period !== "weekly" ? weekly.connects : undefined
+                    showWeekly && weekly && !isSinglePeriod ? weekly.connects : undefined
                   }
                 />
                 <SuggestRow
                   label="Prospects dialed"
                   value={suggested.prospects}
                   weeklyValue={
-                    showWeekly && weekly && period !== "weekly" ? weekly.prospects : undefined
+                    showWeekly && weekly && !isSinglePeriod ? weekly.prospects : undefined
                   }
                 />
                 <SuggestRow
                   label="Meetings booked"
                   value={suggested.meetingsBooked}
                   weeklyValue={
-                    showWeekly && weekly && period !== "weekly" ? weekly.meetingsBooked : undefined
+                    showWeekly && weekly && !isSinglePeriod ? weekly.meetingsBooked : undefined
                   }
                 />
                 <SuggestRow
                   label="Meetings held"
                   value={suggested.meetingsHeldTarget}
                   weeklyValue={
-                    showWeekly && weekly && period !== "weekly"
+                    showWeekly && weekly && !isSinglePeriod
                       ? weekly.meetingsHeldTarget
                       : undefined
                   }
                 />
               </tbody>
             </table>
-            {showWeekly && weekly && period === "weekly" && (
+            {showWeekly && weekly && isSinglePeriod && (
               <p className="text-[10px] text-blue-700/80 italic">
-                You entered weekly numbers, so the weekly breakdown matches the suggestion
-                above 1:1.
+                {period === "weekly"
+                  ? "You entered weekly numbers, so the weekly breakdown matches the suggestion above 1:1."
+                  : "Historical numbers are treated as a single period (no scaling), so the weekly breakdown matches the suggestion above 1:1."}
               </p>
             )}
             <p className="text-[10px] text-blue-700/80 italic pt-1">

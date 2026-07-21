@@ -22,7 +22,7 @@ function LoginShell(props: { children?: React.ReactNode }) {
     <main className="mx-auto flex min-h-screen max-w-sm items-center px-6">
       <div className="w-full">
         <h1 className="text-2xl font-semibold">Sign in</h1>
-        <p className="mt-1 text-sm text-slate-600">SDR Metrics.</p>
+        <p className="mt-1 text-sm text-slate-600">SDR Sidekick.</p>
         {props.children}
       </div>
     </main>

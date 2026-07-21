@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "SDR Metrics",
+  title: "SDR Sidekick",
   description: "Goals, benchmarks, and meeting tracking for SDR teams.",
 };
 

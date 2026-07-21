@@ -7,6 +7,30 @@ import { importFromLegacyExport, type ImportSummary } from "@/lib/import/legacy"
 import { updateMyProfile } from "@/lib/data/profile";
 import type { Profile } from "@/lib/types";
 
+// Turns any thrown value into a useful string. Supabase / Postgrest
+// errors are plain objects with { message, details, hint, code }, not
+// Error instances, so falling back to String(e) yields "[object
+// Object]". Walk the common shapes explicitly.
+function formatError(e: unknown): string {
+  if (e instanceof Error) return e.message;
+  if (typeof e === "string") return e;
+  if (e && typeof e === "object") {
+    const rec = e as Record<string, unknown>;
+    const parts: string[] = [];
+    if (typeof rec.message === "string") parts.push(rec.message);
+    if (typeof rec.details === "string" && rec.details) parts.push(rec.details);
+    if (typeof rec.hint === "string" && rec.hint) parts.push(`(hint: ${rec.hint})`);
+    if (typeof rec.code === "string" && rec.code) parts.push(`[${rec.code}]`);
+    if (parts.length > 0) return parts.join(" ");
+    try {
+      return JSON.stringify(e);
+    } catch {
+      return String(e);
+    }
+  }
+  return String(e);
+}
+
 export function Settings({ profile, email }: { profile: Profile; email: string }) {
   return (
     <div className="space-y-8">
@@ -38,7 +62,7 @@ function DisplayNameSection({ profile }: { profile: Profile }) {
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(formatError(e));
     } finally {
       setBusy(false);
     }
@@ -104,7 +128,7 @@ function ImportSection() {
       setSummary(result);
       setJson("");
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(formatError(e));
     } finally {
       setBusy(false);
     }

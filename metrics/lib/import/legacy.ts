@@ -144,6 +144,21 @@ export interface ImportSummary {
   };
 }
 
+// Turn a raw Postgrest error into an Error with a useful message
+// (message + code + hint), so callers see something better than
+// [object Object].
+function wrap(
+  phase: string,
+  err: { message?: string; details?: string; hint?: string; code?: string } | null
+): Error {
+  const parts: string[] = [`Import failed at "${phase}"`];
+  if (err?.message) parts.push(err.message);
+  if (err?.details) parts.push(err.details);
+  if (err?.hint) parts.push(`(hint: ${err.hint})`);
+  if (err?.code) parts.push(`[${err.code}]`);
+  return new Error(parts.join(" — "));
+}
+
 // Runs the import. Everything the caller can see under RLS gets
 // written to the DB; there is no dry-run. `abort` may be checked
 // between phases to bail early if the caller sets it.
@@ -200,7 +215,7 @@ export async function importFromLegacyExport(
       .from("accounts")
       .insert(accountsToInsert.map((a) => ({ name: a.name })))
       .select("id, name");
-    if (error) throw error;
+    if (error) throw wrap("insert accounts", error);
     const inserted = (data ?? []) as { id: string; name: string }[];
     // Match inserted rows back to the pre-insert order by name+index.
     // supabase-js preserves order for a bulk insert, so we can zip.
@@ -282,7 +297,7 @@ export async function importFromLegacyExport(
         .from("meetings")
         .insert(slice.map((s) => s.row))
         .select("id");
-      if (error) throw error;
+      if (error) throw wrap("insert meetings", error);
       const inserted = (data ?? []) as { id: string }[];
       for (let j = 0; j < slice.length; j++) {
         const s = slice[j];
@@ -318,7 +333,7 @@ export async function importFromLegacyExport(
         const { error } = await supabase
           .from("meeting_updates")
           .insert(updateRows.slice(i, i + BATCH));
-        if (error) throw error;
+        if (error) throw wrap("insert meeting_updates", error);
       }
       summary.meetingUpdates = updateRows.length;
     }
@@ -349,7 +364,7 @@ export async function importFromLegacyExport(
       const { error } = await supabase
         .from("goal_logs")
         .insert(logRows.slice(i, i + BATCH));
-      if (error) throw error;
+      if (error) throw wrap("insert goal_logs", error);
     }
     summary.goalLogs = logRows.length;
   }
@@ -377,7 +392,7 @@ export async function importFromLegacyExport(
     const { error } = await supabase
       .from("quarterly_goals")
       .upsert(quarterlyRows, { onConflict: "user_id,year,quarter" });
-    if (error) throw error;
+    if (error) throw wrap("upsert quarterly_goals", error);
     summary.quarterlyGoals = quarterlyRows.length;
   }
 
@@ -398,7 +413,7 @@ export async function importFromLegacyExport(
         onConflict: "user_id,week_start,kind",
         ignoreDuplicates: true,
       });
-    if (error) throw error;
+    if (error) throw wrap("upsert saved_weeks", error);
     summary.savedWeeks = weekRows.length;
   }
 

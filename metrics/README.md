@@ -15,6 +15,10 @@ tools from the SDR Launchpad. Next.js 14 (App Router) on top of Supabase
      profile triggers.
    - `002_admin_policies.sql` — lets admins manage the invite
      allowlist from the in-app `/admin/invites` page.
+   - `003_user_id_defaults.sql` — stamps the caller's user id on
+     every insert so RLS accepts writes from the app.
+   - `004_eses.sql` — per-user ESE list backing the Meetings
+     Tracker dropdowns, managed from the Accounts page.
 
 3. **Create the storage bucket** for meeting screenshots. In the
    Supabase dashboard: Storage → New bucket → name `meeting-images`,

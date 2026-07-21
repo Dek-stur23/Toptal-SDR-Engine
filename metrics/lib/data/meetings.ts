@@ -14,6 +14,7 @@ interface MeetingRow {
   last_name: string;
   title: string;
   linkedin_url: string;
+  salesloft_url: string;
   account_id: string | null;
   scheduled_for: string | null;
   notes: string;
@@ -37,7 +38,7 @@ interface MeetingUpdateRow {
 }
 
 const MEETING_COLS =
-  "id, first_name, last_name, title, linkedin_url, account_id, scheduled_for, notes, status, created_at, held_at, dead_ended_at, image_key, prospect_response, ese, held_outcome, booked_category";
+  "id, first_name, last_name, title, linkedin_url, salesloft_url, account_id, scheduled_for, notes, status, created_at, held_at, dead_ended_at, image_key, prospect_response, ese, held_outcome, booked_category";
 
 function toMeeting(row: MeetingRow): Meeting {
   return {
@@ -46,6 +47,7 @@ function toMeeting(row: MeetingRow): Meeting {
     lastName: row.last_name,
     title: row.title,
     linkedinUrl: row.linkedin_url,
+    salesloftUrl: row.salesloft_url ?? "",
     accountId: row.account_id,
     scheduledFor: row.scheduled_for,
     notes: row.notes,
@@ -98,6 +100,7 @@ export async function createMeeting(
       last_name: draft.lastName,
       title: draft.title,
       linkedin_url: draft.linkedinUrl,
+      salesloft_url: draft.salesloftUrl,
       account_id: draft.accountId,
       scheduled_for: draft.scheduledFor,
       notes: draft.notes,
@@ -127,6 +130,7 @@ export async function updateMeeting(
   if (patch.lastName !== undefined) dbPatch.last_name = patch.lastName;
   if (patch.title !== undefined) dbPatch.title = patch.title;
   if (patch.linkedinUrl !== undefined) dbPatch.linkedin_url = patch.linkedinUrl;
+  if (patch.salesloftUrl !== undefined) dbPatch.salesloft_url = patch.salesloftUrl;
   if (patch.accountId !== undefined) dbPatch.account_id = patch.accountId;
   if (patch.scheduledFor !== undefined) dbPatch.scheduled_for = patch.scheduledFor;
   if (patch.notes !== undefined) dbPatch.notes = patch.notes;

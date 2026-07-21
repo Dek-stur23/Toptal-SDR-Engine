@@ -174,6 +174,7 @@ function describeMeetingChanges(before: Meeting, after: Meeting): string {
     changed.push("name");
   if (before.title !== after.title) changed.push("title");
   if (before.linkedinUrl !== after.linkedinUrl) changed.push("LinkedIn URL");
+  if (before.salesloftUrl !== after.salesloftUrl) changed.push("SalesLoft URL");
   if ((before.accountId ?? "") !== (after.accountId ?? "")) changed.push("account");
   if ((before.ese ?? "") !== (after.ese ?? "")) changed.push("ESE");
   if ((before.bookedCategory ?? "") !== (after.bookedCategory ?? ""))
@@ -1492,6 +1493,16 @@ function MeetingCard({
                 <ExternalLink className="w-3 h-3" /> LinkedIn
               </a>
             )}
+            {meeting.salesloftUrl && (
+              <a
+                href={linkHref(meeting.salesloftUrl)}
+                target="_blank"
+                rel="noreferrer"
+                className="flex items-center gap-1 text-blue-600 hover:text-blue-800"
+              >
+                <ExternalLink className="w-3 h-3" /> SalesLoft
+              </a>
+            )}
           </div>
         </div>
       </div>
@@ -1618,6 +1629,7 @@ function MeetingModal({
   const [lastName, setLastName] = useState(source?.lastName ?? "");
   const [title, setTitle] = useState(source?.title ?? "");
   const [linkedinUrl, setLinkedinUrl] = useState(source?.linkedinUrl ?? "");
+  const [salesloftUrl, setSalesloftUrl] = useState(source?.salesloftUrl ?? "");
   const [accountId, setAccountId] = useState(source?.accountId ?? "");
   const [ese, setEse] = useState(source?.ese ?? "");
   const [bookedCategory, setBookedCategory] = useState<BookedCategory | "">(
@@ -1769,6 +1781,7 @@ function MeetingModal({
       lastName: lastName.trim(),
       title: title.trim(),
       linkedinUrl: linkedinUrl.trim(),
+      salesloftUrl: salesloftUrl.trim(),
       accountId: accountId || null,
       scheduledFor: datetimeLocalToIso(scheduledFor),
       notes: notes.trim(),
@@ -1798,6 +1811,7 @@ function MeetingModal({
         lastName !== source.lastName ||
         title !== source.title ||
         linkedinUrl !== source.linkedinUrl ||
+        salesloftUrl !== source.salesloftUrl ||
         (accountId || null) !== (source.accountId ?? null) ||
         (ese || null) !== (source.ese ?? null) ||
         (bookedCategory || null) !== (source.bookedCategory ?? null) ||
@@ -1811,6 +1825,7 @@ function MeetingModal({
       lastName.trim() !== "" ||
       title.trim() !== "" ||
       linkedinUrl.trim() !== "" ||
+      salesloftUrl.trim() !== "" ||
       !!accountId ||
       !!ese ||
       !!bookedCategory ||
@@ -2032,6 +2047,16 @@ function MeetingModal({
             value={linkedinUrl}
             onChange={(e) => setLinkedinUrl(e.target.value)}
             placeholder="linkedin.com/in/..."
+            className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+          />
+        </Field>
+
+        <Field label="SalesLoft link (optional)">
+          <input
+            type="text"
+            value={salesloftUrl}
+            onChange={(e) => setSalesloftUrl(e.target.value)}
+            placeholder="salesloft.com/app/people/..."
             className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
           />
         </Field>

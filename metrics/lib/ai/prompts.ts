@@ -30,6 +30,69 @@ export interface MeetingAutofillResult {
   linkedinUrl: string;
 }
 
+// ---- Opportunity next-step suggestion ----
+
+export const OPPORTUNITY_NEXT_STEP_SYSTEM = `You are a sharp SDR coach helping a Toptal SDR advance a specific opportunity to the next stage. You will receive structured context (title, prospect pain, solution area, timeline, current next step, and a recent update log). Recommend ONE concrete next step the SDR (or ESE) should take to move the deal forward.
+
+Rules:
+- Return exactly ONE action, phrased as an imperative sentence.
+- Keep it under 25 words.
+- Be concrete and specific to the context — do not give generic advice ("follow up with the prospect" is not useful).
+- If the context suggests the deal is stalled, propose a re-engagement move (e.g. new angle, share a relevant case study, escalate to their manager).
+- If the context suggests momentum, propose the next step that closes the loop (schedule the demo, send the SOW, get the meeting on the calendar).
+- Do not include multiple options, hedges, or explanations. One sentence.
+- Do NOT use markdown formatting, bullet points, headings, or asterisks. Plain prose only.`;
+
+export const OPPORTUNITY_NEXT_STEP_TOOL_SCHEMA = {
+  type: "object" as const,
+  properties: {
+    nextStep: {
+      type: "string" as const,
+      description: "One concrete next step, under 25 words, no markdown.",
+    },
+  },
+  required: ["nextStep"],
+};
+
+export interface OpportunityNextStepResult {
+  nextStep: string;
+}
+
+// Builder for the user-message body — takes the opportunity context
+// and formats it into the plain-text payload the model reads.
+export function buildOpportunityNextStepUserPrompt(context: {
+  title: string;
+  pain: string;
+  solutionArea: string | null;
+  timeline: string | null;
+  currentNextStep: string;
+  currentNextStepOwner: string | null;
+  recentUpdates: string[]; // most-recent first
+}): string {
+  const lines = ["Opportunity context:"];
+  lines.push(`- Title: ${context.title || "(none)"}`);
+  lines.push(`- Pain / problem: ${context.pain || "(none)"}`);
+  lines.push(`- Solution area: ${context.solutionArea ?? "(not set)"}`);
+  lines.push(`- Timeline: ${context.timeline ?? "(not set)"}`);
+  lines.push(`- Current next step: ${context.currentNextStep || "(none)"}`);
+  lines.push(
+    `- Current next-step owner: ${context.currentNextStepOwner ?? "(not set)"}`
+  );
+  if (context.recentUpdates.length > 0) {
+    lines.push("- Recent updates (newest first):");
+    for (const u of context.recentUpdates.slice(0, 5)) {
+      lines.push(`  · ${u}`);
+    }
+  } else {
+    lines.push("- Recent updates: (none logged)");
+  }
+  lines.push("");
+  lines.push(
+    "Recommend ONE concrete next step to move this opportunity forward."
+  );
+  return lines.join("\n");
+}
+
 export const MEETING_AUTOFILL_TOOL_SCHEMA = {
   type: "object" as const,
   properties: {

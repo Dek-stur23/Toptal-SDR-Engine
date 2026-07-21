@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { AiUsageEntry } from "@/lib/types";
+import type { AiEndpoint, AiUsageEntry } from "@/lib/types";
 
 interface AiUsageRow {
   id: string;
@@ -13,7 +13,7 @@ interface AiUsageRow {
 function toAiUsage(row: AiUsageRow): AiUsageEntry {
   return {
     id: row.id,
-    endpoint: row.endpoint as "autofill",
+    endpoint: row.endpoint as AiEndpoint,
     tokensIn: row.tokens_in,
     tokensOut: row.tokens_out,
     estimatedCostCents: row.estimated_cost_cents,
@@ -46,7 +46,7 @@ export async function insertAiUsage(
   supabase: SupabaseClient,
   entry: {
     userId: string;
-    endpoint: "autofill";
+    endpoint: AiEndpoint;
     tokensIn: number;
     tokensOut: number;
     estimatedCostCents: number;

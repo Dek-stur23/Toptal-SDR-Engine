@@ -22,6 +22,8 @@ tools from the SDR Launchpad. Next.js 14 (App Router) on top of Supabase
    - `005_opportunities.sql` — opportunities + opportunity_updates
      tables for the workflow that opens under a held meeting when
      the outcome is "Opportunity identified".
+   - `006_ai_endpoints.sql` — expands the ai_usage endpoint check to
+     cover the "opportunity-next-step" AI call.
 
 3. **Create the storage bucket** for meeting screenshots. In the
    Supabase dashboard: Storage → New bucket → name `meeting-images`,

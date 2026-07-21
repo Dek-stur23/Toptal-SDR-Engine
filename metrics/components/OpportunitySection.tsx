@@ -8,9 +8,12 @@ import {
   CheckCircle2,
   ChevronRight,
   Edit2,
+  Loader2,
   Play,
   Plus,
   Trash2,
+  Wand2,
+  X,
 } from "lucide-react";
 import type {
   Meeting,
@@ -116,6 +119,10 @@ export function OpportunitySection({
     updateId: string
   ) => void | Promise<void>;
 }) {
+  const acceptSuggestion = async (id: string, suggestion: string) => {
+    await onUpdate(id, { nextStepText: suggestion });
+    await onAddUpdate(id, `AI suggested next step: ${suggestion}`);
+  };
   const [editing, setEditing] = useState(false);
 
   // Terminal-status opportunities render as a tiny reference row —
@@ -204,6 +211,7 @@ export function OpportunitySection({
       onDelete={() => onDelete(opportunity.id)}
       onAddUpdate={(text) => onAddUpdate(opportunity.id, text)}
       onRemoveUpdate={(uid) => onRemoveUpdate(opportunity.id, uid)}
+      onAcceptSuggestion={(text) => acceptSuggestion(opportunity.id, text)}
     />
   );
 }
@@ -390,6 +398,7 @@ function OpportunityCard({
   onDelete,
   onAddUpdate,
   onRemoveUpdate,
+  onAcceptSuggestion,
 }: {
   meeting: Meeting;
   opportunity: Opportunity;
@@ -399,8 +408,70 @@ function OpportunityCard({
   onDelete: () => void;
   onAddUpdate: (text: string) => void | Promise<void>;
   onRemoveUpdate: (id: string) => void | Promise<void>;
+  onAcceptSuggestion: (text: string) => void | Promise<void>;
 }) {
   const overdue = isOverdue(opportunity);
+  const [suggesting, setSuggesting] = useState(false);
+  const [suggestion, setSuggestion] = useState<string | null>(null);
+  const [suggestError, setSuggestError] = useState<string | null>(null);
+
+  const askForSuggestion = async () => {
+    setSuggesting(true);
+    setSuggestError(null);
+    setSuggestion(null);
+    try {
+      const res = await fetch("/api/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          endpoint: "opportunity-next-step",
+          context: {
+            title: opportunity.title,
+            pain: opportunity.pain,
+            solutionArea: opportunity.solutionArea,
+            timeline: opportunity.timeline,
+            currentNextStep: opportunity.nextStepText,
+            currentNextStepOwner: opportunity.nextStepOwner,
+            recentUpdates: [...updates]
+              .sort((a, b) => b.loggedAt.localeCompare(a.loggedAt))
+              .map((u) => u.text),
+          },
+        }),
+      });
+      const json = (await res.json()) as {
+        result?: { nextStep?: string };
+        error?: string;
+        spentCents?: number;
+        capCents?: number;
+      };
+      if (!res.ok) {
+        if (res.status === 429 && json.capCents != null) {
+          setSuggestError(
+            `Monthly AI cap reached ($${(json.capCents / 100).toFixed(2)}).`
+          );
+        } else {
+          setSuggestError(json.error ?? "Suggestion failed.");
+        }
+        return;
+      }
+      const nextStep = json.result?.nextStep?.trim();
+      if (!nextStep) {
+        setSuggestError("No suggestion returned.");
+        return;
+      }
+      setSuggestion(nextStep);
+    } catch (e) {
+      setSuggestError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSuggesting(false);
+    }
+  };
+
+  const acceptSuggestion = async () => {
+    if (!suggestion) return;
+    await onAcceptSuggestion(suggestion);
+    setSuggestion(null);
+  };
 
   return (
     <div className="border border-blue-200 bg-blue-50/30 rounded-md p-3 space-y-3">
@@ -468,9 +539,24 @@ function OpportunityCard({
       )}
 
       <div className="text-xs">
-        <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-0.5">
-          Next step
-        </p>
+        <div className="flex items-center justify-between mb-0.5">
+          <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">
+            Next step
+          </p>
+          <button
+            onClick={() => void askForSuggestion()}
+            disabled={suggesting}
+            className="text-[10px] font-bold uppercase tracking-wider bg-blue-100 hover:bg-blue-200 text-blue-700 px-2 py-0.5 rounded flex items-center gap-1 transition-colors disabled:opacity-50"
+            title="Ask AI to suggest a next step based on this opportunity's context"
+          >
+            {suggesting ? (
+              <Loader2 className="w-3 h-3 animate-spin" />
+            ) : (
+              <Wand2 className="w-3 h-3" />
+            )}
+            {suggesting ? "Thinking…" : "Suggest next step"}
+          </button>
+        </div>
         {opportunity.nextStepText ? (
           <p className="text-slate-700">
             {opportunity.nextStepText}
@@ -482,6 +568,31 @@ function OpportunityCard({
           </p>
         ) : (
           <p className="italic text-slate-500">No next step set yet.</p>
+        )}
+        {suggestError && (
+          <p className="text-[11px] text-red-600 mt-1">{suggestError}</p>
+        )}
+        {suggestion && (
+          <div className="mt-2 rounded-md border border-blue-300 bg-white p-2 space-y-2">
+            <p className="text-[10px] font-semibold text-blue-700 uppercase tracking-wider flex items-center gap-1">
+              <Wand2 className="w-3 h-3" /> Suggested next step
+            </p>
+            <p className="text-xs text-slate-700">{suggestion}</p>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => void acceptSuggestion()}
+                className="text-[11px] font-semibold text-white bg-blue-600 hover:bg-blue-700 px-2.5 py-1 rounded flex items-center gap-1"
+              >
+                <CheckCircle2 className="w-3 h-3" /> Use as next step
+              </button>
+              <button
+                onClick={() => setSuggestion(null)}
+                className="text-[11px] font-semibold text-slate-500 hover:text-slate-800 px-2 py-1 rounded flex items-center gap-1"
+              >
+                <X className="w-3 h-3" /> Dismiss
+              </button>
+            </div>
+          </div>
         )}
       </div>
 

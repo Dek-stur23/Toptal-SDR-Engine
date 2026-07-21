@@ -150,9 +150,11 @@ export interface Profile {
 
 // ---------- AI usage ----------
 
+export type AiEndpoint = "autofill" | "opportunity-next-step";
+
 export interface AiUsageEntry {
   id: string;
-  endpoint: "autofill";
+  endpoint: AiEndpoint;
   tokensIn: number;
   tokensOut: number;
   estimatedCostCents: number;

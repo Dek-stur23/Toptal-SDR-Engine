@@ -6,20 +6,29 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test:hotlist": "tsx scripts/test-hotlist.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.91.1",
+    "lucide-react": "^1.11.0",
     "next": "14.2.33",
     "react": "18.3.1",
-    "react-dom": "18.3.1"
+    "react-dom": "18.3.1",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1",
+    "tailwindcss-animate": "^1.0.7"
   },
   "devDependencies": {
+    "@tailwindcss/typography": "^0.5.19",
     "@types/node": "20.14.10",
     "@types/react": "18.3.3",
     "@types/react-dom": "18.3.0",
     "autoprefixer": "10.4.19",
+    "fake-indexeddb": "^6.2.5",
     "postcss": "8.4.39",
     "tailwindcss": "3.4.6",
+    "tsx": "^4.22.2",
     "typescript": "5.5.3"
   }
 }

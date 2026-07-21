@@ -11,3 +11,4 @@ dist/
 .env.production.local
 next-env.d.ts
 .vercel
+*.tsbuildinfo

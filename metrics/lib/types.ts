@@ -105,6 +105,23 @@ export interface SavedWeek {
   kind: SavedWeekKind;
 }
 
+// Snapshot of the weekly goals + benchmarks that were live for one
+// past week. Created lazily on the next goals-edit for weeks that
+// have ended without a snapshot yet.
+export interface WeeklyGoalSnapshot {
+  id: string;
+  weekStart: string; // YYYY-MM-DD
+  weeklyDialsGoal: number;
+  weeklyDialsBenchmark: number;
+  weeklyProspectsGoal: number;
+  weeklyProspectsBenchmark: number;
+  weeklyMeetingsBookedGoal: number;
+  weeklyMeetingsBookedBenchmark: number;
+  weeklyMeetingsHeldGoal: number;
+  weeklyMeetingsHeldBenchmark: number;
+  snapshotAt: string;
+}
+
 // ---------- Opportunities ----------
 
 export type OpportunitySolutionArea =

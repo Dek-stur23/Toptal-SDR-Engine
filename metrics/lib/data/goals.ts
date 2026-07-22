@@ -5,6 +5,7 @@ import type {
   QuarterlyGoals,
   SavedWeek,
   SavedWeekKind,
+  WeeklyGoalSnapshot,
 } from "@/lib/types";
 
 // ---------- quarterly_goals ----------
@@ -232,4 +233,91 @@ export async function clearSavedWeek(
     .eq("week_start", weekStart)
     .eq("kind", kind);
   if (error) throw error;
+}
+
+// ---------- weekly_goal_snapshots ----------
+
+interface SnapshotRow {
+  id: string;
+  week_start: string;
+  weekly_dials_goal: number;
+  weekly_dials_benchmark: number;
+  weekly_prospects_goal: number;
+  weekly_prospects_benchmark: number;
+  weekly_meetings_booked_goal: number;
+  weekly_meetings_booked_benchmark: number;
+  weekly_meetings_held_goal: number;
+  weekly_meetings_held_benchmark: number;
+  snapshot_at: string;
+}
+
+const SNAPSHOT_COLS =
+  "id, week_start, weekly_dials_goal, weekly_dials_benchmark, weekly_prospects_goal, weekly_prospects_benchmark, weekly_meetings_booked_goal, weekly_meetings_booked_benchmark, weekly_meetings_held_goal, weekly_meetings_held_benchmark, snapshot_at";
+
+function toSnapshot(row: SnapshotRow): WeeklyGoalSnapshot {
+  return {
+    id: row.id,
+    weekStart: row.week_start,
+    weeklyDialsGoal: row.weekly_dials_goal,
+    weeklyDialsBenchmark: row.weekly_dials_benchmark,
+    weeklyProspectsGoal: row.weekly_prospects_goal,
+    weeklyProspectsBenchmark: row.weekly_prospects_benchmark,
+    weeklyMeetingsBookedGoal: row.weekly_meetings_booked_goal,
+    weeklyMeetingsBookedBenchmark: row.weekly_meetings_booked_benchmark,
+    weeklyMeetingsHeldGoal: row.weekly_meetings_held_goal,
+    weeklyMeetingsHeldBenchmark: row.weekly_meetings_held_benchmark,
+    snapshotAt: row.snapshot_at,
+  };
+}
+
+export async function listWeeklyGoalSnapshots(
+  supabase: SupabaseClient
+): Promise<WeeklyGoalSnapshot[]> {
+  const { data, error } = await supabase
+    .from("weekly_goal_snapshots")
+    .select(SNAPSHOT_COLS)
+    .order("week_start", { ascending: false });
+  if (error) throw error;
+  return (data as SnapshotRow[]).map(toSnapshot);
+}
+
+// Insert snapshots for a batch of week-start dates using the given
+// goals. Uses upsert with ignoreDuplicates so calling this for a
+// week that already has a snapshot is a safe no-op.
+export async function insertWeeklyGoalSnapshots(
+  supabase: SupabaseClient,
+  weekStarts: string[],
+  goals: Pick<
+    QuarterlyGoals,
+    | "weeklyDialsGoal"
+    | "weeklyDialsBenchmark"
+    | "weeklyProspectsGoal"
+    | "weeklyProspectsBenchmark"
+    | "weeklyMeetingsBookedGoal"
+    | "weeklyMeetingsBookedBenchmark"
+    | "weeklyMeetingsHeldGoal"
+    | "weeklyMeetingsHeldBenchmark"
+  >
+): Promise<WeeklyGoalSnapshot[]> {
+  if (weekStarts.length === 0) return [];
+  const rows = weekStarts.map((w) => ({
+    week_start: w,
+    weekly_dials_goal: goals.weeklyDialsGoal,
+    weekly_dials_benchmark: goals.weeklyDialsBenchmark,
+    weekly_prospects_goal: goals.weeklyProspectsGoal,
+    weekly_prospects_benchmark: goals.weeklyProspectsBenchmark,
+    weekly_meetings_booked_goal: goals.weeklyMeetingsBookedGoal,
+    weekly_meetings_booked_benchmark: goals.weeklyMeetingsBookedBenchmark,
+    weekly_meetings_held_goal: goals.weeklyMeetingsHeldGoal,
+    weekly_meetings_held_benchmark: goals.weeklyMeetingsHeldBenchmark,
+  }));
+  const { data, error } = await supabase
+    .from("weekly_goal_snapshots")
+    .upsert(rows, {
+      onConflict: "user_id,week_start",
+      ignoreDuplicates: true,
+    })
+    .select(SNAPSHOT_COLS);
+  if (error) throw error;
+  return (data as SnapshotRow[]).map(toSnapshot);
 }

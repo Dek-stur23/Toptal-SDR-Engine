@@ -12,6 +12,13 @@ interface Props {
   buckets: ChartBucket[];
   goal: number;
   benchmark: number;
+  // Optional per-bucket goal / benchmark arrays (parallel to buckets).
+  // When provided, the reference lines render as horizontal step
+  // segments — one per bucket — so past-week frozen values render
+  // truthfully next to current-week live ones. If omitted, we draw
+  // the classic single horizontal line at `goal` / `benchmark`.
+  bucketGoals?: number[];
+  bucketBenchmarks?: number[];
   barColorClass: string;
   currentBarColorClass?: string;
   goalStrokeClass?: string;
@@ -32,6 +39,8 @@ export function PacingChart({
   buckets,
   goal,
   benchmark,
+  bucketGoals,
+  bucketBenchmarks,
   barColorClass,
   currentBarColorClass,
   goalStrokeClass = "stroke-slate-700",
@@ -42,7 +51,12 @@ export function PacingChart({
 
   const anyData = buckets.some((b) => b.count > 0);
   const peak = buckets.reduce((m, b) => Math.max(m, b.count), 0);
-  const rawMax = Math.max(peak, goal, benchmark);
+  const goalMax = bucketGoals && bucketGoals.length > 0 ? Math.max(...bucketGoals) : goal;
+  const benchMax =
+    bucketBenchmarks && bucketBenchmarks.length > 0
+      ? Math.max(...bucketBenchmarks)
+      : benchmark;
+  const rawMax = Math.max(peak, goalMax, benchMax);
   const yMax = rawMax > 0 ? Math.ceil(rawMax * 1.15) : 1;
 
   const bucketCount = Math.max(1, buckets.length);
@@ -185,27 +199,66 @@ export function PacingChart({
                 </g>
               );
             })}
-            {goalY !== null && (
-              <line
-                x1={Y_AXIS_WIDTH}
-                y1={goalY}
-                x2={Y_AXIS_WIDTH + totalBarSpace}
-                y2={goalY}
-                strokeWidth="1.5"
-                className={goalStrokeClass}
-              />
-            )}
-            {benchmarkY !== null && (
-              <line
-                x1={Y_AXIS_WIDTH}
-                y1={benchmarkY}
-                x2={Y_AXIS_WIDTH + totalBarSpace}
-                y2={benchmarkY}
-                strokeWidth="1.5"
-                strokeDasharray="4 3"
-                className={benchmarkStrokeClass}
-              />
-            )}
+            {/* Goal reference line — stepped if bucketGoals is
+                provided, single horizontal otherwise. */}
+            {bucketGoals && bucketGoals.length === buckets.length
+              ? buckets.map((_, i) => {
+                  const g = bucketGoals[i];
+                  if (g <= 0) return null;
+                  const x = Y_AXIS_WIDTH + i * (barWidth + BAR_GAP);
+                  const y = yForValue(g);
+                  return (
+                    <line
+                      key={`goal-${i}`}
+                      x1={x}
+                      y1={y}
+                      x2={x + barWidth}
+                      y2={y}
+                      strokeWidth="1.5"
+                      className={goalStrokeClass}
+                    />
+                  );
+                })
+              : goalY !== null && (
+                  <line
+                    x1={Y_AXIS_WIDTH}
+                    y1={goalY}
+                    x2={Y_AXIS_WIDTH + totalBarSpace}
+                    y2={goalY}
+                    strokeWidth="1.5"
+                    className={goalStrokeClass}
+                  />
+                )}
+            {bucketBenchmarks && bucketBenchmarks.length === buckets.length
+              ? buckets.map((_, i) => {
+                  const b = bucketBenchmarks[i];
+                  if (b <= 0) return null;
+                  const x = Y_AXIS_WIDTH + i * (barWidth + BAR_GAP);
+                  const y = yForValue(b);
+                  return (
+                    <line
+                      key={`bench-${i}`}
+                      x1={x}
+                      y1={y}
+                      x2={x + barWidth}
+                      y2={y}
+                      strokeWidth="1.5"
+                      strokeDasharray="4 3"
+                      className={benchmarkStrokeClass}
+                    />
+                  );
+                })
+              : benchmarkY !== null && (
+                  <line
+                    x1={Y_AXIS_WIDTH}
+                    y1={benchmarkY}
+                    x2={Y_AXIS_WIDTH + totalBarSpace}
+                    y2={benchmarkY}
+                    strokeWidth="1.5"
+                    strokeDasharray="4 3"
+                    className={benchmarkStrokeClass}
+                  />
+                )}
             {buckets.map((b, i) => {
               const x = Y_AXIS_WIDTH + i * (barWidth + BAR_GAP) + barWidth / 2;
               const showEvery = bucketCount > 10 ? 2 : 1;

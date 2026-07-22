@@ -26,6 +26,9 @@ tools from the SDR Launchpad. Next.js 14 (App Router) on top of Supabase
      cover the "opportunity-next-step" AI call.
    - `007_meetings_salesloft_url.sql` — adds an optional
      salesloft_url column to meetings.
+   - `008_weekly_goal_snapshots.sql` — freezes weekly goals +
+     benchmarks per past week so mid-quarter edits don't
+     retroactively recolor the archive or the pacing chart.
 
 3. **Create the storage bucket** for meeting screenshots. In the
    Supabase dashboard: Storage → New bucket → name `meeting-images`,

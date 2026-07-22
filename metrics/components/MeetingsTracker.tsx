@@ -1776,6 +1776,15 @@ function MeetingModal({
       setError("Provide at least a name, title, or LinkedIn URL.");
       return;
     }
+    // The uploaded screenshot's only job is autofill. Anything the
+    // user uploaded in this modal session gets discarded on save so
+    // meetings never persist their screenshots. Pre-existing images
+    // on an edited meeting (from before this behavior) stay put
+    // unless the user removed them explicitly.
+    const wasFreshUpload =
+      imageKey !== null && uploadedKeysRef.current.includes(imageKey);
+    const persistedImageKey = wasFreshUpload ? null : imageKey;
+
     const draft: MeetingDraft = {
       firstName: firstName.trim(),
       lastName: lastName.trim(),
@@ -1786,7 +1795,7 @@ function MeetingModal({
       scheduledFor: datetimeLocalToIso(scheduledFor),
       notes: notes.trim(),
       status: source?.status ?? "booked",
-      imageKey: imageKey,
+      imageKey: persistedImageKey,
       prospectResponse: source?.prospectResponse ?? null,
       ese: ese || null,
       heldOutcome: source?.heldOutcome ?? null,
@@ -1795,8 +1804,15 @@ function MeetingModal({
     setBusy(true);
     try {
       await onSave(draft, source?.id ?? null);
-      // Save succeeded — session-uploaded keys are now attached to a
-      // persisted meeting, so drop them from the cleanup list.
+      // Save succeeded — delete any fresh-in-session uploads from
+      // Storage since we deliberately didn't persist them.
+      for (const k of uploadedKeysRef.current) {
+        try {
+          await deleteMeetingImage(supabase, k);
+        } catch {
+          /* best effort */
+        }
+      }
       uploadedKeysRef.current = [];
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -1950,6 +1966,9 @@ function MeetingModal({
               </>
             )}
           </div>
+          <p className="text-[10px] text-slate-500 mt-1 italic">
+            Only used to autofill fields above — removed when you save.
+          </p>
           {imageError && (
             <p className="text-xs text-red-600 mt-1">{imageError}</p>
           )}

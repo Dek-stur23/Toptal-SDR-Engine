@@ -123,6 +123,16 @@ export function OpportunitySection({
     await onUpdate(id, { nextStepText: suggestion });
     await onAddUpdate(id, `AI suggested next step: ${suggestion}`);
   };
+
+  // Mark the current next step as done. Auto-logs a "Completed: …"
+  // system entry so the history is preserved, then clears the field
+  // (and its owner) so the user is prompted to think of the next one.
+  const completeNextStep = async (id: string, doneText: string) => {
+    const clean = doneText.trim();
+    if (!clean) return;
+    await onAddUpdate(id, `Completed: ${clean}`);
+    await onUpdate(id, { nextStepText: "", nextStepOwner: null });
+  };
   const [editing, setEditing] = useState(false);
 
   // Terminal-status opportunities render as a tiny reference row —
@@ -212,6 +222,7 @@ export function OpportunitySection({
       onAddUpdate={(text) => onAddUpdate(opportunity.id, text)}
       onRemoveUpdate={(uid) => onRemoveUpdate(opportunity.id, uid)}
       onAcceptSuggestion={(text) => acceptSuggestion(opportunity.id, text)}
+      onCompleteNextStep={(text) => completeNextStep(opportunity.id, text)}
     />
   );
 }
@@ -399,6 +410,7 @@ function OpportunityCard({
   onAddUpdate,
   onRemoveUpdate,
   onAcceptSuggestion,
+  onCompleteNextStep,
 }: {
   meeting: Meeting;
   opportunity: Opportunity;
@@ -409,6 +421,7 @@ function OpportunityCard({
   onAddUpdate: (text: string) => void | Promise<void>;
   onRemoveUpdate: (id: string) => void | Promise<void>;
   onAcceptSuggestion: (text: string) => void | Promise<void>;
+  onCompleteNextStep: (text: string) => void | Promise<void>;
 }) {
   const overdue = isOverdue(opportunity);
   const [suggesting, setSuggesting] = useState(false);
@@ -558,16 +571,28 @@ function OpportunityCard({
           </button>
         </div>
         {opportunity.nextStepText ? (
-          <p className="text-slate-700">
-            {opportunity.nextStepText}
-            {opportunity.nextStepOwner && (
-              <span className="ml-2 text-[10px] font-semibold bg-white text-slate-600 border border-slate-200 px-1.5 py-0.5 rounded">
-                Owner: {opportunity.nextStepOwner}
-              </span>
-            )}
-          </p>
+          <div className="flex items-start gap-2">
+            <button
+              onClick={() => void onCompleteNextStep(opportunity.nextStepText)}
+              className="shrink-0 mt-0.5 w-4 h-4 rounded border-2 border-slate-300 hover:border-emerald-500 hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-emerald-400 transition-colors group"
+              title="Mark next step as done"
+              aria-label="Mark next step as done"
+            >
+              <CheckCircle2 className="w-3 h-3 text-emerald-600 opacity-0 group-hover:opacity-100 transition-opacity -mt-0.5 -ml-0.5" />
+            </button>
+            <p className="text-slate-700 flex-1">
+              {opportunity.nextStepText}
+              {opportunity.nextStepOwner && (
+                <span className="ml-2 text-[10px] font-semibold bg-white text-slate-600 border border-slate-200 px-1.5 py-0.5 rounded">
+                  Owner: {opportunity.nextStepOwner}
+                </span>
+              )}
+            </p>
+          </div>
         ) : (
-          <p className="italic text-slate-500">No next step set yet.</p>
+          <p className="italic text-slate-500">
+            No next step set yet. Type one in Edit, or click Suggest above.
+          </p>
         )}
         {suggestError && (
           <p className="text-[11px] text-red-600 mt-1">{suggestError}</p>

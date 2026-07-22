@@ -89,6 +89,21 @@ function pct(actual: number, target: number): number {
   return Math.round((actual / target) * 100);
 }
 
+// Weeks remaining in the current calendar quarter (rounded up, min 1).
+// Used as the default "Over this many weeks" value in Calculate Goals
+// so a user opening the modal mid-quarter gets a sensible number.
+function weeksRemainingInQuarter(now: Date = new Date()): number {
+  const year = now.getFullYear();
+  const month = now.getMonth();
+  const quarterIdx = Math.floor(month / 3);
+  const quarterEndMonth = quarterIdx * 3 + 2; // 0-based last month of quarter
+  const quarterEnd = new Date(year, quarterEndMonth + 1, 0, 23, 59, 59, 999);
+  const diffMs = quarterEnd.getTime() - now.getTime();
+  if (diffMs <= 0) return 1;
+  const days = diffMs / (24 * 60 * 60 * 1000);
+  return Math.max(1, Math.ceil(days / 7));
+}
+
 export function GoalsAndBenchmarks() {
   const supabase = useMemo(() => createClient(), []);
   const [loading, setLoading] = useState(true);
@@ -1127,30 +1142,19 @@ function CalculateGoalsModal({
   const [meetingsBooked, setMeetingsBooked] = useState("");
   const [meetingsHeld, setMeetingsHeld] = useState("");
   const [target, setTarget] = useState("");
-  const [period, setPeriod] = useState<
-    "weekly" | "monthly" | "quarterly" | "historical"
-  >("weekly");
-  const [showWeekly, setShowWeekly] = useState(false);
-  // "historical" carries no built-in timespan — treat the entered
-  // numbers as a single-period reference like weekly (no scaling).
-  const weeksInPeriod =
-    period === "weekly" || period === "historical"
-      ? 1
-      : period === "monthly"
-        ? 4.33
-        : 13;
-  // Weekly + Historical share the "1 week per bucket" math, so the
-  // weekly breakdown matches the suggestion 1:1 for both.
-  const isSinglePeriod = period === "weekly" || period === "historical";
-  // Human-readable "per X" label. Only used when isSinglePeriod is
-  // false, so we don't have to handle historical here.
-  const periodShortLabel =
-    period === "monthly" ? "month" : period === "quarterly" ? "quarter" : period;
+  // "Over this many weeks" is the timespan the entered target covers.
+  // Defaults to the number of full weeks remaining in the current
+  // quarter, so a user opening the modal mid-quarter gets a sensible
+  // default without any thinking.
+  const [weeksStr, setWeeksStr] = useState(() =>
+    String(weeksRemainingInQuarter())
+  );
 
   const parse = (s: string) => {
     const n = Number.parseFloat(s);
     return Number.isFinite(n) && n >= 0 ? n : 0;
   };
+  const weeksInPeriod = Math.max(1, parse(weeksStr) || 1);
 
   const nDials = parse(dials);
   const nConnects = parse(connects);
@@ -1183,6 +1187,7 @@ function CalculateGoalsModal({
         meetingsHeldTarget: Math.ceil(suggested.meetingsHeldTarget / weeksInPeriod),
       }
     : null;
+  const showsWeeklyColumn = weeksInPeriod !== 1;
 
   const pctStr = (numer: number, denom: number): string =>
     denom > 0 ? `${((numer / denom) * 100).toFixed(1)}%` : "—";
@@ -1216,29 +1221,9 @@ function CalculateGoalsModal({
         </div>
 
         <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
-              Historical average
-            </p>
-            <label className="inline-flex items-center gap-1.5 text-[11px] text-slate-500">
-              <span className="uppercase tracking-wider font-semibold">Period</span>
-              <select
-                value={period}
-                onChange={(e) => {
-                  setPeriod(
-                    e.target.value as "weekly" | "monthly" | "quarterly" | "historical"
-                  );
-                  setShowWeekly(false);
-                }}
-                className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs text-slate-800 focus:ring-2 focus:ring-blue-500 outline-none"
-              >
-                <option value="weekly">Weekly</option>
-                <option value="monthly">Monthly</option>
-                <option value="quarterly">Quarterly</option>
-                <option value="historical">Historical</option>
-              </select>
-            </label>
-          </div>
+          <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+            Historical numbers
+          </p>
           <div className="grid grid-cols-2 gap-3">
             <NumberField label="Dials" value={parse(dials)} onChange={(v) => setDials(String(v))} />
             <NumberField
@@ -1271,6 +1256,17 @@ function CalculateGoalsModal({
             value={parse(target)}
             onChange={(v) => setTarget(String(v))}
           />
+          <NumberField
+            label="Over this many weeks"
+            value={parse(weeksStr)}
+            onChange={(v) => setWeeksStr(String(v))}
+            placeholder="e.g. 13"
+          />
+          <p className="text-[10px] text-slate-500 italic -mt-1">
+            Defaults to the number of weeks left in the current quarter. The
+            per-week goals are computed by dividing the total suggestion by
+            this number.
+          </p>
         </div>
 
         {(nDials > 0 || nConnects > 0 || nProspects > 0 || nMeetingsBooked > 0) &&
@@ -1302,32 +1298,19 @@ function CalculateGoalsModal({
             </div>
           )}
 
-        {suggested && (
+        {suggested && weekly && (
           <div className="bg-blue-50 border border-blue-200 rounded-md p-3 space-y-2">
-            <div className="flex items-center justify-between gap-2 flex-wrap">
-              <p className="text-[10px] font-semibold text-blue-700 uppercase tracking-wider">
-                Suggested goals to hit {suggested.meetingsHeldTarget} meetings held
-                {!isSinglePeriod && (
-                  <span className="normal-case font-normal text-blue-700/70">
-                    {" "}
-                    (per {periodShortLabel})
-                  </span>
-                )}
-              </p>
-              <button
-                onClick={() => setShowWeekly((v) => !v)}
-                className="text-[10px] font-semibold text-blue-700 hover:text-white hover:bg-blue-600 border border-blue-300 hover:border-blue-600 px-2 py-0.5 rounded transition-colors"
-              >
-                {showWeekly ? "Hide weekly breakdown" : "Check weekly breakdown"}
-              </button>
-            </div>
+            <p className="text-[10px] font-semibold text-blue-700 uppercase tracking-wider">
+              Suggested goals to hit {suggested.meetingsHeldTarget} meetings
+              held over {weeksInPeriod} week{weeksInPeriod === 1 ? "" : "s"}
+            </p>
             <table className="w-full text-xs">
               <thead>
-                {showWeekly && weekly && !isSinglePeriod && (
+                {showsWeeklyColumn && (
                   <tr className="text-[10px] uppercase tracking-wider text-blue-700/70">
                     <th className="text-left font-semibold py-1"></th>
                     <th className="text-right font-semibold py-1">
-                      Per {periodShortLabel}
+                      Total over {weeksInPeriod} wks
                     </th>
                     <th className="text-right font-semibold py-1 pl-3">Per week</th>
                   </tr>
@@ -1337,53 +1320,34 @@ function CalculateGoalsModal({
                 <SuggestRow
                   label="Dials"
                   value={suggested.dials}
-                  weeklyValue={
-                    showWeekly && weekly && !isSinglePeriod ? weekly.dials : undefined
-                  }
+                  weeklyValue={showsWeeklyColumn ? weekly.dials : undefined}
                 />
                 <SuggestRow
                   label="Connects"
                   value={suggested.connects}
-                  weeklyValue={
-                    showWeekly && weekly && !isSinglePeriod ? weekly.connects : undefined
-                  }
+                  weeklyValue={showsWeeklyColumn ? weekly.connects : undefined}
                 />
                 <SuggestRow
                   label="Prospects dialed"
                   value={suggested.prospects}
-                  weeklyValue={
-                    showWeekly && weekly && !isSinglePeriod ? weekly.prospects : undefined
-                  }
+                  weeklyValue={showsWeeklyColumn ? weekly.prospects : undefined}
                 />
                 <SuggestRow
                   label="Meetings booked"
                   value={suggested.meetingsBooked}
-                  weeklyValue={
-                    showWeekly && weekly && !isSinglePeriod ? weekly.meetingsBooked : undefined
-                  }
+                  weeklyValue={showsWeeklyColumn ? weekly.meetingsBooked : undefined}
                 />
                 <SuggestRow
                   label="Meetings held"
                   value={suggested.meetingsHeldTarget}
-                  weeklyValue={
-                    showWeekly && weekly && !isSinglePeriod
-                      ? weekly.meetingsHeldTarget
-                      : undefined
-                  }
+                  weeklyValue={showsWeeklyColumn ? weekly.meetingsHeldTarget : undefined}
                 />
               </tbody>
             </table>
-            {showWeekly && weekly && isSinglePeriod && (
-              <p className="text-[10px] text-blue-700/80 italic">
-                {period === "weekly"
-                  ? "You entered weekly numbers, so the weekly breakdown matches the suggestion above 1:1."
-                  : "Historical numbers are treated as a single period (no scaling), so the weekly breakdown matches the suggestion above 1:1."}
-              </p>
-            )}
             <p className="text-[10px] text-blue-700/80 italic pt-1">
-              Note: Connects is used for the calc but isn&apos;t stored as a quarterly
-              goal — the other four update the current quarter&apos;s goals when you
-              Apply (using the weekly breakdown, since goals are stored weekly).
+              Apply writes the per-week numbers into the current quarter&apos;s
+              weekly goals. Connects is used for the calc but isn&apos;t stored
+              as a quarterly goal.
             </p>
           </div>
         )}

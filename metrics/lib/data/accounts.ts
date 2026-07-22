@@ -5,14 +5,18 @@ interface AccountRow {
   id: string;
   name: string;
   is_archived: boolean;
+  default_ese: string | null;
   created_at: string;
 }
+
+const COLS = "id, name, is_archived, default_ese, created_at";
 
 function toAccount(row: AccountRow): Account {
   return {
     id: row.id,
     name: row.name,
     isArchived: row.is_archived,
+    defaultEse: row.default_ese ?? null,
     createdAt: row.created_at,
   };
 }
@@ -20,7 +24,7 @@ function toAccount(row: AccountRow): Account {
 export async function listAccounts(supabase: SupabaseClient): Promise<Account[]> {
   const { data, error } = await supabase
     .from("accounts")
-    .select("id, name, is_archived, created_at")
+    .select(COLS)
     .order("name", { ascending: true });
   if (error) throw error;
   return (data as AccountRow[]).map(toAccount);
@@ -33,7 +37,7 @@ export async function createAccount(
   const { data, error } = await supabase
     .from("accounts")
     .insert({ name })
-    .select("id, name, is_archived, created_at")
+    .select(COLS)
     .single();
   if (error) throw error;
   return toAccount(data as AccountRow);
@@ -70,7 +74,7 @@ export async function bulkCreateAccounts(
   const { data, error } = await supabase
     .from("accounts")
     .insert(fresh.map((name) => ({ name })))
-    .select("id, name, is_archived, created_at");
+    .select(COLS);
   if (error) throw error;
   return { created: (data as AccountRow[]).map(toAccount), skipped };
 }
@@ -97,6 +101,23 @@ export async function setAccountArchived(
     .update({ is_archived: isArchived })
     .eq("id", id);
   if (error) throw error;
+}
+
+// Set (or clear, with null) the default ESE tag on an account. Called
+// from the Accounts page ESE picker per row.
+export async function setAccountDefaultEse(
+  supabase: SupabaseClient,
+  id: string,
+  defaultEse: string | null
+): Promise<Account> {
+  const { data, error } = await supabase
+    .from("accounts")
+    .update({ default_ese: defaultEse })
+    .eq("id", id)
+    .select(COLS)
+    .single();
+  if (error) throw error;
+  return toAccount(data as AccountRow);
 }
 
 export async function deleteAccount(

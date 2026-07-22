@@ -29,6 +29,8 @@ tools from the SDR Launchpad. Next.js 14 (App Router) on top of Supabase
    - `008_weekly_goal_snapshots.sql` — freezes weekly goals +
      benchmarks per past week so mid-quarter edits don't
      retroactively recolor the archive or the pacing chart.
+   - `009_accounts_default_ese.sql` — optional per-account default
+     ESE that auto-populates the ESE field on new meetings.
 
 3. **Create the storage bucket** for meeting screenshots. In the
    Supabase dashboard: Storage → New bucket → name `meeting-images`,

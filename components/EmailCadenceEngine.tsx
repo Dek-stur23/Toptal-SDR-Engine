@@ -20,12 +20,14 @@ interface Props {
 type Department =
   | "Engineering & Technical"
   | "IT"
-  | "Marketing";
+  | "Marketing"
+  | "Procurement";
 
 const DEPARTMENTS: Department[] = [
   "Engineering & Technical",
   "IT",
   "Marketing",
+  "Procurement",
 ];
 
 // The gem branches on this two-value dimension, so we collapse the
@@ -49,6 +51,7 @@ function statusLabel(status: AccountStatus): string {
 }
 
 interface GeneratedEmail {
+  subjectLine: string;
   bodyMarkdown: string;
 }
 
@@ -64,9 +67,10 @@ const CADENCE_SCHEMA = {
       items: {
         type: "OBJECT",
         properties: {
+          subjectLine: { type: "STRING" },
           bodyMarkdown: { type: "STRING" },
         },
-        required: ["bodyMarkdown"],
+        required: ["subjectLine", "bodyMarkdown"],
       },
     },
   },
@@ -267,7 +271,10 @@ function CadenceResults({ emails }: { emails: GeneratedEmail[] }) {
 
   const copyAll = async () => {
     const text = emails
-      .map((e, i) => `--- Email ${i + 1} ---\n\n${e.bodyMarkdown.trim()}`)
+      .map(
+        (e, i) =>
+          `--- Email ${i + 1} ---\nSubject: ${e.subjectLine.trim()}\n\n${e.bodyMarkdown.trim()}`
+      )
       .join("\n\n\n");
     try {
       await navigator.clipboard.writeText(text);
@@ -302,34 +309,84 @@ function CadenceResults({ emails }: { emails: GeneratedEmail[] }) {
       </div>
       <ul className="space-y-3">
         {emails.map((e, i) => (
-          <EmailCard key={i} index={i + 1} body={e.bodyMarkdown} />
+          <EmailCard
+            key={i}
+            index={i + 1}
+            subject={e.subjectLine}
+            body={e.bodyMarkdown}
+          />
         ))}
       </ul>
     </section>
   );
 }
 
-function EmailCard({ index, body }: { index: number; body: string }) {
-  const [copied, setCopied] = useState(false);
-  const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(body.trim());
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      /* clipboard denied — ignore */
-    }
-  };
-
+function EmailCard({
+  index,
+  subject,
+  body,
+}: {
+  index: number;
+  subject: string;
+  body: string;
+}) {
   return (
     <li className="bg-white border border-slate-200 rounded-lg shadow-sm p-4 space-y-3">
       <div className="flex items-center justify-between">
         <span className="text-[10px] font-bold text-blue-700 uppercase tracking-wider bg-blue-50 border border-blue-200 px-2 py-0.5 rounded">
           Email {index}
         </span>
+      </div>
+      <CopyableBlock
+        label="Subject"
+        value={subject}
+        mono={false}
+        rows={1}
+      />
+      <CopyableBlock
+        label="Body"
+        value={body}
+        mono={false}
+        rows={0}
+      />
+    </li>
+  );
+}
+
+// Small stand-alone label + content + Copy button block. Used for
+// both the Subject and Body of an email so each can be copied
+// independently — the "different box that can be copied separately"
+// UX the user asked for.
+function CopyableBlock({
+  label,
+  value,
+  mono,
+  rows,
+}: {
+  label: string;
+  value: string;
+  mono: boolean;
+  rows: number;
+}) {
+  const [copied, setCopied] = useState(false);
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(value.trim());
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      /* clipboard denied — ignore */
+    }
+  };
+  return (
+    <div className="rounded-md border border-slate-200 bg-slate-50/60">
+      <div className="flex items-center justify-between px-3 py-1.5 border-b border-slate-200">
+        <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+          {label}
+        </span>
         <button
           onClick={() => void copy()}
-          className="text-xs font-semibold text-slate-600 hover:text-slate-900 bg-slate-50 hover:bg-slate-100 border border-slate-200 flex items-center gap-1 px-2.5 py-1 rounded"
+          className="text-xs font-semibold text-slate-600 hover:text-slate-900 bg-white hover:bg-slate-100 border border-slate-200 flex items-center gap-1 px-2 py-0.5 rounded"
         >
           {copied ? (
             <>
@@ -342,9 +399,13 @@ function EmailCard({ index, body }: { index: number; body: string }) {
           )}
         </button>
       </div>
-      <pre className="whitespace-pre-wrap font-sans text-sm text-slate-800 leading-relaxed">
-        {body.trim()}
+      <pre
+        className={`whitespace-pre-wrap px-3 py-2 text-sm text-slate-800 leading-relaxed bg-white ${
+          mono ? "font-mono" : "font-sans"
+        } ${rows === 1 ? "" : "min-h-[3rem]"}`}
+      >
+        {value.trim()}
       </pre>
-    </li>
+    </div>
   );
 }

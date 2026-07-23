@@ -41,9 +41,11 @@ import {
 import {
   deleteGoalLog,
   insertGoalLog,
+  insertWeeklyGoalSnapshots,
   listGoalLogs,
   listQuarterlyGoals,
   listSavedWeeks,
+  listWeeklyGoalSnapshots,
   clearSavedWeek,
   markSavedWeek,
   updateGoalLog,
@@ -58,6 +60,7 @@ import type {
   Meeting,
   QuarterlyGoals,
   SavedWeek,
+  WeeklyGoalSnapshot,
 } from "@/lib/types";
 
 const monthShort = (d: Date) =>
@@ -89,6 +92,32 @@ function pct(actual: number, target: number): number {
   return Math.round((actual / target) * 100);
 }
 
+// Given a week-start ISO date, return the weekly goals + benchmarks
+// that were in effect for that week. Past weeks pull from the frozen
+// snapshot if one exists; the current week and anything without a
+// snapshot fall back to the current quarterly goals.
+function effectiveWeeklyGoalsFor(
+  weekStartIso: string,
+  snapshots: WeeklyGoalSnapshot[],
+  currentGoals: QuarterlyGoals,
+  isCurrent: boolean
+): QuarterlyGoals {
+  if (isCurrent) return currentGoals;
+  const snap = snapshots.find((s) => s.weekStart === weekStartIso);
+  if (!snap) return currentGoals;
+  return {
+    ...currentGoals,
+    weeklyDialsGoal: snap.weeklyDialsGoal,
+    weeklyDialsBenchmark: snap.weeklyDialsBenchmark,
+    weeklyProspectsGoal: snap.weeklyProspectsGoal,
+    weeklyProspectsBenchmark: snap.weeklyProspectsBenchmark,
+    weeklyMeetingsBookedGoal: snap.weeklyMeetingsBookedGoal,
+    weeklyMeetingsBookedBenchmark: snap.weeklyMeetingsBookedBenchmark,
+    weeklyMeetingsHeldGoal: snap.weeklyMeetingsHeldGoal,
+    weeklyMeetingsHeldBenchmark: snap.weeklyMeetingsHeldBenchmark,
+  };
+}
+
 // Weeks remaining in the current calendar quarter (rounded up, min 1).
 // Used as the default "Over this many weeks" value in Calculate Goals
 // so a user opening the modal mid-quarter gets a sensible number.
@@ -114,17 +143,19 @@ export function GoalsAndBenchmarks() {
   const [quarterly, setQuarterly] = useState<QuarterlyGoals[]>([]);
   const [logs, setLogs] = useState<GoalLogEntry[]>([]);
   const [savedWeeks, setSavedWeeks] = useState<SavedWeek[]>([]);
+  const [snapshots, setSnapshots] = useState<WeeklyGoalSnapshot[]>([]);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const [a, m, q, l, s] = await Promise.all([
+        const [a, m, q, l, s, snaps] = await Promise.all([
           listAccounts(supabase),
           listMeetings(supabase),
           listQuarterlyGoals(supabase),
           listGoalLogs(supabase),
           listSavedWeeks(supabase),
+          listWeeklyGoalSnapshots(supabase),
         ]);
         if (cancelled) return;
         setAccounts(a);
@@ -132,6 +163,7 @@ export function GoalsAndBenchmarks() {
         setQuarterly(q);
         setLogs(l);
         setSavedWeeks(s);
+        setSnapshots(snaps);
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : String(e));
       } finally {
@@ -249,6 +281,54 @@ export function GoalsAndBenchmarks() {
   };
 
   const handleSaveGoals = async (next: QuarterlyGoals) => {
+    // Freeze past weeks before overwriting the goals. Any past week
+    // in the current quarter that doesn't yet have a snapshot gets
+    // one created with the OLD goals (currentQuarterGoals in state,
+    // which reflects the DB state pre-update).
+    const currentWeekIso = new Date(
+      Date.UTC(now.getFullYear(), now.getMonth(), now.getDate())
+    );
+    const quarterStart = new Date(
+      now.getFullYear(),
+      (getQuarterOf(now).quarter - 1) * 3,
+      1
+    );
+    const existingSnapshots = new Set(snapshots.map((s) => s.weekStart));
+    const isoDate = (d: Date) => {
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, "0");
+      const day = String(d.getDate()).padStart(2, "0");
+      return `${y}-${m}-${day}`;
+    };
+    // Walk each Monday from the quarter start to (but excluding) the
+    // current week — those are the past weeks that need freezing.
+    const pastWeekStarts: string[] = [];
+    let cursor = new Date(quarterStart);
+    // Nudge cursor forward to the Monday of the quarter-start week.
+    const day = cursor.getDay();
+    const diff = day === 0 ? 1 : day === 1 ? 0 : 8 - day;
+    cursor.setDate(cursor.getDate() + (day <= 1 ? (day === 1 ? 0 : 1) : diff));
+    const thisWeekMonday = (() => {
+      const d = new Date(currentWeekIso);
+      const wd = d.getDay();
+      const off = wd === 0 ? -6 : 1 - wd;
+      d.setDate(d.getDate() + off);
+      return isoDate(d);
+    })();
+    while (isoDate(cursor) < thisWeekMonday) {
+      const iso = isoDate(cursor);
+      if (!existingSnapshots.has(iso)) pastWeekStarts.push(iso);
+      cursor.setDate(cursor.getDate() + 7);
+    }
+    if (pastWeekStarts.length > 0 && currentQuarterGoals) {
+      const newRows = await insertWeeklyGoalSnapshots(
+        supabase,
+        pastWeekStarts,
+        currentQuarterGoals
+      );
+      setSnapshots((prev) => [...newRows, ...prev]);
+    }
+
     const saved = await upsertQuarterlyGoals(supabase, next);
     setQuarterly((prev) => {
       const others = prev.filter(
@@ -406,6 +486,7 @@ export function GoalsAndBenchmarks() {
           meetings={meetings}
           period={period}
           quarterly={currentQuarterGoals}
+          snapshots={snapshots}
         />
       )}
 
@@ -424,7 +505,14 @@ export function GoalsAndBenchmarks() {
               <WeeklyBucketCard
                 key={b.weekStartIso}
                 bucket={b}
-                quarterly={currentQuarterGoals}
+                quarterly={
+                  effectiveWeeklyGoalsFor(
+                    b.weekStartIso,
+                    snapshots,
+                    currentQuarterGoals,
+                    b.isCurrent
+                  )
+                }
                 savedWeeks={savedWeeks}
                 now={now}
                 accountNameById={accountNameById}
@@ -482,11 +570,13 @@ function PacingSection({
   meetings,
   period,
   quarterly,
+  snapshots,
 }: {
   logs: GoalLogEntry[];
   meetings: Meeting[];
   period: ReturnType<typeof resolveViewPeriod>;
   quarterly: QuarterlyGoals;
+  snapshots: WeeklyGoalSnapshot[];
 }) {
   const now = new Date();
   const dialBuckets = useMemo(
@@ -543,6 +633,64 @@ function PacingSection({
 
   const subtitle = granularity === "day" ? "Per day" : "Per week";
 
+  // For weekly-granularity charts, resolve each bucket's goal +
+  // benchmark by looking up the snapshot for that week (past weeks)
+  // or falling back to the current quarterly goal (current + future).
+  // Day-granularity charts stick with the single-value goal because
+  // day buckets never straddle a goal change (they're all within one
+  // week).
+  const buildPerBucket = (
+    buckets: import("@/lib/goals").ChartBucket[],
+    picker: (g: QuarterlyGoals) => number
+  ): number[] => {
+    return buckets.map((b) => {
+      const start = new Date(b.startMs);
+      const iso = isoDateFor(start);
+      const isCurrent = b.isCurrent;
+      const eff = effectiveWeeklyGoalsFor(iso, snapshots, quarterly, isCurrent);
+      return picker(eff);
+    });
+  };
+
+  const dialsGoals =
+    granularity === "week"
+      ? buildPerBucket(dialBuckets, (g) => g.weeklyDialsGoal)
+      : undefined;
+  const dialsBenchmarks =
+    granularity === "week"
+      ? buildPerBucket(dialBuckets, (g) => g.weeklyDialsBenchmark)
+      : undefined;
+  const prospectsGoals =
+    granularity === "week"
+      ? buildPerBucket(prospectBuckets, (g) => g.weeklyProspectsGoal)
+      : undefined;
+  const prospectsBenchmarks =
+    granularity === "week"
+      ? buildPerBucket(prospectBuckets, (g) => g.weeklyProspectsBenchmark)
+      : undefined;
+  const meetingsBookedGoals =
+    granularity === "week"
+      ? buildPerBucket(meetingsBookedBuckets, (g) => g.weeklyMeetingsBookedGoal)
+      : undefined;
+  const meetingsBookedBenchmarks =
+    granularity === "week"
+      ? buildPerBucket(
+          meetingsBookedBuckets,
+          (g) => g.weeklyMeetingsBookedBenchmark
+        )
+      : undefined;
+  const meetingsHeldGoals =
+    granularity === "week"
+      ? buildPerBucket(meetingsHeldBuckets, (g) => g.weeklyMeetingsHeldGoal)
+      : undefined;
+  const meetingsHeldBenchmarks =
+    granularity === "week"
+      ? buildPerBucket(
+          meetingsHeldBuckets,
+          (g) => g.weeklyMeetingsHeldBenchmark
+        )
+      : undefined;
+
   return (
     <section className="space-y-3">
       <h2 className="text-sm font-bold text-slate-700 uppercase tracking-wider">
@@ -555,6 +703,8 @@ function PacingSection({
           buckets={dialBuckets}
           goal={dialsGoalPerBucket}
           benchmark={dialsBenchmarkPerBucket}
+          bucketGoals={dialsGoals}
+          bucketBenchmarks={dialsBenchmarks}
           barColorClass="fill-blue-500"
           currentBarColorClass="fill-blue-700"
           goalStrokeClass="stroke-blue-700"
@@ -566,6 +716,8 @@ function PacingSection({
           buckets={prospectBuckets}
           goal={prospectsGoalPerBucket}
           benchmark={prospectsBenchmarkPerBucket}
+          bucketGoals={prospectsGoals}
+          bucketBenchmarks={prospectsBenchmarks}
           barColorClass="fill-emerald-500"
           currentBarColorClass="fill-emerald-700"
           goalStrokeClass="stroke-emerald-700"
@@ -577,6 +729,8 @@ function PacingSection({
           buckets={meetingsBookedBuckets}
           goal={meetingsBookedGoalPerBucket}
           benchmark={meetingsBookedBenchmarkPerBucket}
+          bucketGoals={meetingsBookedGoals}
+          bucketBenchmarks={meetingsBookedBenchmarks}
           barColorClass="fill-indigo-500"
           currentBarColorClass="fill-indigo-700"
           goalStrokeClass="stroke-indigo-700"
@@ -588,6 +742,8 @@ function PacingSection({
           buckets={meetingsHeldBuckets}
           goal={meetingsHeldGoalPerBucket}
           benchmark={meetingsHeldBenchmarkPerBucket}
+          bucketGoals={meetingsHeldGoals}
+          bucketBenchmarks={meetingsHeldBenchmarks}
           barColorClass="fill-purple-500"
           currentBarColorClass="fill-purple-700"
           goalStrokeClass="stroke-purple-700"
@@ -596,6 +752,14 @@ function PacingSection({
       </div>
     </section>
   );
+}
+
+// YYYY-MM-DD helper matching the DB week_start format.
+function isoDateFor(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
 }
 
 function MetricCard({

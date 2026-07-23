@@ -13,6 +13,10 @@ export interface Account {
   id: string;
   name: string;
   isArchived: boolean;
+  // Optional default ESE tag. When set and a new meeting is created
+  // against this account, the meeting's ESE field is auto-populated
+  // with this value if the user hasn't picked one manually.
+  defaultEse: string | null;
   createdAt: string; // ISO string
 }
 
@@ -103,6 +107,23 @@ export interface SavedWeek {
   id: string;
   weekStart: string; // YYYY-MM-DD
   kind: SavedWeekKind;
+}
+
+// Snapshot of the weekly goals + benchmarks that were live for one
+// past week. Created lazily on the next goals-edit for weeks that
+// have ended without a snapshot yet.
+export interface WeeklyGoalSnapshot {
+  id: string;
+  weekStart: string; // YYYY-MM-DD
+  weeklyDialsGoal: number;
+  weeklyDialsBenchmark: number;
+  weeklyProspectsGoal: number;
+  weeklyProspectsBenchmark: number;
+  weeklyMeetingsBookedGoal: number;
+  weeklyMeetingsBookedBenchmark: number;
+  weeklyMeetingsHeldGoal: number;
+  weeklyMeetingsHeldBenchmark: number;
+  snapshotAt: string;
 }
 
 // ---------- Opportunities ----------

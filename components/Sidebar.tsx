@@ -11,6 +11,7 @@ import {
   Download,
   Edit2,
   History,
+  Mail,
   MoreVertical,
   Plus,
   Target,
@@ -38,7 +39,7 @@ interface Props {
   isSidebarOpen: boolean;
   isAccountsSectionOpen: boolean;
   isArchivedSectionOpen: boolean;
-  currentView: "account" | "goals" | "meetings";
+  currentView: "account" | "goals" | "meetings" | "cadence";
   onClose: () => void;
   onAddAccount: () => void;
   onSelectAccount: (id: string) => void;
@@ -52,6 +53,7 @@ interface Props {
   onRestoreBackup: (slot: BackupSlot) => void;
   onSelectGoalsView: () => void;
   onSelectMeetingsView: () => void;
+  onSelectCadenceView: () => void;
   onBulkAddAccounts: (names: string[]) => void;
 }
 
@@ -75,6 +77,7 @@ export function Sidebar({
   onRestoreBackup,
   onSelectGoalsView,
   onSelectMeetingsView,
+  onSelectCadenceView,
   onBulkAddAccounts,
 }: Props) {
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
@@ -282,6 +285,16 @@ export function Sidebar({
           }`}
         >
           <CalendarDays className="w-4 h-4" /> Meetings Tracker
+        </button>
+        <button
+          onClick={onSelectCadenceView}
+          className={`w-full py-2 px-4 rounded-lg flex items-center gap-2 text-sm font-medium transition-colors ${
+            currentView === "cadence"
+              ? "bg-slate-700 text-white shadow-inner"
+              : "bg-slate-800 hover:bg-slate-700 text-slate-200"
+          }`}
+        >
+          <Mail className="w-4 h-4" /> Email Cadence Engine
         </button>
         <button
           onClick={onAddAccount}

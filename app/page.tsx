@@ -33,6 +33,7 @@ import {
 import { GoalsAndBenchmarks } from "@/components/GoalsAndBenchmarks";
 import { Header } from "@/components/Header";
 import { MeetingsTracker } from "@/components/MeetingsTracker";
+import { EmailCadenceEngine } from "@/components/EmailCadenceEngine";
 import { Sidebar } from "@/components/Sidebar";
 import { StepCard } from "@/components/StepCard";
 import { ToolCard } from "@/components/ToolCard";
@@ -477,6 +478,10 @@ export default function App() {
     setState((prev) => (prev ? { ...prev, currentView: "meetings" } : prev));
   };
 
+  const handleSelectCadenceView = () => {
+    setState((prev) => (prev ? { ...prev, currentView: "cadence" } : prev));
+  };
+
   const handleToggleMeetingsHeldSection = () => {
     setState((prev) =>
       prev
@@ -664,6 +669,7 @@ export default function App() {
         onRestoreBackup={handleRestoreBackup}
         onSelectGoalsView={handleSelectGoalsView}
         onSelectMeetingsView={handleSelectMeetingsView}
+        onSelectCadenceView={handleSelectCadenceView}
       />
 
       <div className="flex-1 flex flex-col h-full overflow-y-auto relative bg-[#F9FAFB]">
@@ -705,7 +711,9 @@ export default function App() {
               ? "Goals & Metrics"
               : state.currentView === "meetings"
                 ? "Meetings Tracker"
-                : currentAccount.accountData.companyName
+                : state.currentView === "cadence"
+                  ? "Email Cadence Engine"
+                  : currentAccount.accountData.companyName
           }
         />
 
@@ -725,6 +733,10 @@ export default function App() {
               meetingsView={state.meetingsView}
               onSetMeetingsView={handleSetMeetingsView}
             />
+          </main>
+        ) : state.currentView === "cadence" ? (
+          <main className="flex-1 w-full">
+            <EmailCadenceEngine accounts={state.accounts} />
           </main>
         ) : (
         <main className="flex-1 max-w-4xl w-full mx-auto px-6 py-10">

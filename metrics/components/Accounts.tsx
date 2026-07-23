@@ -23,6 +23,7 @@ import {
   listAccounts,
   renameAccount,
   setAccountArchived,
+  setAccountDefaultEse,
 } from "@/lib/data/accounts";
 import { createEse, deleteEse, listEses, type Ese } from "@/lib/data/eses";
 import type { Account } from "@/lib/types";
@@ -32,6 +33,7 @@ export function Accounts() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [accounts, setAccounts] = useState<Account[]>([]);
+  const [eses, setEses] = useState<Ese[]>([]);
   const [showArchived, setShowArchived] = useState(false);
   const [query, setQuery] = useState("");
   const [addName, setAddName] = useState("");
@@ -42,8 +44,13 @@ export function Accounts() {
     let cancelled = false;
     (async () => {
       try {
-        const rows = await listAccounts(supabase);
-        if (!cancelled) setAccounts(rows);
+        const [as, es] = await Promise.all([
+          listAccounts(supabase),
+          listEses(supabase),
+        ]);
+        if (cancelled) return;
+        setAccounts(as);
+        setEses(es);
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : String(e));
       } finally {
@@ -103,6 +110,11 @@ export function Accounts() {
     setAccounts((prev) =>
       prev.map((x) => (x.id === id ? { ...x, isArchived: !a.isArchived } : x))
     );
+  };
+
+  const setEseFor = async (id: string, ese: string | null) => {
+    const saved = await setAccountDefaultEse(supabase, id, ese);
+    setAccounts((prev) => prev.map((x) => (x.id === id ? saved : x)));
   };
 
   const del = async (id: string) => {
@@ -206,7 +218,9 @@ export function Accounts() {
               <AccountRow
                 key={a.id}
                 account={a}
+                eses={eses}
                 onRename={(next) => rename(a.id, next)}
+                onSetDefaultEse={(ese) => setEseFor(a.id, ese)}
                 onToggleArchive={() => toggleArchive(a.id)}
                 onDelete={() => del(a.id)}
               />
@@ -353,12 +367,16 @@ function EseSection() {
 
 function AccountRow({
   account,
+  eses,
   onRename,
+  onSetDefaultEse,
   onToggleArchive,
   onDelete,
 }: {
   account: Account;
+  eses: Ese[];
   onRename: (next: string) => void | Promise<void>;
+  onSetDefaultEse: (ese: string | null) => void | Promise<void>;
   onToggleArchive: () => void | Promise<void>;
   onDelete: () => void | Promise<void>;
 }) {
@@ -371,6 +389,11 @@ function AccountRow({
     }
     setEditing(false);
   };
+
+  // Preserve a currently-set ESE even if it's since been removed from
+  // the user's list — mirrors what the Meeting modal already does.
+  const currentEseMissing =
+    !!account.defaultEse && !eses.some((e) => e.name === account.defaultEse);
 
   return (
     <li className="flex items-center gap-2 text-sm bg-white border border-slate-200 rounded-md px-3 py-2">
@@ -413,6 +436,33 @@ function AccountRow({
               Archived
             </span>
           )}
+          <label
+            className="inline-flex items-center gap-1 text-xs text-slate-500"
+            title="Default ESE — auto-fills the ESE field on new meetings for this account"
+          >
+            <span className="text-[10px] font-semibold uppercase tracking-wider">
+              ESE
+            </span>
+            <select
+              value={account.defaultEse ?? ""}
+              onChange={(e) =>
+                void onSetDefaultEse(e.target.value ? e.target.value : null)
+              }
+              className="rounded border border-slate-300 bg-white px-2 py-0.5 text-xs text-slate-800 focus:ring-2 focus:ring-blue-500 outline-none max-w-40 truncate"
+            >
+              <option value="">— None —</option>
+              {eses.map((e) => (
+                <option key={e.id} value={e.name}>
+                  {e.name}
+                </option>
+              ))}
+              {currentEseMissing && account.defaultEse && (
+                <option value={account.defaultEse}>
+                  {account.defaultEse} (removed)
+                </option>
+              )}
+            </select>
+          </label>
           <button
             onClick={() => setEditing(true)}
             className="text-slate-400 hover:text-blue-600 p-1"

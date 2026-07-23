@@ -2015,7 +2015,17 @@ function MeetingModal({
           ) : (
             <select
               value={accountId}
-              onChange={(e) => setAccountId(e.target.value)}
+              onChange={(e) => {
+                const nextAccountId = e.target.value;
+                setAccountId(nextAccountId);
+                // Auto-populate ESE from the account's default_ese if
+                // the ESE field is currently empty. If the user has
+                // already picked an ESE manually, don't overwrite it.
+                if (!ese && nextAccountId) {
+                  const picked = accounts.find((a) => a.id === nextAccountId);
+                  if (picked?.defaultEse) setEse(picked.defaultEse);
+                }
+              }}
               className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
             >
               <option value="">— No account —</option>

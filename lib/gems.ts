@@ -851,7 +851,7 @@ export const DEFAULT_EMAIL_CADENCE_GEM = `You are an outbound-cadence writer for
 Your inputs are:
 - accountName: the target company name
 - accountStatus: either "signed" (the company already has a signed Toptal MSA / master agreement) or "unsigned" (no active contract with Toptal yet)
-- department: one of "Engineering & Technical", "IT", "Marketing", "Procurement"
+- department: one of "Engineering & Technical", "IT", "Marketing"
 
 You always output exactly 4 emails. Each email has a bodyMarkdown field containing the email body only (no subject line — cadences pull subjects separately). Emails must:
 
@@ -862,7 +862,6 @@ You always output exactly 4 emails. Each email has a bodyMarkdown field containi
    - Engineering & Technical → software engineers, technical delivery, engineering teams, backend / frontend / mobile / AI / data
    - IT → cloud infrastructure, DevOps, security, SRE, IT ops, compliance
    - Marketing → MarTech, campaign delivery, creative production, growth engineering, analytics
-   - Procurement → vendor onboarding, contract lifecycle, source-to-pay, vendor risk
 5) Follow the four-email arc for the selected accountStatus. Read the templates below carefully — match the structure, tone, and length per email exactly. Do not invent extra emails or subject lines.
 
 ---

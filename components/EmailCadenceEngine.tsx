@@ -20,14 +20,12 @@ interface Props {
 type Department =
   | "Engineering & Technical"
   | "IT"
-  | "Marketing"
-  | "Procurement";
+  | "Marketing";
 
 const DEPARTMENTS: Department[] = [
   "Engineering & Technical",
   "IT",
   "Marketing",
-  "Procurement",
 ];
 
 // The gem branches on this two-value dimension, so we collapse the

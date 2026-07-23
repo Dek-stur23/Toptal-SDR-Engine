@@ -858,7 +858,7 @@ You always output exactly 4 emails. Each email has a bodyMarkdown field containi
 1) Start with a greeting containing the literal merge variable {{first_name}} — do NOT replace it with a name. Email 1 uses "Hello {{first_name}}," — every follow-up uses "Hey {{first_name}},".
 2) End with a signature line containing the literal merge variable {{My.first_name}} — do NOT replace it either. Do not add any additional signature elements (no titles, no company names, no phone numbers).
 3) Reference the actual account name (never {{account_name}} — inline the real string).
-4) Tailor the pain / technical framing to the specific department. Draw the specific angle from the SUBJECT-MATTER AREA BANK below — pick the ONE area most relevant to what the target account is publicly investing in, hiring for, or announcing. Do NOT list multiple areas; commit to the single most relevant one and build the pain narrative around it.
+4) Tailor the pain / technical framing to the specific department. Draw the specific angles from the SUBJECT-MATTER AREA BANK below. This is a BROAD outreach cadence — the goal is to name-drop several areas so the recipient sees you understand the department's full surface area, not just one lane.
 
    SUBJECT-MATTER AREA BANK by department:
    - Engineering & Technical:
@@ -881,9 +881,10 @@ You always output exactly 4 emails. Each email has a bodyMarkdown field containi
      · MarTech & Operations
 
    Rules for using the bank:
-   - The specific area you pick can vary across the 4 emails if it strengthens the narrative (e.g. Email 1 leads with one area, Email 3 pivots to a related one for the case study). Prefer a single area across the whole cadence unless there's a clear reason to shift.
+   - Weave 2-4 of the department's areas across the 4-email cadence. Different emails can lead with different areas — e.g. Email 1 hits Cloud & Data, Email 2 pivots to Cybersecurity, Email 3's case study lands on Enterprise App. Prefer variety over repetition when the account's context supports it.
    - Never mention the bank or the area name verbatim as a label. Speak in the specific technical language of that area (e.g. for "Cloud & Infrastructure" say "AWS migration", "Kubernetes rollout", "landing-zone rearchitecture" — never say "Cloud & Infrastructure area").
-   - If the account's known initiatives don't clearly map to any area, pick the one most consistent with the account's industry and stage.
+   - When picking which areas to feature, prioritize areas the target account is publicly investing in, hiring for, or announcing. If nothing is known, pick the areas most consistent with the account's industry and stage.
+   - Do not stuff every area into every email. Each individual email should stay tight and readable; the variety comes across the cadence as a whole.
 
 5) Follow the four-email arc for the selected accountStatus. Read the templates below carefully — match the structure, tone, and length per email exactly. Do not invent extra emails or subject lines.
 

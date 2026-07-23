@@ -430,7 +430,7 @@ export interface AppState {
 
 export type MeetingsView = "list" | "calendar";
 
-export type AppView = "account" | "goals" | "meetings";
+export type AppView = "account" | "goals" | "meetings" | "cadence";
 
 // ============================================================
 // Meetings Tracker — booked/held meetings, account-agnostic.

@@ -52,7 +52,7 @@ import {
   upsertQuarterlyGoals,
 } from "@/lib/data/goals";
 import { listAccounts } from "@/lib/data/accounts";
-import { listMeetings } from "@/lib/data/meetings";
+import { listMeetings, quickLogMeeting } from "@/lib/data/meetings";
 import type {
   Account,
   GoalLogEntry,
@@ -240,6 +240,7 @@ export function GoalsAndBenchmarks() {
   }, [accounts]);
 
   const [logModalKind, setLogModalKind] = useState<GoalMetricKind | null>(null);
+  const [meetingLogOpen, setMeetingLogOpen] = useState(false);
 
   const suggestedWhenMs = useMemo(() => {
     const nowMs = now.getTime();
@@ -474,6 +475,12 @@ export function GoalsAndBenchmarks() {
               >
                 <UserPlus className="w-3.5 h-3.5" /> Log prospects added
               </button>
+              <button
+                onClick={() => setMeetingLogOpen(true)}
+                className="w-full text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 text-white px-2.5 py-2 rounded-md transition-colors flex items-center justify-center gap-1.5"
+              >
+                <CalendarPlus className="w-3.5 h-3.5" /> Log meeting
+              </button>
             </div>
           </div>
         </div>
@@ -559,6 +566,23 @@ export function GoalsAndBenchmarks() {
           periodLabel={period.label}
           onClose={() => setLogModalKind(null)}
           onSubmit={(count, opts) => submitLog(logModalKind, count, opts)}
+        />
+      )}
+
+      {meetingLogOpen && (
+        <QuickLogMeetingModal
+          accounts={accounts.filter((a) => !a.isArchived)}
+          defaultWhenMs={suggestedWhenMs}
+          onClose={() => setMeetingLogOpen(false)}
+          onSubmit={async (status, accountId, whenMs) => {
+            const saved = await quickLogMeeting(supabase, {
+              status,
+              accountId,
+              when: new Date(whenMs).toISOString(),
+            });
+            setMeetings((prev) => [saved, ...prev]);
+            setMeetingLogOpen(false);
+          }}
         />
       )}
     </div>
@@ -1715,5 +1739,174 @@ function NumberField({
         className="w-full rounded-md border border-slate-300 px-2 py-1.5 focus:ring-2 focus:ring-blue-500 outline-none text-sm"
       />
     </label>
+  );
+}
+
+// Small modal used by the "Log meeting" button on the Log Activity
+// card. Skips every prospect-details field of the full Meetings
+// Tracker modal — just status, account (optional), when. Backdating
+// works because quickLogMeeting sets created_at + held_at from
+// whichever timestamp the user picks, so counts land in the right
+// weekly bucket.
+function QuickLogMeetingModal({
+  accounts,
+  defaultWhenMs,
+  onClose,
+  onSubmit,
+}: {
+  accounts: Account[];
+  defaultWhenMs: number;
+  onClose: () => void;
+  onSubmit: (
+    status: "booked" | "held",
+    accountId: string | null,
+    whenMs: number
+  ) => void | Promise<void>;
+}) {
+  const [status, setStatus] = useState<"booked" | "held">("booked");
+  const [accountId, setAccountId] = useState("");
+  const [when, setWhen] = useState(formatDatetimeLocal(defaultWhenMs));
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const whenTs = parseDatetimeLocal(when);
+  const nowMs = Date.now();
+  const isBackdated =
+    whenTs !== null && Math.abs(whenTs - nowMs) > 60_000;
+
+  const submit = async () => {
+    if (whenTs === null) {
+      setError("Pick a valid date and time.");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      await onSubmit(status, accountId || null, whenTs);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 bg-slate-900/70 flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white rounded-xl shadow-xl max-w-sm w-full p-5 space-y-4"
+        onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => {
+          if (e.key === "Escape") onClose();
+          if (e.key === "Enter" && !e.shiftKey) {
+            e.preventDefault();
+            void submit();
+          }
+        }}
+      >
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-indigo-50 text-indigo-600">
+              <CalendarPlus className="w-4 h-4" />
+            </div>
+            <h3 className="text-base font-bold text-slate-900">Log meeting</h3>
+          </div>
+          <button
+            onClick={onClose}
+            className="text-slate-400 hover:text-slate-700"
+            aria-label="Close"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <label className="block">
+          <span className="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1">
+            Status
+          </span>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => setStatus("booked")}
+              className={`text-xs font-semibold py-2 px-3 rounded-md border transition-colors ${
+                status === "booked"
+                  ? "bg-indigo-600 text-white border-indigo-600"
+                  : "bg-white text-slate-700 border-slate-300 hover:bg-slate-50"
+              }`}
+            >
+              Booked
+            </button>
+            <button
+              type="button"
+              onClick={() => setStatus("held")}
+              className={`text-xs font-semibold py-2 px-3 rounded-md border transition-colors ${
+                status === "held"
+                  ? "bg-emerald-600 text-white border-emerald-600"
+                  : "bg-white text-slate-700 border-slate-300 hover:bg-slate-50"
+              }`}
+            >
+              Held
+            </button>
+          </div>
+        </label>
+
+        <label className="block">
+          <span className="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1">
+            Account (optional)
+          </span>
+          <select
+            value={accountId}
+            onChange={(e) => setAccountId(e.target.value)}
+            className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+          >
+            <option value="">— No account tag —</option>
+            {accounts.map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.name || "(unnamed)"}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="block">
+          <span className="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1">
+            When
+          </span>
+          <input
+            type="datetime-local"
+            value={when}
+            onChange={(e) => setWhen(e.target.value)}
+            className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+          />
+          <p className="text-[10px] text-slate-500 mt-1">
+            Defaults to now. Change to backlog a past meeting.
+            {isBackdated && (
+              <span className="ml-1 font-semibold text-amber-700">
+                (Backdated entry)
+              </span>
+            )}
+          </p>
+        </label>
+
+        {error && <p className="text-xs text-red-600">{error}</p>}
+
+        <div className="flex justify-end gap-2 pt-1">
+          <button
+            onClick={onClose}
+            className="text-xs font-semibold text-slate-600 hover:text-slate-900 bg-slate-50 hover:bg-slate-100 border border-slate-200 px-3 py-1.5 rounded-md"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={() => void submit()}
+            disabled={busy}
+            className="text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 px-3 py-1.5 rounded-md shadow-sm"
+          >
+            {busy ? "Saving…" : "Log meeting"}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }

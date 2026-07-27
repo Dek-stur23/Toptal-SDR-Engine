@@ -161,6 +161,47 @@ export async function deleteMeeting(
   if (error) throw error;
 }
 
+// Quick-log a meeting from the Goals & Metrics page without the full
+// prospect-details workflow. Writes a minimal row keyed to the
+// caller-supplied timestamp so the goal-metrics counts land in the
+// right period even for backlogged entries.
+//
+// - Booked: sets scheduled_for + created_at to `when`, held_at null.
+//   Booked count buckets by created_at.
+// - Held:   sets scheduled_for + created_at + held_at all to `when`.
+//   Held count buckets by held_at.
+export async function quickLogMeeting(
+  supabase: SupabaseClient,
+  opts: { status: "booked" | "held"; accountId: string | null; when: string }
+): Promise<Meeting> {
+  const { status, accountId, when } = opts;
+  const { data, error } = await supabase
+    .from("meetings")
+    .insert({
+      first_name: "",
+      last_name: "",
+      title: "",
+      linkedin_url: "",
+      salesloft_url: "",
+      account_id: accountId,
+      scheduled_for: when,
+      notes: "",
+      status,
+      created_at: when,
+      held_at: status === "held" ? when : null,
+      dead_ended_at: null,
+      image_key: null,
+      prospect_response: null,
+      ese: null,
+      held_outcome: null,
+      booked_category: null,
+    })
+    .select(MEETING_COLS)
+    .single();
+  if (error) throw error;
+  return toMeeting(data as MeetingRow);
+}
+
 // ---------- Meeting updates ----------
 
 export async function listMeetingUpdates(

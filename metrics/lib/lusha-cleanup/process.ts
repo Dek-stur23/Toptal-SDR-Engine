@@ -320,7 +320,7 @@ export function process(
       "First Name": firstName,
       "Last Name": lastName,
       Email: primary,
-      "Alternate Email": alternate,
+      "Supplemental Email": alternate,
       "Additional Emails": additionalEmails.join("; "),
       "Mobile Phone": mobilePhone,
       "Work Phone": workPhone,
@@ -387,7 +387,7 @@ export function process(
     );
     const outputEmails = [
       c.fields.Email,
-      c.fields["Alternate Email"],
+      c.fields["Supplemental Email"],
       ...(c.fields["Additional Emails"]
         ? c.fields["Additional Emails"].split(";")
         : []),

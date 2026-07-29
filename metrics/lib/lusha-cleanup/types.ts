@@ -18,7 +18,7 @@ export const OUTPUT_FIELDS = [
   "First Name",
   "Last Name",
   "Email",
-  "Alternate Email",
+  "Supplemental Email",
   "Additional Emails",
   "Mobile Phone",
   "Work Phone",

@@ -8,6 +8,7 @@ import {
   Building2,
   CalendarClock,
   ChevronDown,
+  FileText,
   MoreHorizontal,
   Settings as SettingsIcon,
   ShieldCheck,
@@ -30,8 +31,12 @@ export const ADDITIONAL_TOOLS: {
   icon: LucideIcon;
   description?: string;
 }[] = [
-  // Example shape:
-  // { href: "/insights", label: "Insights", icon: LineChart, description: "Cross-account trends" },
+  {
+    href: "/lusha-csv",
+    label: "ZoomInfo → Lusha CSV",
+    icon: FileText,
+    description: "Prep a ZoomInfo export for Lusha enrichment",
+  },
 ];
 
 // Shell rendered by the protected layout. Header with view tabs and a

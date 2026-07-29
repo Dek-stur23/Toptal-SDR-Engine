@@ -1,5 +1,5 @@
-import { LushaCsvPrep } from "@/components/LushaCsvPrep";
+import { LushaCsvWorkflow } from "@/components/LushaCsvWorkflow";
 
 export default function LushaCsvPage() {
-  return <LushaCsvPrep />;
+  return <LushaCsvWorkflow />;
 }

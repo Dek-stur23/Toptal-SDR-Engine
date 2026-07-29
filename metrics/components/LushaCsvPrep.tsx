@@ -5,7 +5,6 @@ import {
   AlertTriangle,
   CheckCircle2,
   Download,
-  FileText,
   Loader2,
   RotateCcw,
   Upload,
@@ -345,18 +344,12 @@ export function LushaCsvPrep() {
   };
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
-          <FileText className="w-6 h-6 text-blue-600" /> ZoomInfo → Lusha CSV
-        </h1>
-        <p className="text-sm text-slate-500 mt-1">
-          Upload a ZoomInfo Person export and download a Lusha-ready CSV
-          matching Lusha&apos;s enrichment requirements (UTF-8, comma-delimited,
-          under 10,000 rows). Runs entirely in your browser — nothing leaves
-          this page.
-        </p>
-      </div>
+    <div className="space-y-4">
+      <p className="text-xs text-slate-500 italic">
+        Upload a ZoomInfo Person export and download a Lusha-ready CSV meeting
+        every requirement on Lusha&apos;s upload page (UTF-8, comma-delimited,
+        under 10,000 rows). Runs entirely in your browser.
+      </p>
 
       {!result && (
         <section className="bg-white border-2 border-dashed border-slate-300 rounded-xl p-8 text-center">

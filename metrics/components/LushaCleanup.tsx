@@ -3,9 +3,7 @@
 import { useMemo, useState } from "react";
 import {
   AlertTriangle,
-  CheckCircle2,
   Download,
-  FileText,
   Loader2,
   RotateCcw,
   Upload,
@@ -163,17 +161,12 @@ export function LushaCleanup() {
 
   // ---- Render ----
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
-          <FileText className="w-6 h-6 text-blue-600" /> Lusha Cleanup &amp; Job-Change Review
-        </h1>
-        <p className="text-sm text-slate-500 mt-1">
-          Part 2 of the Lusha workflow. Upload the enriched CSV Lusha returned,
-          review flagged contacts, and download a clean SalesLoft-ready file.
-          Runs entirely in your browser.
-        </p>
-      </div>
+    <div className="space-y-4">
+      <p className="text-xs text-slate-500 italic">
+        Upload the enriched CSV Lusha returned. The tool consolidates duplicate
+        email/phone columns, flags contacts whose employer changed, and outputs
+        a SalesLoft-mappable file. Runs entirely in your browser.
+      </p>
 
       {!result && (
         <section className="bg-white border-2 border-dashed border-slate-300 rounded-xl p-8 text-center">

@@ -35,6 +35,8 @@ const OUTPUT_COLUMNS = [
   "Company Domain",
   "LinkedIn URL",
   "Job Title",
+  "Management Level",
+  "Job Function",
   "Email",
   "Location",
 ] as const;
@@ -46,6 +48,8 @@ const ZI_HEADERS = {
   firstName: "First Name",
   lastName: "Last Name",
   jobTitle: "Job Title",
+  managementLevel: "Management Level",
+  jobFunction: "Job Function",
   email: "Email Address",
   linkedin: "LinkedIn Contact Profile URL",
   company: "Company Name",
@@ -193,6 +197,8 @@ function prep(text: string): PrepResult {
     const domain = extractDomain(g("website"));
     const linkedin = g("linkedin");
     const jobTitle = g("jobTitle");
+    const managementLevel = g("managementLevel");
+    const jobFunction = g("jobFunction");
     const email = g("email");
     const location = joinLocation(g("city"), g("state"), g("country"));
 
@@ -210,6 +216,8 @@ function prep(text: string): PrepResult {
         domain,
         linkedin,
         jobTitle,
+        managementLevel,
+        jobFunction,
         email,
         location,
       ],

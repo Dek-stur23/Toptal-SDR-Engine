@@ -438,11 +438,12 @@ function DownloadBar({
         </button>
       </div>
       <p className="text-[11px] text-slate-500 italic">
-        SalesLoft mapping: <code>Email</code> → Email Address, <code>Mobile
-        Phone</code> → Mobile Phone, <code>Work Phone</code> → Phone. The
-        <code> Alternate Email</code>, <code>Additional Emails</code>, and
-        <code> Additional Phones</code> columns exist to prevent data loss and
-        aren&apos;t expected to be mapped.
+        SalesLoft mapping: <code>Email</code> → Email Address,{" "}
+        <code>Supplemental Email</code> → Supplemental Email,{" "}
+        <code>Mobile Phone</code> → Mobile Phone,{" "}
+        <code>Work Phone</code> → Phone. The <code>Additional Emails</code> and{" "}
+        <code>Additional Phones</code> columns exist to prevent data loss on
+        rows with 3+ addresses/numbers and aren&apos;t expected to be mapped.
       </p>
     </div>
   );

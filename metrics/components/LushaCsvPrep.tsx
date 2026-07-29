@@ -227,6 +227,47 @@ function prep(text: string): PrepResult {
   };
 }
 
+// Pick the company name that appears most often across the prepped
+// rows. Ties go to whichever value shows up first. Returns null when
+// there's no company data at all — the caller falls back to the
+// source filename in that case.
+function dominantCompanyName(rows: PreppedRow[]): string | null {
+  // Company Name is index 3 in OUTPUT_COLUMNS.
+  const counts = new Map<string, number>();
+  let firstSeenOrder: string[] = [];
+  for (const r of rows) {
+    const c = (r.values[3] ?? "").trim();
+    if (!c) continue;
+    if (!counts.has(c)) firstSeenOrder.push(c);
+    counts.set(c, (counts.get(c) ?? 0) + 1);
+  }
+  if (counts.size === 0) return null;
+  let best = firstSeenOrder[0];
+  let bestCount = counts.get(best) ?? 0;
+  for (const c of firstSeenOrder) {
+    const n = counts.get(c) ?? 0;
+    if (n > bestCount) {
+      best = c;
+      bestCount = n;
+    }
+  }
+  return best;
+}
+
+// Strip characters that don't belong in a filename. Collapses
+// whitespace and drops anything that isn't alphanumeric, dash, dot,
+// underscore, or space. Trims to a reasonable length.
+function sanitizeFilename(name: string): string {
+  const cleaned = name
+    .replace(/[^A-Za-z0-9\-_. ]+/g, "")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .trim();
+  const truncated = cleaned.slice(0, 60);
+  return truncated || "zoominfo";
+}
+
 // UTF-8 without BOM — Lusha's docs explicitly flag BOM as a common
 // cause of upload failure.
 function downloadCsv(filename: string, csv: string): void {
@@ -289,9 +330,10 @@ export function LushaCsvPrep() {
       OUTPUT_COLUMNS.slice(),
       ...chunk.map((r) => r.values),
     ];
-    const base = (fileName ?? "zoominfo").replace(/\.csv$/i, "");
+    const base = dominantCompanyName(result.rows) ??
+      (fileName ?? "zoominfo").replace(/\.csv$/i, "");
     const suffix = chunks.length > 1 ? `-part${chunkIdx + 1}of${chunks.length}` : "";
-    downloadCsv(`${base}-lusha-ready${suffix}.csv`, toCsv(rows));
+    downloadCsv(`${sanitizeFilename(base)}-lusha-ready${suffix}.csv`, toCsv(rows));
   };
 
   return (

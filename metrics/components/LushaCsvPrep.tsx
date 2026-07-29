@@ -35,6 +35,8 @@ const OUTPUT_COLUMNS = [
   "Company Domain",
   "LinkedIn URL",
   "Job Title",
+  "Management Level",
+  "Job Function",
   "Email",
   "Location",
 ] as const;
@@ -46,6 +48,8 @@ const ZI_HEADERS = {
   firstName: "First Name",
   lastName: "Last Name",
   jobTitle: "Job Title",
+  managementLevel: "Management Level",
+  jobFunction: "Job Function",
   email: "Email Address",
   linkedin: "LinkedIn Contact Profile URL",
   company: "Company Name",
@@ -193,6 +197,8 @@ function prep(text: string): PrepResult {
     const domain = extractDomain(g("website"));
     const linkedin = g("linkedin");
     const jobTitle = g("jobTitle");
+    const managementLevel = g("managementLevel");
+    const jobFunction = g("jobFunction");
     const email = g("email");
     const location = joinLocation(g("city"), g("state"), g("country"));
 
@@ -210,6 +216,8 @@ function prep(text: string): PrepResult {
         domain,
         linkedin,
         jobTitle,
+        managementLevel,
+        jobFunction,
         email,
         location,
       ],
@@ -494,7 +502,7 @@ export function LushaCsvPrep() {
             <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
               <div className="px-4 py-2 border-b border-slate-100">
                 <p className="text-xs font-semibold text-slate-700 uppercase tracking-wider">
-                  Preview (first {Math.min(10, result.rows.length)} rows)
+                  Preview (first {Math.min(20, result.rows.length)} rows)
                 </p>
               </div>
               <div className="overflow-x-auto">
@@ -515,7 +523,7 @@ export function LushaCsvPrep() {
                     </tr>
                   </thead>
                   <tbody>
-                    {result.rows.slice(0, 10).map((r, i) => (
+                    {result.rows.slice(0, 20).map((r, i) => (
                       <tr
                         key={i}
                         className={

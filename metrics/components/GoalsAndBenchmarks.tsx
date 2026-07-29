@@ -20,6 +20,7 @@ import {
   X,
 } from "lucide-react";
 import { PacingChart } from "@/components/PacingChart";
+import { DateTime15Picker } from "@/components/DateTime15Picker";
 import { createClient } from "@/lib/supabase/client";
 import {
   bucketLogsForChart,
@@ -1143,16 +1144,14 @@ function LogEntryModal({
   const [countStr, setCountStr] = useState("");
   const [note, setNote] = useState("");
   const [accountId, setAccountId] = useState("");
-  const [when, setWhen] = useState(formatDatetimeLocal(defaultWhenMs));
+  const [whenMs, setWhenMs] = useState<number>(defaultWhenMs);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   const parsed = Number.parseInt(countStr, 10);
   const isValid = Number.isFinite(parsed) && parsed >= 1;
-  const whenTs = parseDatetimeLocal(when);
   const nowMs = Date.now();
-  const isBackdated =
-    Number.isFinite(whenTs) && whenTs !== null && Math.abs(whenTs - nowMs) > 60_000;
+  const isBackdated = Math.abs(whenMs - nowMs) > 60_000;
 
   const submit = async () => {
     if (!isValid) {
@@ -1164,7 +1163,7 @@ function LogEntryModal({
       await onSubmit(parsed, {
         note: note.trim() || undefined,
         accountId: !isDial && accountId ? accountId : undefined,
-        timestamp: whenTs !== null && Number.isFinite(whenTs) ? whenTs : undefined,
+        timestamp: whenMs,
       });
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -1237,11 +1236,10 @@ function LogEntryModal({
           <span className="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1">
             When?
           </span>
-          <input
-            type="datetime-local"
-            value={when}
-            onChange={(e) => setWhen(e.target.value)}
-            className={`w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:ring-2 ${accentRing} outline-none`}
+          <DateTime15Picker
+            valueMs={whenMs}
+            onChange={setWhenMs}
+            focusRingClass={accentRing}
           />
           <p className="text-[10px] text-slate-500 mt-1">
             Default matches the current view ({periodLabel}). Change to backdate an entry.
@@ -1765,24 +1763,18 @@ function QuickLogMeetingModal({
 }) {
   const [status, setStatus] = useState<"booked" | "held">("booked");
   const [accountId, setAccountId] = useState("");
-  const [when, setWhen] = useState(formatDatetimeLocal(defaultWhenMs));
+  const [whenMs, setWhenMs] = useState<number>(defaultWhenMs);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const whenTs = parseDatetimeLocal(when);
   const nowMs = Date.now();
-  const isBackdated =
-    whenTs !== null && Math.abs(whenTs - nowMs) > 60_000;
+  const isBackdated = Math.abs(whenMs - nowMs) > 60_000;
 
   const submit = async () => {
-    if (whenTs === null) {
-      setError("Pick a valid date and time.");
-      return;
-    }
     setBusy(true);
     setError(null);
     try {
-      await onSubmit(status, accountId || null, whenTs);
+      await onSubmit(status, accountId || null, whenMs);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
       setBusy(false);
@@ -1873,11 +1865,10 @@ function QuickLogMeetingModal({
           <span className="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1">
             When
           </span>
-          <input
-            type="datetime-local"
-            value={when}
-            onChange={(e) => setWhen(e.target.value)}
-            className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+          <DateTime15Picker
+            valueMs={whenMs}
+            onChange={setWhenMs}
+            focusRingClass="focus:ring-indigo-500"
           />
           <p className="text-[10px] text-slate-500 mt-1">
             Defaults to now. Change to backlog a past meeting.

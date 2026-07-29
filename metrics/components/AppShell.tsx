@@ -37,6 +37,12 @@ export const ADDITIONAL_TOOLS: {
     icon: FileText,
     description: "Prep a ZoomInfo export for Lusha enrichment",
   },
+  {
+    href: "/lusha-cleanup",
+    label: "Lusha Cleanup & Review",
+    icon: FileText,
+    description: "Consolidate an enriched Lusha CSV and flag job changes",
+  },
 ];
 
 // Shell rendered by the protected layout. Header with view tabs and a

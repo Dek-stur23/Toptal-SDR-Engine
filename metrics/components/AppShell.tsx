@@ -35,13 +35,7 @@ export const ADDITIONAL_TOOLS: {
     href: "/lusha-csv",
     label: "ZoomInfo → Lusha CSV",
     icon: FileText,
-    description: "Prep a ZoomInfo export for Lusha enrichment",
-  },
-  {
-    href: "/lusha-cleanup",
-    label: "Lusha Cleanup & Review",
-    icon: FileText,
-    description: "Consolidate an enriched Lusha CSV and flag job changes",
+    description: "Prep for Lusha, then clean the returned file for SalesLoft",
   },
 ];
 

@@ -502,7 +502,7 @@ export function LushaCsvPrep() {
             <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
               <div className="px-4 py-2 border-b border-slate-100">
                 <p className="text-xs font-semibold text-slate-700 uppercase tracking-wider">
-                  Preview (first {Math.min(10, result.rows.length)} rows)
+                  Preview (first {Math.min(20, result.rows.length)} rows)
                 </p>
               </div>
               <div className="overflow-x-auto">
@@ -523,7 +523,7 @@ export function LushaCsvPrep() {
                     </tr>
                   </thead>
                   <tbody>
-                    {result.rows.slice(0, 10).map((r, i) => (
+                    {result.rows.slice(0, 20).map((r, i) => (
                       <tr
                         key={i}
                         className={

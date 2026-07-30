@@ -34,6 +34,7 @@ export function toAuditCsv(
     "Status",
     "Flag Detail",
     "Email Source",
+    "Email Generated",
     "Current Employer (Lusha)",
     ...OUTPUT_FIELDS,
   ];
@@ -46,6 +47,7 @@ export function toAuditCsv(
       c.flags.join("|"),
       c.flagDetail,
       c.emailSource,
+      c.emailGenerated ? "yes" : "",
       c.currentEmployerLusha,
       ...OUTPUT_FIELDS.map((k) => c.fields[k]),
     ]);

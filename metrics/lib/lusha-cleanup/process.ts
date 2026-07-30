@@ -342,6 +342,7 @@ export function process(
       defaultDecision,
       currentEmployerLusha: lushaCompany.trim(),
       emailSource,
+      emailGenerated: false,
       fields,
     });
   });

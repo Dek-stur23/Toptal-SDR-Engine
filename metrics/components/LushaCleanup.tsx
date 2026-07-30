@@ -6,7 +6,10 @@ import {
   Download,
   Loader2,
   RotateCcw,
+  Sparkles,
+  Undo2,
   Upload,
+  Wand2,
 } from "lucide-react";
 import {
   OUTPUT_FIELDS,
@@ -17,6 +20,11 @@ import {
 } from "@/lib/lusha-cleanup/types";
 import { process } from "@/lib/lusha-cleanup/process";
 import { downloadCsv, toAuditCsv, toCsv } from "@/lib/lusha-cleanup/csv";
+import {
+  deriveTemplate,
+  isTemplateValid,
+  renderEmailFromTemplate,
+} from "@/lib/lusha-cleanup/nomenclature";
 
 // Part 2 of the Lusha workflow. The user brings in the file Lusha
 // returned (an enriched CSV with parallel "(Lusha) …" columns), the
@@ -26,7 +34,7 @@ import { downloadCsv, toAuditCsv, toCsv } from "@/lib/lusha-cleanup/csv";
 //
 // Everything is client-side. Nothing hits the server or Supabase.
 
-type Filter = "all" | "flagged" | "left" | "willExport";
+type Filter = "all" | "flagged" | "left" | "generated" | "willExport";
 
 // Preview row style by highest-severity flag (§5.3).
 const ROW_STYLE: Record<FlagStatus, string> = {
@@ -53,6 +61,19 @@ const STATUS_LABEL: Record<FlagStatus, string> = {
   MATCH: "Match",
 };
 
+// A contact qualifies for a generated email when it has no real email
+// (blank Email + blank Supplemental Email) and hasn't moved companies —
+// a moved contact's address would live on a different domain than the
+// file's. A row already carrying a generated guess still qualifies, so
+// re-generating with a different pattern recomputes cleanly.
+function isEligible(c: Contact): boolean {
+  return (
+    !c.fields["Supplemental Email"] &&
+    !c.flags.includes("LEFT_COMPANY") &&
+    (!c.fields.Email || c.emailGenerated === true)
+  );
+}
+
 export function LushaCleanup() {
   const [fileName, setFileName] = useState<string | null>(null);
   const [result, setResult] = useState<ProcessResult | null>(null);
@@ -61,6 +82,7 @@ export function LushaCleanup() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [leftCompanyReviewed, setLeftCompanyReviewed] = useState(false);
+  const [appliedTemplate, setAppliedTemplate] = useState<string | null>(null);
 
   const handleFile = async (file: File) => {
     setBusy(true);
@@ -69,6 +91,7 @@ export function LushaCleanup() {
     setDecisions({});
     setFileName(file.name);
     setLeftCompanyReviewed(false);
+    setAppliedTemplate(null);
     try {
       const text = await file.text();
       const r = process(text);
@@ -91,6 +114,7 @@ export function LushaCleanup() {
     setFilter("all");
     setError(null);
     setLeftCompanyReviewed(false);
+    setAppliedTemplate(null);
   };
 
   // ---- Derived state ----
@@ -101,6 +125,8 @@ export function LushaCleanup() {
         return result.contacts.filter((c) => !c.flags.includes("MATCH") || c.flags.length > 1);
       case "left":
         return result.contacts.filter((c) => c.flags.includes("LEFT_COMPANY"));
+      case "generated":
+        return result.contacts.filter((c) => c.emailGenerated);
       case "willExport":
         return result.contacts.filter(
           (c) => (decisions[c.contactId] ?? c.defaultDecision) === "keep"
@@ -126,6 +152,16 @@ export function LushaCleanup() {
     ).length;
   }, [result, decisions]);
 
+  const noEmailCount = useMemo(
+    () => (result ? result.contacts.filter(isEligible).length : 0),
+    [result]
+  );
+
+  const generatedCount = useMemo(
+    () => (result ? result.contacts.filter((c) => c.emailGenerated).length : 0),
+    [result]
+  );
+
   // ---- Actions ----
   const setDecision = (contactId: string, d: "keep" | "delete") => {
     setDecisions((prev) => ({ ...prev, [contactId]: d }));
@@ -140,6 +176,77 @@ export function LushaCleanup() {
       }
       return next;
     });
+  };
+
+  // Fill the Email field of every eligible contact from a nomenclature
+  // template, tagging each filled row as a guess. Reversible via
+  // clearGeneration; re-running with a new template recomputes from
+  // scratch because eligibility counts already-generated rows.
+  const applyGeneration = (template: string) => {
+    if (!result) return;
+    const prevGenIds = new Set(
+      result.contacts.filter((c) => c.emailGenerated).map((c) => c.contactId)
+    );
+
+    const nextContacts = result.contacts.map((c) => {
+      const stripGuess = () =>
+        c.emailGenerated
+          ? { ...c, emailGenerated: false, fields: { ...c.fields, Email: "" } }
+          : c;
+
+      if (!isEligible(c)) return stripGuess();
+      const { email } = renderEmailFromTemplate(template, {
+        first: c.fields["First Name"],
+        last: c.fields["Last Name"],
+      });
+      if (!email) return stripGuess();
+      return {
+        ...c,
+        emailGenerated: true,
+        fields: { ...c.fields, Email: email },
+      };
+    });
+
+    const genNowIds = new Set(
+      nextContacts.filter((c) => c.emailGenerated).map((c) => c.contactId)
+    );
+    // Auto-keep freshly generated contacts — NO_CONTACT_DATA defaults to
+    // delete, but a contact we just gave a usable email to should ship.
+    // Any row that lost its guess reverts to its default decision.
+    setDecisions((prev) => {
+      const d = { ...prev };
+      for (const c of nextContacts) {
+        if (genNowIds.has(c.contactId)) d[c.contactId] = "keep";
+        else if (prevGenIds.has(c.contactId)) d[c.contactId] = c.defaultDecision;
+      }
+      return d;
+    });
+
+    setResult({ ...result, contacts: nextContacts });
+    setAppliedTemplate(template);
+  };
+
+  const clearGeneration = () => {
+    if (!result) return;
+    const genIds = new Set(
+      result.contacts.filter((c) => c.emailGenerated).map((c) => c.contactId)
+    );
+    if (genIds.size > 0) {
+      const nextContacts = result.contacts.map((c) =>
+        c.emailGenerated
+          ? { ...c, emailGenerated: false, fields: { ...c.fields, Email: "" } }
+          : c
+      );
+      setDecisions((prev) => {
+        const d = { ...prev };
+        for (const c of nextContacts) {
+          if (genIds.has(c.contactId)) d[c.contactId] = c.defaultDecision;
+        }
+        return d;
+      });
+      setResult({ ...result, contacts: nextContacts });
+    }
+    setAppliedTemplate(null);
   };
 
   const download = () => {
@@ -217,6 +324,7 @@ export function LushaCleanup() {
           <SummaryBar
             result={result}
             exportCount={exportCount}
+            generatedCount={generatedCount}
             fileName={fileName}
             onReset={handleReset}
           />
@@ -232,10 +340,22 @@ export function LushaCleanup() {
             </ul>
           )}
 
+          {(noEmailCount > 0 || generatedCount > 0) && (
+            <NomenclatureFill
+              contacts={result.contacts}
+              noEmailCount={noEmailCount}
+              generatedCount={generatedCount}
+              appliedTemplate={appliedTemplate}
+              onApply={applyGeneration}
+              onClear={clearGeneration}
+            />
+          )}
+
           <FilterBar
             filter={filter}
             onFilter={setFilter}
             result={result}
+            generatedCount={generatedCount}
             onBulk={bulk}
           />
 
@@ -243,6 +363,7 @@ export function LushaCleanup() {
             onDownload={download}
             onDownloadAudit={downloadAudit}
             exportCount={exportCount}
+            generatedCount={generatedCount}
             undecidedLeftCompany={undecidedLeftCompany}
             leftCompanyReviewed={leftCompanyReviewed}
           />
@@ -261,11 +382,13 @@ export function LushaCleanup() {
 function SummaryBar({
   result,
   exportCount,
+  generatedCount,
   fileName,
   onReset,
 }: {
   result: ProcessResult;
   exportCount: number;
+  generatedCount: number;
   fileName: string | null;
   onReset: () => void;
 }) {
@@ -313,8 +436,257 @@ function SummaryBar({
       <div className="text-xs text-slate-800 font-semibold border-t border-slate-100 pt-2">
         → {exportCount} will be exported
         {removed > 0 && `, ${removed} removed`}
+        {generatedCount > 0 && (
+          <span className="text-violet-700">
+            {" "}
+            · {generatedCount} email{generatedCount === 1 ? "" : "s"} generated
+            from nomenclature
+          </span>
+        )}
       </div>
     </div>
+  );
+}
+
+// Nomenclature fill — derive a company email pattern from one verified
+// example, let the user review/edit it, then auto-fill guessed emails
+// for every contact who has none. Fully client-side and deterministic.
+function NomenclatureFill({
+  contacts,
+  noEmailCount,
+  generatedCount,
+  appliedTemplate,
+  onApply,
+  onClear,
+}: {
+  contacts: Contact[];
+  noEmailCount: number;
+  generatedCount: number;
+  appliedTemplate: string | null;
+  onApply: (template: string) => void;
+  onClear: () => void;
+}) {
+  const [sourceContactId, setSourceContactId] = useState("");
+  const [email, setEmail] = useState("");
+  const [first, setFirst] = useState("");
+  const [last, setLast] = useState("");
+  const [template, setTemplate] = useState("");
+  const [analyzed, setAnalyzed] = useState(false);
+  const [recognized, setRecognized] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Existing contacts that already carry a real (non-guessed) email —
+  // any of them can seed the pattern with one click.
+  const candidates = useMemo(
+    () => contacts.filter((c) => c.fields.Email && !c.emailGenerated),
+    [contacts]
+  );
+
+  const pickCandidate = (id: string) => {
+    setSourceContactId(id);
+    setError(null);
+    setAnalyzed(false);
+    if (!id) return;
+    const c = contacts.find((x) => x.contactId === id);
+    if (!c) return;
+    setEmail(c.fields.Email);
+    setFirst(c.fields["First Name"]);
+    setLast(c.fields["Last Name"]);
+  };
+
+  const analyze = () => {
+    setError(null);
+    if (!first.trim() || !last.trim()) {
+      setError("Enter the first and last name this email belongs to.");
+      return;
+    }
+    const d = deriveTemplate(email, { first, last });
+    if (!d) {
+      setError("That doesn't look like a valid email address.");
+      setAnalyzed(false);
+      return;
+    }
+    setTemplate(d.template);
+    setRecognized(d.recognized);
+    setAnalyzed(true);
+  };
+
+  // Live shape preview from a canonical name so the user sees what the
+  // pattern produces regardless of the example's own name.
+  const example = useMemo(
+    () => renderEmailFromTemplate(template, { first: "Jane", last: "Doe" }).email,
+    [template]
+  );
+
+  // How many eligible contacts this exact template can actually fill
+  // (some may lack a name part the pattern needs).
+  const willGenerate = useMemo(() => {
+    if (!isTemplateValid(template)) return 0;
+    return contacts.filter((c) => {
+      if (!isEligible(c)) return false;
+      return !!renderEmailFromTemplate(template, {
+        first: c.fields["First Name"],
+        last: c.fields["Last Name"],
+      }).email;
+    }).length;
+  }, [contacts, template]);
+
+  const skipped = noEmailCount - willGenerate;
+  const canGenerate = analyzed && isTemplateValid(template) && willGenerate > 0;
+
+  return (
+    <section className="rounded-xl border border-violet-200 bg-violet-50/40 shadow-sm p-4 space-y-3">
+      <div className="flex items-start gap-2">
+        <Sparkles className="w-4 h-4 text-violet-600 mt-0.5 shrink-0" />
+        <div>
+          <h2 className="text-sm font-bold text-slate-800">
+            Fill missing emails from company nomenclature
+          </h2>
+          <p className="text-xs text-slate-600">
+            {noEmailCount} contact{noEmailCount === 1 ? "" : "s"} still ha
+            {noEmailCount === 1 ? "s" : "ve"} no email. Give one verified email
+            for this company and the tool will infer the pattern and generate
+            best-guess addresses for the rest.
+          </p>
+        </div>
+      </div>
+
+      {/* Step 1 — provide a verified example */}
+      <div className="space-y-2 rounded-lg border border-violet-100 bg-white p-3">
+        {candidates.length > 0 && (
+          <label className="block text-[11px] font-semibold text-slate-600">
+            Use an existing contact with a known email
+            <select
+              value={sourceContactId}
+              onChange={(e) => pickCandidate(e.target.value)}
+              className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-violet-500"
+            >
+              <option value="">— enter one manually below —</option>
+              {candidates.map((c) => (
+                <option key={c.contactId} value={c.contactId}>
+                  {c.fields["First Name"]} {c.fields["Last Name"]} —{" "}
+                  {c.fields.Email}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => {
+              setEmail(e.target.value);
+              setAnalyzed(false);
+            }}
+            placeholder="Verified email (jane.doe@acme.com)"
+            className="rounded-md border border-slate-300 px-2.5 py-1.5 text-sm outline-none focus:ring-2 focus:ring-violet-500 sm:col-span-3"
+          />
+          <input
+            value={first}
+            onChange={(e) => {
+              setFirst(e.target.value);
+              setAnalyzed(false);
+            }}
+            placeholder="First name"
+            className="rounded-md border border-slate-300 px-2.5 py-1.5 text-sm outline-none focus:ring-2 focus:ring-violet-500"
+          />
+          <input
+            value={last}
+            onChange={(e) => {
+              setLast(e.target.value);
+              setAnalyzed(false);
+            }}
+            placeholder="Last name"
+            className="rounded-md border border-slate-300 px-2.5 py-1.5 text-sm outline-none focus:ring-2 focus:ring-violet-500"
+          />
+          <button
+            onClick={analyze}
+            disabled={!email.trim()}
+            className="inline-flex items-center justify-center gap-1.5 rounded-md bg-slate-900 hover:bg-slate-800 disabled:opacity-40 text-white text-sm font-semibold px-3 py-1.5"
+          >
+            <Wand2 className="w-3.5 h-3.5" /> Analyze
+          </button>
+        </div>
+        {error && <p className="text-xs text-red-600">{error}</p>}
+      </div>
+
+      {/* Step 2 — review + approve the pattern */}
+      {analyzed && (
+        <div className="space-y-2 rounded-lg border border-violet-100 bg-white p-3">
+          <p className="text-[11px] font-semibold text-slate-600">
+            {recognized ? (
+              <>Detected pattern — review, edit if needed, then generate:</>
+            ) : (
+              <>
+                Couldn&apos;t auto-detect the pattern from that example.
+                Assuming the most common one — please confirm or edit it:
+              </>
+            )}
+          </p>
+          <input
+            value={template}
+            onChange={(e) => setTemplate(e.target.value)}
+            spellCheck={false}
+            className="w-full rounded-md border border-slate-300 px-2.5 py-1.5 text-sm font-mono outline-none focus:ring-2 focus:ring-violet-500"
+          />
+          <p className="text-[11px] text-slate-500">
+            Placeholders: <code>{"{first}"}</code> <code>{"{last}"}</code>{" "}
+            <code>{"{f}"}</code> (first initial) <code>{"{l}"}</code> (last
+            initial).{" "}
+            {example && (
+              <>
+                Example: <span className="font-mono text-slate-700">{example}</span>
+              </>
+            )}
+          </p>
+
+          <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 pt-2">
+            <button
+              onClick={() => onApply(template)}
+              disabled={!canGenerate}
+              className="inline-flex items-center gap-1.5 rounded-md bg-violet-600 hover:bg-violet-700 disabled:opacity-40 text-white text-sm font-semibold px-3 py-1.5 shadow-sm"
+            >
+              <Wand2 className="w-3.5 h-3.5" /> Generate {willGenerate} email
+              {willGenerate === 1 ? "" : "s"}
+            </button>
+            {generatedCount > 0 && (
+              <button
+                onClick={onClear}
+                className="inline-flex items-center gap-1.5 rounded-md bg-white hover:bg-slate-50 text-slate-700 text-sm font-semibold px-3 py-1.5 border border-slate-200"
+              >
+                <Undo2 className="w-3.5 h-3.5" /> Undo generated ({generatedCount})
+              </button>
+            )}
+            {skipped > 0 && (
+              <span className="text-[11px] text-slate-500">
+                {skipped} can&apos;t be generated (missing a name part).
+              </span>
+            )}
+          </div>
+        </div>
+      )}
+
+      {generatedCount > 0 && (
+        <p className="rounded-md border border-violet-200 bg-white px-3 py-2 text-[11px] text-violet-800 flex items-start gap-2">
+          <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+          <span>
+            {generatedCount} address{generatedCount === 1 ? " is a" : "es are"}{" "}
+            pattern-guess{generatedCount === 1 ? "" : "es"}, not verified — they
+            may bounce. They&apos;re badged in the preview below and marked in
+            the audit CSV.
+            {appliedTemplate && (
+              <>
+                {" "}
+                Pattern:{" "}
+                <span className="font-mono">{appliedTemplate}</span>.
+              </>
+            )}
+          </span>
+        </p>
+      )}
+    </section>
   );
 }
 
@@ -322,28 +694,32 @@ function FilterBar({
   filter,
   onFilter,
   result,
+  generatedCount,
   onBulk,
 }: {
   filter: Filter;
   onFilter: (f: Filter) => void;
   result: ProcessResult;
+  generatedCount: number;
   onBulk: (status: FlagStatus, d: "keep" | "delete") => void;
 }) {
   const leftCount = result.summary.countsByStatus.LEFT_COMPANY;
   const noContact = result.summary.countsByStatus.NO_CONTACT_DATA;
+  const filters: [Filter, string][] = [
+    ["all", `All (${result.summary.total})`],
+    ["flagged", "Flagged only"],
+    ["left", `Moved companies (${leftCount})`],
+    ...((generatedCount > 0
+      ? [["generated", `Pattern-guesses (${generatedCount})`]]
+      : []) as [Filter, string][]),
+    ["willExport", "Will be exported"],
+  ];
   return (
     <div className="rounded-xl border border-slate-200 bg-white shadow-sm p-3 flex flex-wrap items-center gap-2">
       <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 mr-1">
         Filter
       </span>
-      {(
-        [
-          ["all", `All (${result.summary.total})`],
-          ["flagged", "Flagged only"],
-          ["left", `Moved companies (${leftCount})`],
-          ["willExport", "Will be exported"],
-        ] as [Filter, string][]
-      ).map(([key, label]) => (
+      {filters.map(([key, label]) => (
         <button
           key={key}
           onClick={() => onFilter(key)}
@@ -398,12 +774,14 @@ function DownloadBar({
   onDownload,
   onDownloadAudit,
   exportCount,
+  generatedCount,
   undecidedLeftCompany,
   leftCompanyReviewed,
 }: {
   onDownload: () => void;
   onDownloadAudit: () => void;
   exportCount: number;
+  generatedCount: number;
   undecidedLeftCompany: number;
   leftCompanyReviewed: boolean;
 }) {
@@ -419,6 +797,16 @@ function DownloadBar({
             {undecidedLeftCompany === 1 ? "" : "s"} appear to have left the
             target company and are set to Keep. Their old corporate email
             will likely bounce. Click Download again to proceed anyway.
+          </span>
+        </p>
+      )}
+      {generatedCount > 0 && (
+        <p className="rounded-md border border-violet-200 bg-violet-50 px-3 py-2 text-xs text-violet-800 flex items-start gap-2">
+          <Sparkles className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+          <span>
+            This export includes <strong>{generatedCount}</strong> pattern-guess
+            email{generatedCount === 1 ? "" : "s"}. They&apos;re unverified and
+            may bounce — consider verifying before a heavy send.
           </span>
         </p>
       )}
@@ -536,6 +924,11 @@ function PreviewTable({
                             {STATUS_LABEL[f]}
                           </span>
                         ))}
+                      {c.emailGenerated && (
+                        <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded border inline-block w-fit bg-violet-100 text-violet-800 border-violet-200">
+                          Pattern-guess
+                        </span>
+                      )}
                       {c.flagDetail && (
                         <span className="text-[11px] text-slate-700">
                           {c.flagDetail}
@@ -543,17 +936,24 @@ function PreviewTable({
                       )}
                     </div>
                   </td>
-                  {OUTPUT_FIELDS.map((k) => (
-                    <td
-                      key={k}
-                      className={`px-3 py-1.5 text-slate-700 whitespace-nowrap max-w-56 truncate ${strike}`}
-                      title={c.fields[k]}
-                    >
-                      {c.fields[k] || (
-                        <span className="text-slate-300">—</span>
-                      )}
-                    </td>
-                  ))}
+                  {OUTPUT_FIELDS.map((k) => {
+                    const isGuessEmail = k === "Email" && c.emailGenerated;
+                    return (
+                      <td
+                        key={k}
+                        className={`px-3 py-1.5 whitespace-nowrap max-w-56 truncate ${strike} ${
+                          isGuessEmail
+                            ? "text-violet-700 italic"
+                            : "text-slate-700"
+                        }`}
+                        title={c.fields[k]}
+                      >
+                        {c.fields[k] || (
+                          <span className="text-slate-300">—</span>
+                        )}
+                      </td>
+                    );
+                  })}
                 </tr>
               );
             })}

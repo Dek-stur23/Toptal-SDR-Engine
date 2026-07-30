@@ -43,6 +43,11 @@ export interface Contact {
   defaultDecision: "keep" | "delete";
   currentEmployerLusha: string;
   emailSource: "source" | "lusha";
+  // True when the Email was auto-filled from a company nomenclature
+  // pattern rather than sourced from ZoomInfo/Lusha. These are educated
+  // guesses, not verified addresses — the UI badges them and the audit
+  // CSV marks them so they're never mistaken for real data.
+  emailGenerated?: boolean;
   fields: ContactFields;
 }
 

@@ -136,7 +136,7 @@ function CadenceChooser({ onPick }: { onPick: (m: CadenceMode) => void }) {
           onClick={() => onPick("icp")}
           icon={<UserPlus className="w-5 h-5 text-emerald-600" />}
           title="New ICP Hired Outreach"
-          description="Triggered when a target persona was recently hired into an ICP account. Engineering & Technical only. Leaves [First Name] and [Title] as placeholders for you to fill in per recipient."
+          description="Triggered when a target persona was recently hired into an ICP account. Engineering & Technical or Marketing. Preserves SalesLoft merge variables ({{first_name}}, {{title}}, {{company}}, {{my.first_name}}) in the output."
         />
       </div>
     </div>
@@ -354,6 +354,13 @@ function VolumeOutboundCadence({ accounts }: Props) {
   );
 }
 
+type IcpDiscipline = "engineering" | "marketing";
+
+const ICP_DISCIPLINE_OPTIONS: { value: IcpDiscipline; label: string }[] = [
+  { value: "engineering", label: "Engineering & Technical" },
+  { value: "marketing", label: "Marketing" },
+];
+
 function IcpHiredOutreach({ accounts }: Props) {
   const activeAccounts = useActiveAccounts(accounts);
 
@@ -361,6 +368,7 @@ function IcpHiredOutreach({ accounts }: Props) {
   const [statusOverride, setStatusOverride] = useState<AccountStatus | null>(
     null
   );
+  const [discipline, setDiscipline] = useState<IcpDiscipline | "">("");
 
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -369,10 +377,11 @@ function IcpHiredOutreach({ accounts }: Props) {
   const account = accounts.find((a) => a.id === accountId) ?? null;
   const effectiveStatus: AccountStatus =
     statusOverride ?? account?.accountData.accountStatus ?? "";
-  const canGenerate = !!account && effectiveStatus !== "" && !generating;
+  const canGenerate =
+    !!account && effectiveStatus !== "" && !!discipline && !generating;
 
   const generate = async () => {
-    if (!account || effectiveStatus === "") return;
+    if (!account || effectiveStatus === "" || !discipline) return;
     const accountName =
       account.name || account.accountData.companyName || "";
     if (!accountName.trim()) {
@@ -390,8 +399,9 @@ function IcpHiredOutreach({ accounts }: Props) {
           `Generate a 4-email new-ICP-hire outreach cadence for the following context:\n\n` +
           `- accountName: ${accountName}\n` +
           `- accountStatus: ${branch}\n` +
+          `- discipline: ${discipline}\n` +
           `- currentQuarter: ${quarter}\n\n` +
-          `Follow the template that matches accountStatus. Preserve [First Name], [Title], and [Your Name] as literal placeholders. Return exactly 4 emails in order.`,
+          `Follow the template that matches BOTH discipline and accountStatus. Preserve {{first_name}}, {{title}}, {{company}}, and {{my.first_name}} literally in every email. Replace {{industry}}, {{key_stack}} or {{key_discipline}}, and {{quarter}} inline. Return exactly 4 emails in order.`,
         system: DEFAULT_ICP_HIRED_CADENCE_GEM,
         schema: CADENCE_SCHEMA,
       });
@@ -416,10 +426,12 @@ function IcpHiredOutreach({ accounts }: Props) {
         </h1>
         <p className="text-sm text-slate-500 mt-1">
           4-email cadence triggered when a target persona was recently hired at
-          an ICP account. Engineering & Technical only. Leaves{" "}
-          <code className="text-[11px]">[First Name]</code> and{" "}
-          <code className="text-[11px]">[Title]</code> as placeholders for you
-          to fill in per recipient.
+          an ICP account. Preserves SalesLoft merge variables (
+          <code className="text-[11px]">{"{{first_name}}"}</code>,{" "}
+          <code className="text-[11px]">{"{{title}}"}</code>,{" "}
+          <code className="text-[11px]">{"{{company}}"}</code>,{" "}
+          <code className="text-[11px]">{"{{my.first_name}}"}</code>) in the
+          output for SalesLoft to substitute per recipient.
         </p>
       </div>
 
@@ -485,10 +497,31 @@ function IcpHiredOutreach({ accounts }: Props) {
           )}
         </label>
 
+        <label className="block">
+          <span className="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1">
+            Discipline
+          </span>
+          <select
+            value={discipline}
+            onChange={(e) =>
+              setDiscipline(e.target.value as IcpDiscipline | "")
+            }
+            className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+          >
+            <option value="">— Select —</option>
+            {ICP_DISCIPLINE_OPTIONS.map((d) => (
+              <option key={d.value} value={d.value}>
+                {d.label}
+              </option>
+            ))}
+          </select>
+        </label>
+
         <div className="text-[11px] text-slate-500 border border-slate-200 rounded-md bg-slate-50 px-3 py-2">
-          Function: <span className="font-semibold text-slate-700">Engineering & Technical</span> (locked for this cadence).
-          Industry and tech stack will be inferred from the account name.
-          Current quarter: <span className="font-semibold text-slate-700">{currentQuarter()}</span>.
+          Industry and{" "}
+          {discipline === "marketing" ? "marketing operator mix" : "tech stack"}{" "}
+          are inferred from the account name. Current quarter:{" "}
+          <span className="font-semibold text-slate-700">{currentQuarter()}</span>.
         </div>
 
         {error && (

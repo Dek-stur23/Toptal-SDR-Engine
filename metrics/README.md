@@ -31,6 +31,8 @@ tools from the SDR Launchpad. Next.js 14 (App Router) on top of Supabase
      retroactively recolor the archive or the pacing chart.
    - `009_accounts_default_ese.sql` — optional per-account default
      ESE that auto-populates the ESE field on new meetings.
+   - `010_activity_events.sql` — generic per-user usage log backing
+     platform-wide usage tracking and the admin Usage dashboard.
 
 3. **Create the storage bucket** for meeting screenshots. In the
    Supabase dashboard: Storage → New bucket → name `meeting-images`,
@@ -78,3 +80,11 @@ point the Supabase project's Auth redirect URLs at the deployed origin.
   (default cap in `AI_MONTHLY_CAP_CENTS`, $50).
 - **Images:** Meeting screenshots live in the private `meeting-images`
   bucket, keyed as `{user_id}/meetings/{meeting_id}.{ext}`.
+- **Usage tracking:** A `UsageTracker` mounted in the app shell logs one
+  `activity_events` row per navigation (tool/tab + `view`), and the
+  client-side ZoomInfo → Lusha tool logs its own actions (`prep`,
+  `cleanup`, `generate-emails`). Admins get a platform-wide **Usage**
+  dashboard at `/admin/activity` — per-rep engagement + per-tool usage
+  over a selectable date range — aggregated server-side via the
+  service-role client (admin-gated, bypasses RLS). Only tool + action +
+  timestamp are recorded; no prospect data.

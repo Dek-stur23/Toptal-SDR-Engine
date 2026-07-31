@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  Activity,
   BarChart3,
   Building2,
   CalendarClock,
@@ -17,6 +18,7 @@ import {
 import { clsx } from "clsx";
 import type { Profile } from "@/lib/types";
 import { OnboardingModal } from "@/components/OnboardingModal";
+import { UsageTracker } from "@/components/UsageTracker";
 
 // Additional Tools dropdown menu.
 //
@@ -61,6 +63,11 @@ export function AppShell({
   ];
   if (profile?.isAdmin) {
     primaryTabs.push({
+      href: "/admin/activity",
+      label: "Usage",
+      icon: Activity,
+    });
+    primaryTabs.push({
       href: "/admin/invites",
       label: "Admin",
       icon: ShieldCheck,
@@ -69,6 +76,7 @@ export function AppShell({
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
+      <UsageTracker />
       <header className="border-b border-slate-200 bg-white">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-3">
           <div className="flex items-center gap-6">

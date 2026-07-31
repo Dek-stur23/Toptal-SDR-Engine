@@ -9,11 +9,14 @@ import {
   RotateCcw,
   Upload,
 } from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
+import { logActivityEvent } from "@/lib/data/activityEvents";
 
 // ZoomInfo → Lusha CSV prep tool.
 //
-// - Runs entirely in the browser. Nothing hits the server, no
-//   prospect data leaves the machine.
+// - Processes entirely in the browser: no prospect data leaves the
+//   machine. The only server call is a fire-and-forget usage ping
+//   (tool + action + timestamp) so the tool shows up in usage reporting.
 // - Reads the user's ZoomInfo Person export, picks the columns
 //   Lusha needs, cleans them, and outputs a UTF-8 (no BOM), comma-
 //   delimited CSV under Lusha's 10k-row limit. Splits into
@@ -297,6 +300,7 @@ export function LushaCsvPrep() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [includeFlagged, setIncludeFlagged] = useState(true);
+  const supabase = useMemo(() => createClient(), []);
 
   const chunks = useMemo(() => {
     if (!result) return [];
@@ -317,6 +321,10 @@ export function LushaCsvPrep() {
       const text = await file.text();
       const prepared = prep(text);
       setResult(prepared);
+      void logActivityEvent(supabase, {
+        tool: "ZoomInfo → Lusha",
+        action: "prep",
+      });
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {

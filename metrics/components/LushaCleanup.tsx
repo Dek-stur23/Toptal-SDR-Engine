@@ -25,6 +25,8 @@ import {
   isTemplateValid,
   renderEmailFromTemplate,
 } from "@/lib/lusha-cleanup/nomenclature";
+import { createClient } from "@/lib/supabase/client";
+import { logActivityEvent } from "@/lib/data/activityEvents";
 
 // Part 2 of the Lusha workflow. The user brings in the file Lusha
 // returned (an enriched CSV with parallel "(Lusha) …" columns), the
@@ -32,7 +34,9 @@ import {
 // and the preview lets the user decide who to keep before downloading
 // a clean CSV suitable for SalesLoft import.
 //
-// Everything is client-side. Nothing hits the server or Supabase.
+// The CSV is processed entirely client-side — no prospect data leaves
+// the browser. The only server call is a fire-and-forget usage ping
+// (tool + action + timestamp) so the tool appears in usage reporting.
 
 type Filter = "all" | "flagged" | "left" | "generated" | "willExport";
 
@@ -83,6 +87,7 @@ export function LushaCleanup() {
   const [error, setError] = useState<string | null>(null);
   const [leftCompanyReviewed, setLeftCompanyReviewed] = useState(false);
   const [appliedTemplate, setAppliedTemplate] = useState<string | null>(null);
+  const supabase = useMemo(() => createClient(), []);
 
   const handleFile = async (file: File) => {
     setBusy(true);
@@ -100,6 +105,10 @@ export function LushaCleanup() {
       for (const c of r.contacts) d[c.contactId] = c.defaultDecision;
       setResult(r);
       setDecisions(d);
+      void logActivityEvent(supabase, {
+        tool: "ZoomInfo → Lusha",
+        action: "cleanup",
+      });
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -224,6 +233,13 @@ export function LushaCleanup() {
 
     setResult({ ...result, contacts: nextContacts });
     setAppliedTemplate(template);
+
+    if (genNowIds.size > 0) {
+      void logActivityEvent(supabase, {
+        tool: "ZoomInfo → Lusha",
+        action: "generate-emails",
+      });
+    }
   };
 
   const clearGeneration = () => {
@@ -289,7 +305,7 @@ export function LushaCleanup() {
                 Drop an enriched Lusha CSV here, or pick one
               </p>
               <p className="text-xs text-slate-500 mb-4">
-                Any Lusha bulk-enrichment export. Nothing leaves this page.
+                Any Lusha bulk-enrichment export. Your CSV stays in your browser.
               </p>
               <input
                 type="file"

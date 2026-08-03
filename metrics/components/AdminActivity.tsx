@@ -20,6 +20,7 @@ const RANGES: { key: RangeKey; label: string }[] = [
   { key: "day", label: "Today" },
   { key: "week", label: "Last 7 days" },
   { key: "month", label: "Last 30 days" },
+  { key: "all", label: "All time" },
   { key: "custom", label: "Custom" },
 ];
 

@@ -2,16 +2,21 @@
 
 import { useMemo, useState } from "react";
 import {
+  ArrowLeft,
   Building2,
   CheckCircle2,
   Copy,
   Loader2,
   Mail,
   Sparkles,
+  UserPlus,
 } from "lucide-react";
 import type { Account, AccountStatus } from "@/lib/types";
 import { generateWithClaude } from "@/lib/api";
-import { DEFAULT_EMAIL_CADENCE_GEM } from "@/lib/gems";
+import {
+  DEFAULT_EMAIL_CADENCE_GEM,
+  DEFAULT_ICP_HIRED_CADENCE_GEM,
+} from "@/lib/gems";
 
 interface Props {
   accounts: Account[];
@@ -50,6 +55,11 @@ function statusLabel(status: AccountStatus): string {
   return status;
 }
 
+function currentQuarter(): string {
+  const m = new Date().getMonth();
+  return `Q${Math.floor(m / 3) + 1}`;
+}
+
 interface GeneratedEmail {
   subjectLine: string;
   bodyMarkdown: string;
@@ -77,8 +87,89 @@ const CADENCE_SCHEMA = {
   required: ["emails"],
 };
 
+type CadenceMode = "chooser" | "volume" | "icp";
+
 export function EmailCadenceEngine({ accounts }: Props) {
-  const activeAccounts = useMemo(
+  const [mode, setMode] = useState<CadenceMode>("chooser");
+
+  if (mode === "chooser") {
+    return <CadenceChooser onPick={setMode} />;
+  }
+
+  return (
+    <div className="max-w-4xl mx-auto px-6 py-10 space-y-6">
+      <button
+        onClick={() => setMode("chooser")}
+        className="text-xs font-semibold text-slate-600 hover:text-slate-900 flex items-center gap-1"
+      >
+        <ArrowLeft className="w-3.5 h-3.5" /> Back to cadences
+      </button>
+      {mode === "volume" ? (
+        <VolumeOutboundCadence accounts={accounts} />
+      ) : (
+        <IcpHiredOutreach accounts={accounts} />
+      )}
+    </div>
+  );
+}
+
+function CadenceChooser({ onPick }: { onPick: (m: CadenceMode) => void }) {
+  return (
+    <div className="max-w-4xl mx-auto px-6 py-10 space-y-8">
+      <div>
+        <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
+          <Mail className="w-6 h-6 text-blue-600" /> Email Cadence Engine
+        </h1>
+        <p className="text-sm text-slate-500 mt-1">
+          Pick the type of cadence you want to generate.
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <CadenceCard
+          onClick={() => onPick("volume")}
+          icon={<Mail className="w-5 h-5 text-blue-600" />}
+          title="Volume Outbound Cadence"
+          description="4-email cadence tuned to account status and job function. Signed accounts pitch the existing MSA; unsigned accounts pitch Toptal top-3% talent. Works across Engineering, IT, Marketing, and Procurement."
+        />
+        <CadenceCard
+          onClick={() => onPick("icp")}
+          icon={<UserPlus className="w-5 h-5 text-emerald-600" />}
+          title="New ICP Hired Outreach"
+          description="Triggered when a target persona was recently hired into an ICP account. Engineering & Technical or Marketing. Preserves SalesLoft merge variables ({{first_name}}, {{title}}, {{company}}, {{my.first_name}}) in the output."
+        />
+      </div>
+    </div>
+  );
+}
+
+function CadenceCard({
+  onClick,
+  icon,
+  title,
+  description,
+}: {
+  onClick: () => void;
+  icon: React.ReactNode;
+  title: string;
+  description: string;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className="text-left bg-white border border-slate-200 hover:border-blue-400 hover:shadow-md transition rounded-xl p-5 space-y-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+    >
+      <div className="flex items-center gap-2">
+        {icon}
+        <h2 className="text-sm font-bold text-slate-900">{title}</h2>
+      </div>
+      <p className="text-xs text-slate-600 leading-relaxed">{description}</p>
+    </button>
+  );
+}
+
+function useActiveAccounts(accounts: Account[]) {
+  return useMemo(
     () =>
       accounts
         .filter((a) => !a.isArchived)
@@ -86,10 +177,12 @@ export function EmailCadenceEngine({ accounts }: Props) {
         .sort((a, b) => (a.name || "").localeCompare(b.name || "")),
     [accounts]
   );
+}
+
+function VolumeOutboundCadence({ accounts }: Props) {
+  const activeAccounts = useActiveAccounts(accounts);
 
   const [accountId, setAccountId] = useState<string>("");
-  // Status auto-fills from the picked account but the user can
-  // override it (e.g. an "" account gets an explicit choice).
   const [statusOverride, setStatusOverride] = useState<AccountStatus | null>(
     null
   );
@@ -141,10 +234,10 @@ export function EmailCadenceEngine({ accounts }: Props) {
   };
 
   return (
-    <div className="max-w-4xl mx-auto px-6 py-10 space-y-8">
+    <>
       <div>
         <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
-          <Mail className="w-6 h-6 text-blue-600" /> Email Cadence Engine
+          <Mail className="w-6 h-6 text-blue-600" /> Volume Outbound Cadence
         </h1>
         <p className="text-sm text-slate-500 mt-1">
           Generate a 4-email outbound cadence tailored to an account and
@@ -154,7 +247,6 @@ export function EmailCadenceEngine({ accounts }: Props) {
       </div>
 
       <section className="bg-white border border-slate-200 rounded-xl shadow-sm p-4 space-y-4">
-        {/* Account */}
         <label className="block">
           <span className="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1">
             Account
@@ -168,7 +260,7 @@ export function EmailCadenceEngine({ accounts }: Props) {
               value={accountId}
               onChange={(e) => {
                 setAccountId(e.target.value);
-                setStatusOverride(null); // let auto-fill take over
+                setStatusOverride(null);
               }}
               className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
             >
@@ -182,7 +274,6 @@ export function EmailCadenceEngine({ accounts }: Props) {
           )}
         </label>
 
-        {/* Status (auto-filled from account, user can override) */}
         <label className="block">
           <span className="flex items-center justify-between text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1">
             <span>Status</span>
@@ -217,7 +308,6 @@ export function EmailCadenceEngine({ accounts }: Props) {
           )}
         </label>
 
-        {/* Department */}
         <label className="block">
           <span className="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1">
             Department / job function
@@ -259,10 +349,206 @@ export function EmailCadenceEngine({ accounts }: Props) {
         </button>
       </section>
 
-      {emails && emails.length > 0 && (
-        <CadenceResults emails={emails} />
-      )}
-    </div>
+      {emails && emails.length > 0 && <CadenceResults emails={emails} />}
+    </>
+  );
+}
+
+type IcpDiscipline = "engineering" | "marketing";
+
+const ICP_DISCIPLINE_OPTIONS: { value: IcpDiscipline; label: string }[] = [
+  { value: "engineering", label: "Engineering & Technical" },
+  { value: "marketing", label: "Marketing" },
+];
+
+function IcpHiredOutreach({ accounts }: Props) {
+  const activeAccounts = useActiveAccounts(accounts);
+
+  const [accountId, setAccountId] = useState<string>("");
+  const [statusOverride, setStatusOverride] = useState<AccountStatus | null>(
+    null
+  );
+  const [discipline, setDiscipline] = useState<IcpDiscipline | "">("");
+
+  const [generating, setGenerating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [emails, setEmails] = useState<GeneratedEmail[] | null>(null);
+
+  const account = accounts.find((a) => a.id === accountId) ?? null;
+  const effectiveStatus: AccountStatus =
+    statusOverride ?? account?.accountData.accountStatus ?? "";
+  const canGenerate =
+    !!account && effectiveStatus !== "" && !!discipline && !generating;
+
+  const generate = async () => {
+    if (!account || effectiveStatus === "" || !discipline) return;
+    const accountName =
+      account.name || account.accountData.companyName || "";
+    if (!accountName.trim()) {
+      setError("The selected account has no name set.");
+      return;
+    }
+    setGenerating(true);
+    setError(null);
+    setEmails(null);
+    try {
+      const branch = branchFor(effectiveStatus);
+      const quarter = currentQuarter();
+      const result = await generateWithClaude<CadenceResult>({
+        prompt:
+          `Generate a 4-email new-ICP-hire outreach cadence for the following context:\n\n` +
+          `- accountName: ${accountName}\n` +
+          `- accountStatus: ${branch}\n` +
+          `- discipline: ${discipline}\n` +
+          `- currentQuarter: ${quarter}\n\n` +
+          `Follow the template that matches BOTH discipline and accountStatus. Preserve {{first_name}}, {{title}}, {{company}}, and {{my.first_name}} literally in every email. Replace {{industry}}, {{key_stack}} or {{key_discipline}}, and {{quarter}} inline. Return exactly 4 emails in order.`,
+        system: DEFAULT_ICP_HIRED_CADENCE_GEM,
+        schema: CADENCE_SCHEMA,
+      });
+      if (!Array.isArray(result?.emails) || result.emails.length === 0) {
+        setError("Model returned no emails.");
+        return;
+      }
+      setEmails(result.emails);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  return (
+    <>
+      <div>
+        <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
+          <UserPlus className="w-6 h-6 text-emerald-600" /> New ICP Hired
+          Outreach
+        </h1>
+        <p className="text-sm text-slate-500 mt-1">
+          4-email cadence triggered when a target persona was recently hired at
+          an ICP account. Preserves SalesLoft merge variables (
+          <code className="text-[11px]">{"{{first_name}}"}</code>,{" "}
+          <code className="text-[11px]">{"{{title}}"}</code>,{" "}
+          <code className="text-[11px]">{"{{company}}"}</code>,{" "}
+          <code className="text-[11px]">{"{{my.first_name}}"}</code>) in the
+          output for SalesLoft to substitute per recipient.
+        </p>
+      </div>
+
+      <section className="bg-white border border-slate-200 rounded-xl shadow-sm p-4 space-y-4">
+        <label className="block">
+          <span className="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1">
+            Account
+          </span>
+          {activeAccounts.length === 0 ? (
+            <p className="text-xs italic text-slate-500 px-3 py-2 border border-slate-200 rounded-md bg-slate-50">
+              No accounts yet. Create one from the sidebar first.
+            </p>
+          ) : (
+            <select
+              value={accountId}
+              onChange={(e) => {
+                setAccountId(e.target.value);
+                setStatusOverride(null);
+              }}
+              className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+            >
+              <option value="">— Select an account —</option>
+              {activeAccounts.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.name || a.accountData.companyName || "(unnamed)"}
+                </option>
+              ))}
+            </select>
+          )}
+        </label>
+
+        <label className="block">
+          <span className="flex items-center justify-between text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1">
+            <span>Account status</span>
+            {account && statusOverride === null && (
+              <span className="text-[10px] font-normal normal-case text-slate-400">
+                From account
+              </span>
+            )}
+          </span>
+          <select
+            value={effectiveStatus}
+            onChange={(e) =>
+              setStatusOverride(e.target.value as AccountStatus)
+            }
+            disabled={!account}
+            className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none disabled:opacity-50"
+          >
+            <option value="">— Select —</option>
+            <option value="Signed Account - Active">Signed Account — Active</option>
+            <option value="Signed Account - Dormant">Signed Account — Dormant</option>
+            <option value="Unsigned Account">Unsigned Account</option>
+          </select>
+          {account && effectiveStatus !== "" && (
+            <p className="text-[11px] text-slate-500 mt-1 flex items-center gap-1">
+              <Building2 className="w-3 h-3" />
+              Cadence branch:{" "}
+              <span className="font-semibold text-slate-700">
+                {branchFor(effectiveStatus)}
+              </span>{" "}
+              (from {statusLabel(effectiveStatus)})
+            </p>
+          )}
+        </label>
+
+        <label className="block">
+          <span className="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1">
+            Discipline
+          </span>
+          <select
+            value={discipline}
+            onChange={(e) =>
+              setDiscipline(e.target.value as IcpDiscipline | "")
+            }
+            className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+          >
+            <option value="">— Select —</option>
+            {ICP_DISCIPLINE_OPTIONS.map((d) => (
+              <option key={d.value} value={d.value}>
+                {d.label}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <div className="text-[11px] text-slate-500 border border-slate-200 rounded-md bg-slate-50 px-3 py-2">
+          Industry and{" "}
+          {discipline === "marketing" ? "marketing operator mix" : "tech stack"}{" "}
+          are inferred from the account name. Current quarter:{" "}
+          <span className="font-semibold text-slate-700">{currentQuarter()}</span>.
+        </div>
+
+        {error && (
+          <p className="text-xs text-red-600 border border-red-200 bg-red-50 rounded-md px-3 py-2">
+            {error}
+          </p>
+        )}
+
+        <button
+          onClick={() => void generate()}
+          disabled={!canGenerate}
+          className="w-full text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg shadow-sm"
+        >
+          {generating ? (
+            <>
+              <Loader2 className="w-4 h-4 animate-spin" /> Generating cadence…
+            </>
+          ) : (
+            <>
+              <Sparkles className="w-4 h-4" /> Generate 4-email cadence
+            </>
+          )}
+        </button>
+      </section>
+
+      {emails && emails.length > 0 && <CadenceResults emails={emails} />}
+    </>
   );
 }
 
@@ -337,26 +623,12 @@ function EmailCard({
           Email {index}
         </span>
       </div>
-      <CopyableBlock
-        label="Subject"
-        value={subject}
-        mono={false}
-        rows={1}
-      />
-      <CopyableBlock
-        label="Body"
-        value={body}
-        mono={false}
-        rows={0}
-      />
+      <CopyableBlock label="Subject" value={subject} mono={false} rows={1} />
+      <CopyableBlock label="Body" value={body} mono={false} rows={0} />
     </li>
   );
 }
 
-// Small stand-alone label + content + Copy button block. Used for
-// both the Subject and Body of an email so each can be copied
-// independently — the "different box that can be copied separately"
-// UX the user asked for.
 function CopyableBlock({
   label,
   value,

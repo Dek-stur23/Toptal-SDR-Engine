@@ -1,15 +1,26 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Activity, BarChart3, Clock, Users } from "lucide-react";
-import type { ActivityReport } from "@/lib/data/activityReport";
+import {
+  Activity,
+  ArrowDown,
+  ArrowUp,
+  BarChart3,
+  Clock,
+  Search,
+  Users,
+} from "lucide-react";
+import type { ActivityReport, PerRep } from "@/lib/data/activityReport";
 import type { RangeKey } from "@/lib/usage";
+
+type RepSortKey = "name" | "events" | "activeDays" | "lastActive";
 
 const RANGES: { key: RangeKey; label: string }[] = [
   { key: "day", label: "Today" },
   { key: "week", label: "Last 7 days" },
   { key: "month", label: "Last 30 days" },
+  { key: "all", label: "All time" },
   { key: "custom", label: "Custom" },
 ];
 
@@ -30,6 +41,46 @@ export function AdminActivity({
   const [customFrom, setCustomFrom] = useState(from);
   const [customTo, setCustomTo] = useState(to);
 
+  // Client-side filter + sort of the per-rep table (operates on the
+  // already-fetched period; changing the period re-navigates the page).
+  const [query, setQuery] = useState("");
+  const [sortKey, setSortKey] = useState<RepSortKey>("events");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+
+  const toggleSort = (key: RepSortKey) => {
+    if (sortKey === key) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortKey(key);
+      setSortDir(key === "name" ? "asc" : "desc");
+    }
+  };
+
+  const displayedReps = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    const filtered = q
+      ? report.perRep.filter(
+          (r) =>
+            r.name.toLowerCase().includes(q) ||
+            r.email.toLowerCase().includes(q)
+        )
+      : report.perRep;
+    const dir = sortDir === "asc" ? 1 : -1;
+    return [...filtered].sort((a: PerRep, b: PerRep) => {
+      switch (sortKey) {
+        case "name":
+          return a.name.localeCompare(b.name) * dir;
+        case "activeDays":
+          return (a.activeDays - b.activeDays) * dir;
+        case "lastActive":
+          return a.lastActive.localeCompare(b.lastActive) * dir;
+        case "events":
+        default:
+          return (a.events - b.events) * dir;
+      }
+    });
+  }, [report.perRep, query, sortKey, sortDir]);
+
   const go = (key: RangeKey) => {
     if (key === "custom") {
       const params = new URLSearchParams({ range: "custom" });
@@ -40,6 +91,15 @@ export function AdminActivity({
       router.push(`/admin/activity?range=${key}`);
     }
   };
+
+  const sortArrow = (key: RepSortKey) =>
+    sortKey === key ? (
+      sortDir === "asc" ? (
+        <ArrowUp className="inline h-3 w-3" />
+      ) : (
+        <ArrowDown className="inline h-3 w-3" />
+      )
+    ) : null;
 
   return (
     <div className="space-y-6">
@@ -114,30 +174,62 @@ export function AdminActivity({
 
       {report.totalEvents === 0 ? (
         <p className="rounded-md border border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500 italic">
-          No recorded activity in this period yet. Usage is tracked from when
-          the tracker went live — earlier activity won&apos;t appear.
+          No recorded activity in this period. Try a wider date range — this
+          blends live usage events with product activity (meetings, goals,
+          accounts, AI) across all users.
         </p>
       ) : (
         <>
           {/* Per-rep engagement */}
           <section className="space-y-2">
-            <h2 className="text-sm font-bold text-slate-700 uppercase tracking-wider">
-              Per-rep engagement
-            </h2>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h2 className="text-sm font-bold text-slate-700 uppercase tracking-wider">
+                Per-rep engagement
+              </h2>
+              <div className="relative">
+                <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Filter by name or email…"
+                  className="w-60 rounded-md border border-slate-300 py-1.5 pl-8 pr-3 text-xs outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+            {query && (
+              <p className="text-[11px] text-slate-500">
+                Showing {displayedReps.length} of {report.perRep.length} reps
+              </p>
+            )}
             <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead className="bg-slate-50">
                     <tr>
-                      <Th>Rep</Th>
-                      <Th className="text-right">Actions</Th>
-                      <Th className="text-right">Active days</Th>
+                      <SortTh onClick={() => toggleSort("name")}>
+                        Rep {sortArrow("name")}
+                      </SortTh>
+                      <SortTh
+                        className="text-right"
+                        onClick={() => toggleSort("events")}
+                      >
+                        Actions {sortArrow("events")}
+                      </SortTh>
+                      <SortTh
+                        className="text-right"
+                        onClick={() => toggleSort("activeDays")}
+                      >
+                        Active days {sortArrow("activeDays")}
+                      </SortTh>
                       <Th>Tools used</Th>
-                      <Th>Last active</Th>
+                      <SortTh onClick={() => toggleSort("lastActive")}>
+                        Last active {sortArrow("lastActive")}
+                      </SortTh>
                     </tr>
                   </thead>
                   <tbody>
-                    {report.perRep.map((r) => (
+                    {displayedReps.map((r) => (
                       <tr
                         key={r.userId}
                         className="border-t border-slate-100 hover:bg-slate-50"
@@ -274,6 +366,30 @@ function Th({
       className={`px-3 py-2 text-left font-semibold text-slate-600 text-xs uppercase tracking-wider whitespace-nowrap ${className}`}
     >
       {children}
+    </th>
+  );
+}
+
+// A sortable column header — clicking toggles the sort in the parent.
+function SortTh({
+  children,
+  onClick,
+  className = "",
+}: {
+  children: React.ReactNode;
+  onClick: () => void;
+  className?: string;
+}) {
+  return (
+    <th
+      className={`px-3 py-2 font-semibold text-slate-600 text-xs uppercase tracking-wider whitespace-nowrap ${className}`}
+    >
+      <button
+        onClick={onClick}
+        className="inline-flex items-center gap-1 hover:text-slate-900"
+      >
+        {children}
+      </button>
     </th>
   );
 }

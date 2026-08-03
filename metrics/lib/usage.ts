@@ -29,7 +29,7 @@ export function toolLabelForPath(pathname: string): string | null {
 
 // ---------- Date-range presets for the usage dashboard ----------
 
-export type RangeKey = "day" | "week" | "month" | "custom";
+export type RangeKey = "day" | "week" | "month" | "all" | "custom";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -68,6 +68,15 @@ export function resolveRange(
       fromISO: start.toISOString(),
       toISO: now.toISOString(),
       label: "Last 30 days",
+    };
+  }
+
+  if (range === "all") {
+    // Far enough back to cover any real history in the project.
+    return {
+      fromISO: new Date("2000-01-01T00:00:00Z").toISOString(),
+      toISO: now.toISOString(),
+      label: "All time",
     };
   }
 

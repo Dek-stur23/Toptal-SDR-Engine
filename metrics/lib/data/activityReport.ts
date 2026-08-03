@@ -46,6 +46,14 @@ interface Activity {
   at: string; // ISO
 }
 
+// Internal admin navigation is not "platform usage" — an admin loading
+// the Usage or Invites pages shouldn't inflate the report or show up as a
+// top tool. Events whose tool label is an Admin surface are dropped from
+// every rollup (per-rep, per-tool, totals, active users).
+function isInternalTool(tool: string): boolean {
+  return tool === "Admin" || tool.startsWith("Admin:");
+}
+
 // Product tables that carry a per-user timestamp, mapped to the tool
 // label their activity should count toward. (meeting_updates /
 // opportunity_updates are omitted — their parent rows already count, and
@@ -140,7 +148,7 @@ export async function buildActivityReport(
 
   const [events, derived] = await Promise.all([eventsPromise, derivedPromise]);
   const all: Activity[] = [...events, ...derived].filter(
-    (a) => a.userId && a.at
+    (a) => a.userId && a.at && !isInternalTool(a.tool)
   );
 
   // Resolve display names (profiles) and emails (auth admin API) so

@@ -10,6 +10,7 @@ import {
   CalendarClock,
   ChevronDown,
   FileText,
+  Mail,
   MoreHorizontal,
   Settings as SettingsIcon,
   ShieldCheck,
@@ -41,6 +42,30 @@ export const ADDITIONAL_TOOLS: {
   },
 ];
 
+// Admin-only pages, grouped under a single "Admin" dropdown so admin
+// surfaces stay nested together rather than sprawling across the top nav.
+// The whole menu only renders for admins (see AppShell), and every target
+// page independently re-checks is_admin server-side.
+export const ADMIN_LINKS: {
+  href: string;
+  label: string;
+  icon: LucideIcon;
+  description?: string;
+}[] = [
+  {
+    href: "/admin/activity",
+    label: "Usage",
+    icon: Activity,
+    description: "Platform usage — per-rep engagement and per-tool use",
+  },
+  {
+    href: "/admin/invites",
+    label: "Invites",
+    icon: Mail,
+    description: "Manage who's allowed to sign up",
+  },
+];
+
 // Shell rendered by the protected layout. Header with view tabs and a
 // sign-out form; children fill the rest. The current-user profile is
 // passed in from the server so the header knows the display name and
@@ -61,18 +86,6 @@ export function AppShell({
     { href: "/meetings", label: "Meetings Tracker", icon: CalendarClock },
     { href: "/accounts", label: "Accounts", icon: Building2 },
   ];
-  if (profile?.isAdmin) {
-    primaryTabs.push({
-      href: "/admin/activity",
-      label: "Usage",
-      icon: Activity,
-    });
-    primaryTabs.push({
-      href: "/admin/invites",
-      label: "Admin",
-      icon: ShieldCheck,
-    });
-  }
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
@@ -105,6 +118,7 @@ export function AppShell({
                 );
               })}
               <AdditionalToolsDropdown pathname={pathname} />
+              {profile?.isAdmin && <AdminDropdown pathname={pathname} />}
             </nav>
           </div>
 
@@ -232,6 +246,95 @@ function AdditionalToolsDropdown({ pathname }: { pathname: string }) {
               })}
             </ul>
           )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Admin dropdown — nests every admin-only page (Usage, Invites) under a
+// single "Admin" menu. AppShell only renders this for admins, and each
+// target page re-checks is_admin server-side, so this is purely a
+// convenience grouping, not the access control.
+function AdminDropdown({ pathname }: { pathname: string }) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (!rootRef.current) return;
+      if (!rootRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  // Close the dropdown when the user navigates to one of its items.
+  useEffect(() => {
+    setOpen(false);
+  }, [pathname]);
+
+  const onAdmin = pathname === "/admin" || pathname.startsWith("/admin/");
+
+  return (
+    <div className="relative" ref={rootRef}>
+      <button
+        onClick={() => setOpen((v) => !v)}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        className={clsx(
+          "flex items-center gap-1.5 rounded px-3 py-1.5 text-sm",
+          onAdmin
+            ? "bg-slate-900 text-white"
+            : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+        )}
+      >
+        <ShieldCheck className="h-4 w-4" />
+        Admin
+        <ChevronDown
+          className={clsx(
+            "h-3.5 w-3.5 transition-transform",
+            open && "rotate-180"
+          )}
+        />
+      </button>
+      {open && (
+        <div
+          role="menu"
+          className="absolute left-0 top-full z-30 mt-1 w-64 overflow-hidden rounded-md border border-slate-200 bg-white shadow-lg"
+        >
+          <ul className="py-1">
+            {ADMIN_LINKS.map((link) => {
+              const active =
+                pathname === link.href || pathname.startsWith(link.href + "/");
+              const Icon = link.icon;
+              return (
+                <li key={link.href}>
+                  <Link
+                    href={link.href}
+                    role="menuitem"
+                    className={clsx(
+                      "flex items-start gap-2 px-3 py-2 text-sm",
+                      active
+                        ? "bg-slate-100 text-slate-900"
+                        : "text-slate-700 hover:bg-slate-50"
+                    )}
+                  >
+                    <Icon className="mt-0.5 h-4 w-4 shrink-0 text-slate-500" />
+                    <div className="min-w-0">
+                      <div className="font-medium">{link.label}</div>
+                      {link.description && (
+                        <div className="text-[11px] text-slate-500">
+                          {link.description}
+                        </div>
+                      )}
+                    </div>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
         </div>
       )}
     </div>

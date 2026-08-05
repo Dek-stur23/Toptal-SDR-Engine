@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import {
+  AlertTriangle,
   Building2,
   CalendarClock,
   Check,
@@ -9,10 +10,21 @@ import {
   ExternalLink,
   Loader2,
   Mail,
+  MessageSquarePlus,
   RefreshCw,
   Sparkles,
+  X,
 } from "lucide-react";
-import type { Meeting, ProspectResponse } from "@/lib/types";
+import type {
+  Meeting,
+  Opportunity,
+  OpportunityUpdate,
+  ProspectResponse,
+} from "@/lib/types";
+import {
+  OPPORTUNITY_STATUS_BADGE,
+  OPPORTUNITY_STATUS_LABEL,
+} from "@/components/OpportunitySection";
 import type {
   MeetingEmailInviteStatus,
   MeetingEmailResult,
@@ -54,6 +66,64 @@ const BUCKET_BADGE: Record<Bucket, string> = {
   declined: "bg-red-50 text-red-700 border-red-200",
   "not-accepted": "bg-amber-50 text-amber-700 border-amber-200",
 };
+
+// ---- Opportunity staleness model ----------------------------------
+//
+// An open opportunity is "stale" when nothing has touched it recently.
+// The 48h cutoff matches the app-wide isOverdue() definition; we tier it
+// so a rep can triage by how cold a deal has gone.
+//
+// Crucially, "last touched" = the later of the opportunity's own
+// updated_at (bumped on field/status edits) and its most recent update
+// note's logged_at. Logging a note does NOT bump updated_at, so relying
+// on updated_at alone would keep an opp flagged stale right after a rep
+// logged activity against it — a false alarm. Folding the update log in
+// means logging a note clears the flag, as you'd expect.
+
+const COOLING_MS = 2 * 24 * 60 * 60 * 1000; // 48h
+const COLD_MS = 5 * 24 * 60 * 60 * 1000; // 5 days
+
+type StaleTier = "cooling" | "cold";
+
+function lastActivityMs(opp: Opportunity, updates: OpportunityUpdate[]): number {
+  let t = new Date(opp.updatedAt).getTime();
+  if (!Number.isFinite(t)) t = 0;
+  for (const u of updates) {
+    const ut = new Date(u.loggedAt).getTime();
+    if (Number.isFinite(ut) && ut > t) t = ut;
+  }
+  return t;
+}
+
+function staleTier(idleMs: number): StaleTier | null {
+  if (idleMs > COLD_MS) return "cold";
+  if (idleMs > COOLING_MS) return "cooling";
+  return null;
+}
+
+const STALE_TIER_LABEL: Record<StaleTier, string> = {
+  cooling: "Cooling",
+  cold: "Cold",
+};
+
+const STALE_TIER_BADGE: Record<StaleTier, string> = {
+  cooling: "bg-amber-50 text-amber-700 border-amber-200",
+  cold: "bg-red-50 text-red-700 border-red-200",
+};
+
+const STALE_TIER_ACCENT: Record<StaleTier, string> = {
+  cooling: "border-l-amber-400",
+  cold: "border-l-red-500",
+};
+
+// Coarse "3 days ago" / "5 hours ago" for the last-touched label.
+function agoLabel(sinceMs: number): string {
+  const hrs = Math.floor(sinceMs / (60 * 60 * 1000));
+  if (hrs < 1) return "under an hour ago";
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  return `${days} day${days === 1 ? "" : "s"} ago`;
+}
 
 // ---- Time helpers -------------------------------------------------
 
@@ -116,14 +186,25 @@ export function MeetingRadarView({
   meetings,
   accountNameById,
   senderName,
+  opportunities,
+  oppUpdatesByOppId,
   onSetProspectResponse,
+  onOpenMeeting,
+  onAddOpportunityUpdate,
 }: {
   meetings: Meeting[];
   accountNameById: Record<string, string>;
   senderName: string | null;
+  opportunities: Opportunity[];
+  oppUpdatesByOppId: Record<string, OpportunityUpdate[]>;
   onSetProspectResponse: (
     id: string,
     response: ProspectResponse
+  ) => void | Promise<void>;
+  onOpenMeeting: (meetingId: string) => void;
+  onAddOpportunityUpdate: (
+    opportunityId: string,
+    text: string
   ) => void | Promise<void>;
 }) {
   const [windowKey, setWindowKey] = useState<WindowKey>("7");
@@ -132,6 +213,41 @@ export function MeetingRadarView({
   // A single "now" captured on mount keeps the relative labels and the
   // window filter stable across re-renders within a session.
   const now = useMemo(() => new Date(), []);
+
+  // Stale opportunities: open opps whose last activity (edit OR logged
+  // note) crossed the 48h line, most-stale first. Parent meeting is
+  // resolved against the (already filtered) meetings list, so the
+  // FilterBar narrows opps the same way it narrows the meeting list.
+  const staleOpps = useMemo(() => {
+    const rows: {
+      opp: Opportunity;
+      meeting: Meeting;
+      tier: StaleTier;
+      idleMs: number;
+    }[] = [];
+    for (const opp of opportunities) {
+      if (opp.status !== "open") continue;
+      const updates = oppUpdatesByOppId[opp.id] ?? [];
+      const idleMs = now.getTime() - lastActivityMs(opp, updates);
+      const tier = staleTier(idleMs);
+      if (!tier) continue;
+      const meeting = meetings.find((m) => m.id === opp.meetingId);
+      if (!meeting) continue;
+      rows.push({ opp, meeting, tier, idleMs });
+    }
+    rows.sort((a, b) => b.idleMs - a.idleMs); // stalest first
+    return rows;
+  }, [opportunities, oppUpdatesByOppId, meetings, now]);
+
+  const staleCounts = useMemo(() => {
+    let cooling = 0;
+    let cold = 0;
+    for (const r of staleOpps) {
+      if (r.tier === "cold") cold += 1;
+      else cooling += 1;
+    }
+    return { cooling, cold, total: staleOpps.length };
+  }, [staleOpps]);
 
   // Upcoming = still-booked meetings with a scheduled time from the
   // start of today forward, within the selected window. Sorted
@@ -244,84 +360,135 @@ export function MeetingRadarView({
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between gap-4">
-        <p className="text-sm text-slate-500">
-          Upcoming booked meetings, who&apos;s accepted their invite, and a
-          ready-to-send email for each prospect.
-        </p>
-        <div
-          className="inline-flex rounded-lg border border-slate-200 bg-white p-0.5 text-xs font-semibold shadow-sm"
-          role="tablist"
-          aria-label="Time window"
-        >
-          {WINDOWS.map((w) => (
-            <button
-              key={w.key}
-              onClick={() => setWindowKey(w.key)}
-              className={`rounded-md px-2.5 py-1.5 transition-colors ${
-                windowKey === w.key
-                  ? "bg-slate-900 text-white"
-                  : "text-slate-600 hover:text-slate-900"
-              }`}
-              aria-pressed={windowKey === w.key}
-            >
-              {w.label}
-            </button>
-          ))}
+    <div className="space-y-8">
+      {/* ---- Section A: Opportunities needing a touch ---- */}
+      <section className="space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-slate-700">
+            <AlertTriangle className="h-4 w-4 text-amber-500" />
+            Needs a touch ({staleCounts.total})
+          </h2>
+          {staleCounts.total > 0 && (
+            <div className="flex items-center gap-2 text-[11px] font-semibold">
+              <span className="rounded border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-amber-700">
+                {staleCounts.cooling} cooling
+              </span>
+              <span className="rounded border border-red-200 bg-red-50 px-1.5 py-0.5 text-red-700">
+                {staleCounts.cold} cold
+              </span>
+            </div>
+          )}
         </div>
-      </div>
-
-      {/* Radar summary */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <SummaryTile label="Upcoming" value={counts.total} tone="slate" />
-        <SummaryTile label="Accepted" value={counts.accepted} tone="emerald" />
-        <SummaryTile
-          label="Not yet accepted"
-          value={counts.notAccepted}
-          tone="amber"
-        />
-        <SummaryTile label="Declined" value={counts.declined} tone="red" />
-      </div>
-
-      {nextMeeting && (
-        <div className="flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-800">
-          <CalendarClock className="h-4 w-4 shrink-0" />
-          <span>
-            Next up:{" "}
-            <span className="font-semibold">
-              {`${nextMeeting.firstName} ${nextMeeting.lastName}`.trim() ||
-                "(unnamed prospect)"}
-            </span>{" "}
-            — {relativeWhen(nextMeeting.scheduledFor, now)},{" "}
-            {fullWhen(nextMeeting.scheduledFor)}
-          </span>
-        </div>
-      )}
-
-      {upcoming.length === 0 ? (
-        <p className="rounded-lg border border-dashed border-slate-300 bg-white px-4 py-8 text-center text-sm italic text-slate-500">
-          No upcoming booked meetings in this window. Book meetings on the
-          Meetings Tracker and they&apos;ll appear here.
+        <p className="text-xs text-slate-500">
+          Open opportunities with no edit or logged note in over 48 hours —
+          stalest first. Log an update to clear one from the list.
         </p>
-      ) : (
-        <ul className="space-y-3">
-          {upcoming.map((m) => (
-            <RadarCard
-              key={m.id}
-              meeting={m}
-              accountName={
-                m.accountId ? accountNameById[m.accountId] ?? null : null
-              }
-              relative={relativeWhen(m.scheduledFor, now)}
-              absolute={fullWhen(m.scheduledFor)}
-              email={emailById[m.id] ?? null}
-              onSetBucket={(b) => setInviteBucket(m.id, b)}
-              onGenerate={() => generateEmail(m)}
-            />
-          ))}
-        </ul>
-      )}
+        {staleOpps.length === 0 ? (
+          <p className="rounded-lg border border-dashed border-slate-300 bg-white px-4 py-6 text-center text-sm italic text-slate-500">
+            Nothing going cold — every open opportunity has been touched in the
+            last 48 hours. Nice.
+          </p>
+        ) : (
+          <ul className="space-y-2">
+            {staleOpps.map(({ opp, meeting, tier, idleMs }) => (
+              <StaleOppCard
+                key={opp.id}
+                opp={opp}
+                meeting={meeting}
+                accountName={
+                  meeting.accountId
+                    ? accountNameById[meeting.accountId] ?? null
+                    : null
+                }
+                tier={tier}
+                idleLabel={agoLabel(idleMs)}
+                onOpen={() => onOpenMeeting(meeting.id)}
+                onLogUpdate={(text) => onAddOpportunityUpdate(opp.id, text)}
+              />
+            ))}
+          </ul>
+        )}
+      </section>
+
+      {/* ---- Section B: Upcoming meetings ---- */}
+      <section className="space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-slate-700">
+            <CalendarClock className="h-4 w-4 text-blue-600" />
+            Upcoming meetings ({counts.total})
+          </h2>
+          <div
+            className="inline-flex rounded-lg border border-slate-200 bg-white p-0.5 text-xs font-semibold shadow-sm"
+            role="tablist"
+            aria-label="Time window"
+          >
+            {WINDOWS.map((w) => (
+              <button
+                key={w.key}
+                onClick={() => setWindowKey(w.key)}
+                className={`rounded-md px-2.5 py-1.5 transition-colors ${
+                  windowKey === w.key
+                    ? "bg-slate-900 text-white"
+                    : "text-slate-600 hover:text-slate-900"
+                }`}
+                aria-pressed={windowKey === w.key}
+              >
+                {w.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <SummaryTile label="Upcoming" value={counts.total} tone="slate" />
+          <SummaryTile label="Accepted" value={counts.accepted} tone="emerald" />
+          <SummaryTile
+            label="Not yet accepted"
+            value={counts.notAccepted}
+            tone="amber"
+          />
+          <SummaryTile label="Declined" value={counts.declined} tone="red" />
+        </div>
+
+        {nextMeeting && (
+          <div className="flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-800">
+            <CalendarClock className="h-4 w-4 shrink-0" />
+            <span>
+              Next up:{" "}
+              <span className="font-semibold">
+                {`${nextMeeting.firstName} ${nextMeeting.lastName}`.trim() ||
+                  "(unnamed prospect)"}
+              </span>{" "}
+              — {relativeWhen(nextMeeting.scheduledFor, now)},{" "}
+              {fullWhen(nextMeeting.scheduledFor)}
+            </span>
+          </div>
+        )}
+
+        {upcoming.length === 0 ? (
+          <p className="rounded-lg border border-dashed border-slate-300 bg-white px-4 py-8 text-center text-sm italic text-slate-500">
+            No upcoming booked meetings in this window. Book meetings on the
+            Meetings Tracker and they&apos;ll appear here.
+          </p>
+        ) : (
+          <ul className="space-y-3">
+            {upcoming.map((m) => (
+              <RadarCard
+                key={m.id}
+                meeting={m}
+                accountName={
+                  m.accountId ? accountNameById[m.accountId] ?? null : null
+                }
+                relative={relativeWhen(m.scheduledFor, now)}
+                absolute={fullWhen(m.scheduledFor)}
+                email={emailById[m.id] ?? null}
+                onSetBucket={(b) => setInviteBucket(m.id, b)}
+                onGenerate={() => generateEmail(m)}
+              />
+            ))}
+          </ul>
+        )}
+      </section>
     </div>
   );
 }
@@ -348,6 +515,149 @@ function SummaryTile({
         {label}
       </div>
     </div>
+  );
+}
+
+// ---- Stale opportunity card ---------------------------------------
+
+function StaleOppCard({
+  opp,
+  meeting,
+  accountName,
+  tier,
+  idleLabel,
+  onOpen,
+  onLogUpdate,
+}: {
+  opp: Opportunity;
+  meeting: Meeting;
+  accountName: string | null;
+  tier: StaleTier;
+  idleLabel: string;
+  onOpen: () => void;
+  onLogUpdate: (text: string) => void | Promise<void>;
+}) {
+  const [logging, setLogging] = useState(false);
+  const [text, setText] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const prospect =
+    `${meeting.firstName} ${meeting.lastName}`.trim() || "(unnamed contact)";
+
+  const save = async () => {
+    const clean = text.trim();
+    if (!clean || saving) return;
+    setSaving(true);
+    try {
+      await onLogUpdate(clean);
+      // The parent's refreshed update log drops this card from the stale
+      // list on the next render, so there's no local success state to keep.
+      setText("");
+      setLogging(false);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <li
+      className={`space-y-2 rounded-lg border border-l-4 border-slate-200 bg-white p-3 shadow-sm ${STALE_TIER_ACCENT[tier]}`}
+    >
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="truncate text-sm font-semibold text-slate-900">
+              {opp.title || "Untitled opportunity"}
+            </span>
+            <span
+              className={`rounded border px-1.5 py-0.5 text-[10px] font-semibold ${STALE_TIER_BADGE[tier]}`}
+            >
+              {STALE_TIER_LABEL[tier]} · {idleLabel}
+            </span>
+            <span
+              className={`rounded border px-1.5 py-0.5 text-[10px] font-semibold ${OPPORTUNITY_STATUS_BADGE[opp.status]}`}
+            >
+              {OPPORTUNITY_STATUS_LABEL[opp.status]}
+            </span>
+          </div>
+          <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+            <span className="truncate font-medium text-slate-700">
+              {prospect}
+            </span>
+            {accountName && (
+              <span className="flex items-center gap-1 rounded border border-blue-200 bg-blue-50 px-1.5 py-0.5 text-[10px] font-semibold text-blue-700">
+                <Building2 className="h-2.5 w-2.5" />
+                {accountName}
+              </span>
+            )}
+            {opp.nextStepOwner && (
+              <span className="rounded border border-indigo-200 bg-indigo-50 px-1.5 py-0.5 text-[10px] font-semibold text-indigo-700">
+                Next step: {opp.nextStepOwner}
+              </span>
+            )}
+          </div>
+          {opp.nextStepText && (
+            <p className="mt-1.5 text-xs text-slate-600">
+              <span className="font-semibold text-slate-500">Next: </span>
+              {opp.nextStepText}
+            </p>
+          )}
+        </div>
+        <div className="flex shrink-0 items-center gap-1.5">
+          <button
+            onClick={() => setLogging((v) => !v)}
+            className="flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-semibold text-slate-600 hover:bg-slate-50"
+          >
+            <MessageSquarePlus className="h-3.5 w-3.5" /> Log update
+          </button>
+          <button
+            onClick={onOpen}
+            className="flex items-center gap-1 rounded-md bg-slate-900 px-2 py-1 text-[11px] font-semibold text-white hover:bg-slate-800"
+          >
+            <ExternalLink className="h-3.5 w-3.5" /> Open
+          </button>
+        </div>
+      </div>
+
+      {logging && (
+        <div className="rounded-md border border-slate-200 bg-slate-50 p-2">
+          <textarea
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={(e) => {
+              if ((e.metaKey || e.ctrlKey) && e.key === "Enter") void save();
+            }}
+            rows={2}
+            autoFocus
+            placeholder="What moved? e.g. Left voicemail, emailed pricing, waiting on ESE…"
+            className="w-full resize-none rounded border border-slate-200 px-2 py-1.5 text-xs text-slate-800 focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-400"
+          />
+          <div className="mt-1.5 flex items-center justify-end gap-1.5">
+            <button
+              onClick={() => {
+                setLogging(false);
+                setText("");
+              }}
+              className="flex items-center gap-1 rounded px-2 py-1 text-[11px] font-semibold text-slate-500 hover:text-slate-800"
+            >
+              <X className="h-3 w-3" /> Cancel
+            </button>
+            <button
+              onClick={() => void save()}
+              disabled={!text.trim() || saving}
+              className="flex items-center gap-1 rounded-md bg-blue-600 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
+            >
+              {saving ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <Check className="h-3 w-3" />
+              )}
+              Save update
+            </button>
+          </div>
+        </div>
+      )}
+    </li>
   );
 }
 

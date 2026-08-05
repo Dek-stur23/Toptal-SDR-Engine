@@ -175,7 +175,8 @@ export interface Profile {
 export type AiEndpoint =
   | "autofill"
   | "opportunity-next-step"
-  | "meeting-email";
+  | "meeting-email"
+  | "import-mapping";
 
 export interface AiUsageEntry {
   id: string;

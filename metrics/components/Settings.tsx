@@ -4,6 +4,7 @@ import { useState } from "react";
 import { UserRound } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { updateMyProfile } from "@/lib/data/profile";
+import { CsvMeetingImport } from "@/components/CsvMeetingImport";
 import type { Profile } from "@/lib/types";
 
 // Turns any thrown value into a useful string. Supabase / Postgrest
@@ -35,6 +36,7 @@ export function Settings({ profile, email }: { profile: Profile; email: string }
     <div className="space-y-8">
       <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Settings</h1>
       <DisplayNameSection profile={profile} />
+      <CsvMeetingImport />
       <AccountInfoSection profile={profile} email={email} />
     </div>
   );

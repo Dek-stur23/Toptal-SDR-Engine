@@ -207,12 +207,14 @@ Target meeting fields (map a source column header to each where one exists; use 
 - prospectResponseColumn: a column indicating the invite response (accepted / declined / no-show / etc.), if any.
 - eseColumn: the account executive / ESE / rep the meeting is handed to, if any.
 - linkedinUrlColumn: a LinkedIn URL column, if any.
+- opportunityColumns: any columns that flag an opportunity as a checkbox / boolean — headers like "Opportunity", "Rev Opp", "Revenue Opportunity", "STA Opp", "STA Opportunity". When such a column is positive (TRUE / yes / checked / x) for a row, an opportunity is auto-created for that meeting. Only include boolean/flag columns here — NOT free-text stage columns (e.g. "STA Stage"). Can be empty.
 - notesColumns: any columns worth preserving as free-text notes (comments, next steps, source, etc.). Can be several; can be empty.
 
 Status vocabulary — map every distinct value of statusColumn to exactly one of:
 - "booked": upcoming / scheduled / confirmed / set / not yet happened.
 - "held": completed / met / showed / done.
-- "dead-end": cancelled / no-show / dead / lost / disqualified / rejected — a meeting that will not progress.
+- "dead-end": cancelled / dead / lost / disqualified / rejected — a meeting that will not progress.
+- "dead-end-if-past": statuses that only make sense once the meeting time has passed and imply it won't progress — most importantly "no-show", and "cancelled" when it reads that way. The client routes these to dead-end when the row's meeting date is in the past, or booked when the date is still in the future.
 - "skip": a value that does NOT represent a real meeting (blank, header junk, "N/A", a total row). Rows with a skipped status are dropped.
 
 Prospect-response vocabulary (only if prospectResponseColumn is set) — map each distinct value to one of: "accepted", "declined", "no-response", "no-show", "rescheduled", "still-scheduling", or "skip" (ignore this value).
@@ -236,6 +238,7 @@ export interface ImportColumnMapping {
   prospectResponseColumn: string | null;
   eseColumn: string | null;
   linkedinUrlColumn: string | null;
+  opportunityColumns: string[];
   notesColumns: string[];
 }
 
@@ -274,6 +277,10 @@ export const IMPORT_MAPPING_TOOL_SCHEMA = {
         prospectResponseColumn: NULLABLE_STR,
         eseColumn: NULLABLE_STR,
         linkedinUrlColumn: NULLABLE_STR,
+        opportunityColumns: {
+          type: "array" as const,
+          items: { type: "string" as const },
+        },
         notesColumns: { type: "array" as const, items: { type: "string" as const } },
       },
       required: [
@@ -289,6 +296,7 @@ export const IMPORT_MAPPING_TOOL_SCHEMA = {
         "prospectResponseColumn",
         "eseColumn",
         "linkedinUrlColumn",
+        "opportunityColumns",
         "notesColumns",
       ],
     },
@@ -298,7 +306,10 @@ export const IMPORT_MAPPING_TOOL_SCHEMA = {
         type: "object" as const,
         properties: {
           from: { type: "string" as const },
-          to: { type: "string" as const, enum: ["booked", "held", "dead-end", "skip"] },
+          to: {
+            type: "string" as const,
+            enum: ["booked", "held", "dead-end", "dead-end-if-past", "skip"],
+          },
         },
         required: ["from", "to"],
       },

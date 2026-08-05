@@ -95,7 +95,14 @@ export function splitFullName(full: string): { first: string; last: string } {
 
 // ---- The editable, normalized plan --------------------------------
 
-export type StatusTarget = MeetingStatus | "skip";
+// "dead-end-if-past" is a date-conditional target: dead-end when the
+// meeting date is in the past, booked when it's still upcoming. Used for
+// statuses like "no-show" that only imply a dead deal once the meeting
+// time has actually passed.
+export type StatusTarget =
+  | MeetingStatus
+  | "dead-end-if-past"
+  | "skip";
 export type ResponseTarget = ProspectResponse | "skip";
 
 // A resolved plan the UI can edit and applyImportPlan can consume. Value
@@ -112,7 +119,31 @@ export interface ImportPlan {
   defaultStatus: MeetingStatus;
 }
 
-const STATUS_TARGETS: StatusTarget[] = ["booked", "held", "dead-end", "skip"];
+const STATUS_TARGETS: StatusTarget[] = [
+  "booked",
+  "held",
+  "dead-end",
+  "dead-end-if-past",
+  "skip",
+];
+
+// Values that read as a positive/checked flag in an opportunity column.
+const TRUTHY_FLAGS = new Set([
+  "true",
+  "yes",
+  "y",
+  "x",
+  "1",
+  "✓",
+  "✔",
+  "checked",
+  "done",
+  "won",
+]);
+
+export function isTruthyFlag(v: string): boolean {
+  return TRUTHY_FLAGS.has(v.trim().toLowerCase());
+}
 const RESPONSE_TARGETS: ResponseTarget[] = [
   "accepted",
   "declined",
@@ -178,6 +209,9 @@ export interface TranslatedMeeting {
   heldAt: string | null;
   deadEndedAt: string | null;
   notes: string;
+  // True when an opportunity-flag column was positive for this row — the
+  // importer auto-creates an open opportunity linked to this meeting.
+  createOpportunity: boolean;
   issues: string[]; // soft warnings — row still imports
 }
 
@@ -191,8 +225,10 @@ export interface TranslationResult {
     held: number;
     deadEnd: number;
     skipped: number;
+    emptyRows: number;
     missingDate: number;
     missingName: number;
+    opportunities: number;
   };
   companyNames: string[]; // distinct, non-empty — seed the Accounts list
   eseNames: string[]; // distinct, non-empty — seed the ESE list
@@ -211,35 +247,37 @@ function cellByHeader(
 
 export function applyImportPlan(
   parsed: ParsedCsv,
-  plan: ImportPlan
+  plan: ImportPlan,
+  now: Date = new Date()
 ): TranslationResult {
   const { headers } = parsed;
   const c = plan.columns;
+  const nowMs = now.getTime();
   const meetings: TranslatedMeeting[] = [];
   let skipped = 0;
+  let emptyRows = 0;
   let booked = 0;
   let held = 0;
   let deadEnd = 0;
   let missingDate = 0;
   let missingName = 0;
+  let opportunities = 0;
   const companies = new Map<string, string>(); // lower -> display
   const eses = new Map<string, string>(); // lower -> display
 
   parsed.rows.forEach((row, rowIndex) => {
-    // ---- Status ----
+    // ---- Status (resolved after dates for the date-conditional case) ----
     const statusRaw = cellByHeader(headers, row, c.statusColumn);
-    let status: MeetingStatus;
-    if (!c.statusColumn) {
-      status = plan.defaultStatus;
-    } else if (!statusRaw) {
-      status = plan.defaultStatus;
+    let statusTarget: StatusTarget;
+    if (!c.statusColumn || !statusRaw) {
+      statusTarget = plan.defaultStatus;
     } else {
       const mapped = plan.statusMap[statusRaw.toLowerCase()];
       if (mapped === "skip") {
         skipped += 1;
         return;
       }
-      status = mapped ?? plan.defaultStatus;
+      statusTarget = mapped ?? plan.defaultStatus;
     }
 
     // ---- Name ----
@@ -279,10 +317,43 @@ export function applyImportPlan(
     const scheduledFor = meetingDate ?? heldDate ?? bookedDate;
     // created_at = when it was booked; fall back to the meeting date.
     const createdAt = bookedDate ?? meetingDate ?? heldDate;
+
+    // Resolve the date-conditional target now that we know the date: a
+    // no-show / cancelled meeting whose date has passed is a dead end;
+    // one still in the future is simply booked.
+    // statusTarget is booked | held | dead-end | dead-end-if-past here
+    // ("skip" already returned above).
+    let status: MeetingStatus;
+    if (statusTarget === "dead-end-if-past") {
+      const ref = meetingDate ?? heldDate ?? bookedDate;
+      status = ref && new Date(ref).getTime() < nowMs ? "dead-end" : "booked";
+    } else {
+      status = statusTarget;
+    }
+
     const heldAt =
       status === "held" ? heldDate ?? meetingDate ?? bookedDate : null;
     const deadEndedAt =
       status === "dead-end" ? meetingDate ?? heldDate ?? bookedDate : null;
+
+    // ---- Drop blank / template rows ----
+    // Exported sheets routinely carry hundreds of empty rows, and some
+    // aren't literally empty — leftover data-validation cells leave stray
+    // values (e.g. "FALSE") in unrelated columns, so the structural CSV
+    // parser can't drop them. A row with no name, no company, and no
+    // parseable date isn't a meeting; ignore it rather than importing an
+    // empty placeholder. Notes-only content doesn't count as identity.
+    if (
+      !first &&
+      !last &&
+      !companyName &&
+      !meetingDate &&
+      !heldDate &&
+      !bookedDate
+    ) {
+      emptyRows += 1;
+      return;
+    }
 
     // ---- Prospect response ----
     let prospectResponse: ProspectResponse | null = null;
@@ -293,6 +364,18 @@ export function applyImportPlan(
         if (mapped && mapped !== "skip") prospectResponse = mapped;
       }
     }
+
+    // ---- Opportunity flag ----
+    // Any positive opportunity/rev-opp/STA-opp column triggers an
+    // auto-created opportunity for this meeting.
+    let createOpportunity = false;
+    for (const h of c.opportunityColumns) {
+      if (isTruthyFlag(cellByHeader(headers, row, h))) {
+        createOpportunity = true;
+        break;
+      }
+    }
+    if (createOpportunity) opportunities += 1;
 
     // ---- Notes (fold in every preserved column, labeled) ----
     const noteParts: string[] = [];
@@ -341,6 +424,7 @@ export function applyImportPlan(
       heldAt,
       deadEndedAt,
       notes,
+      createOpportunity,
       issues,
     });
   });
@@ -355,8 +439,10 @@ export function applyImportPlan(
       held,
       deadEnd,
       skipped,
+      emptyRows,
       missingDate,
       missingName,
+      opportunities,
     },
     companyNames: Array.from(companies.values()),
     eseNames: Array.from(eses.values()),

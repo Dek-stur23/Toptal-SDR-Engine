@@ -38,6 +38,43 @@ export async function createEse(
   return toEse(data as Row);
 }
 
+// Bulk insert with case-insensitive dedup against existing rows and
+// within the input — mirrors bulkCreateAccounts. Used by the CSV
+// importer so an ESE column populates the ESE list, not just each
+// meeting's ese field. Returns only the rows created.
+export async function bulkCreateEses(
+  supabase: SupabaseClient,
+  names: string[]
+): Promise<{ created: Ese[]; skipped: string[] }> {
+  const cleaned = Array.from(
+    new Map(
+      names
+        .map((n) => n.trim())
+        .filter(Boolean)
+        .map((n) => [n.toLowerCase(), n])
+    ).values()
+  );
+  if (cleaned.length === 0) return { created: [], skipped: [] };
+
+  const existing = await listEses(supabase);
+  const existingLower = new Set(existing.map((e) => e.name.toLowerCase()));
+
+  const fresh: string[] = [];
+  const skipped: string[] = [];
+  for (const n of cleaned) {
+    if (existingLower.has(n.toLowerCase())) skipped.push(n);
+    else fresh.push(n);
+  }
+  if (fresh.length === 0) return { created: [], skipped };
+
+  const { data, error } = await supabase
+    .from("eses")
+    .insert(fresh.map((name) => ({ name })))
+    .select("id, name, created_at");
+  if (error) throw error;
+  return { created: (data as Row[]).map(toEse), skipped };
+}
+
 export async function deleteEse(
   supabase: SupabaseClient,
   id: string

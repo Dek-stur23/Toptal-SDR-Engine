@@ -202,6 +202,71 @@ export async function quickLogMeeting(
   return toMeeting(data as MeetingRow);
 }
 
+// Bulk insert for the CSV importer. Unlike createMeeting, this lets the
+// caller set created_at / held_at / dead_ended_at directly so an
+// imported history lands on its real dates (booked/held counts then show
+// up in the right periods on Goals & Pacing). Inserts in chunks to stay
+// well under any statement/row limits and returns the number of rows
+// written.
+export interface BulkMeetingInsert {
+  firstName: string;
+  lastName: string;
+  title: string;
+  linkedinUrl: string;
+  salesloftUrl: string;
+  accountId: string | null;
+  scheduledFor: string | null;
+  notes: string;
+  status: MeetingStatus;
+  prospectResponse: ProspectResponse | null;
+  ese: string | null;
+  createdAt: string | null;
+  heldAt: string | null;
+  deadEndedAt: string | null;
+}
+
+export async function bulkCreateMeetings(
+  supabase: SupabaseClient,
+  rows: BulkMeetingInsert[]
+): Promise<number> {
+  if (rows.length === 0) return 0;
+  const CHUNK = 400;
+  let inserted = 0;
+  for (let i = 0; i < rows.length; i += CHUNK) {
+    const chunk = rows.slice(i, i + CHUNK).map((r) => {
+      const rec: Record<string, unknown> = {
+        first_name: r.firstName,
+        last_name: r.lastName,
+        title: r.title,
+        linkedin_url: r.linkedinUrl,
+        salesloft_url: r.salesloftUrl,
+        account_id: r.accountId,
+        scheduled_for: r.scheduledFor,
+        notes: r.notes,
+        status: r.status,
+        image_key: null,
+        prospect_response: r.prospectResponse,
+        ese: r.ese,
+        held_outcome: null,
+        booked_category: null,
+        held_at: r.heldAt,
+        dead_ended_at: r.deadEndedAt,
+      };
+      // Only set created_at when we actually have a date — otherwise let
+      // the column default to now() rather than writing null.
+      if (r.createdAt) rec.created_at = r.createdAt;
+      return rec;
+    });
+    const { data, error } = await supabase
+      .from("meetings")
+      .insert(chunk)
+      .select("id");
+    if (error) throw error;
+    inserted += (data as { id: string }[]).length;
+  }
+  return inserted;
+}
+
 // ---------- Meeting updates ----------
 
 export async function listMeetingUpdates(

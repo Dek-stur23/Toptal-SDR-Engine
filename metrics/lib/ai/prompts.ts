@@ -180,6 +180,200 @@ export function buildMeetingEmailUserPrompt(context: {
   return lines.join("\n");
 }
 
+// ---- CSV import: infer a mapping plan from a rep's own tracker ----
+//
+// The model NEVER sees every row. It's given the headers, a handful of
+// sample rows, and (for low-cardinality columns) the full set of
+// distinct values, and it returns a *mapping plan* — which column feeds
+// which Sidekick field, plus dictionaries translating the rep's own
+// status / response vocabulary into ours. The client then applies that
+// plan to all rows deterministically. This keeps one small AI call
+// regardless of whether the sheet has 10 rows or 1,000, and makes the
+// translation reproducible and auditable.
+
+export const IMPORT_MAPPING_SYSTEM = `You are a data-onboarding assistant. A sales rep is migrating their personal meeting tracker (an arbitrary CSV exported from Google Sheets / Excel) into a standardized meeting tracker. Your job is to infer how their columns map onto the target schema, and how their status/response vocabulary maps onto ours. You return a MAPPING PLAN only — you never transform the rows yourself.
+
+You will receive: the column headers, a few sample rows, and for low-cardinality columns the full list of distinct values.
+
+Target meeting fields (map a source column header to each where one exists; use null when there is no good match):
+- fullNameColumn: a single column holding the prospect's whole name. Use this OR the first/last pair, not both.
+- firstNameColumn / lastNameColumn: separate given/family name columns.
+- titleColumn: the prospect's job title.
+- companyColumn: the prospect's company / account name.
+- meetingDateColumn: the primary date (or date+time) the meeting is/was scheduled for.
+- bookedDateColumn: the date the meeting was booked/created, if tracked separately from the meeting date. Else null.
+- heldDateColumn: the date the meeting actually happened, if tracked separately. Else null.
+- statusColumn: the column indicating booked vs held vs dead/cancelled.
+- prospectResponseColumn: a column indicating the invite response (accepted / declined / no-show / etc.), if any.
+- eseColumn: the account executive / ESE / rep the meeting is handed to, if any.
+- linkedinUrlColumn: a LinkedIn URL column, if any.
+- notesColumns: any columns worth preserving as free-text notes (comments, next steps, source, etc.). Can be several; can be empty.
+
+Status vocabulary — map every distinct value of statusColumn to exactly one of:
+- "booked": upcoming / scheduled / confirmed / set / not yet happened.
+- "held": completed / met / showed / done.
+- "dead-end": cancelled / no-show / dead / lost / disqualified / rejected — a meeting that will not progress.
+- "skip": a value that does NOT represent a real meeting (blank, header junk, "N/A", a total row). Rows with a skipped status are dropped.
+
+Prospect-response vocabulary (only if prospectResponseColumn is set) — map each distinct value to one of: "accepted", "declined", "no-response", "no-show", "rescheduled", "still-scheduling", or "skip" (ignore this value).
+
+Rules:
+- Reference columns by their exact header string as given. If two headers are identical, pick the one that fits; the client resolves to the first match.
+- Be conservative: only map a column when the header and sample values clearly support it. A wrong mapping is worse than a null.
+- Map EVERY distinct status value you were given — do not leave any unmapped.
+- In "assumptions", briefly note anything ambiguous the rep should double-check (date format, an unclear status value, a column you skipped). One or two sentences, plain text.`;
+
+export interface ImportColumnMapping {
+  fullNameColumn: string | null;
+  firstNameColumn: string | null;
+  lastNameColumn: string | null;
+  titleColumn: string | null;
+  companyColumn: string | null;
+  meetingDateColumn: string | null;
+  bookedDateColumn: string | null;
+  heldDateColumn: string | null;
+  statusColumn: string | null;
+  prospectResponseColumn: string | null;
+  eseColumn: string | null;
+  linkedinUrlColumn: string | null;
+  notesColumns: string[];
+}
+
+export interface ImportValueMapEntry {
+  from: string;
+  to: string;
+}
+
+export interface ImportMappingResult {
+  columns: ImportColumnMapping;
+  statusValueMap: ImportValueMapEntry[];
+  prospectResponseValueMap: ImportValueMapEntry[];
+  dateFormatHint: string;
+  assumptions: string;
+}
+
+const NULLABLE_STR = {
+  type: ["string", "null"] as const,
+};
+
+export const IMPORT_MAPPING_TOOL_SCHEMA = {
+  type: "object" as const,
+  properties: {
+    columns: {
+      type: "object" as const,
+      properties: {
+        fullNameColumn: NULLABLE_STR,
+        firstNameColumn: NULLABLE_STR,
+        lastNameColumn: NULLABLE_STR,
+        titleColumn: NULLABLE_STR,
+        companyColumn: NULLABLE_STR,
+        meetingDateColumn: NULLABLE_STR,
+        bookedDateColumn: NULLABLE_STR,
+        heldDateColumn: NULLABLE_STR,
+        statusColumn: NULLABLE_STR,
+        prospectResponseColumn: NULLABLE_STR,
+        eseColumn: NULLABLE_STR,
+        linkedinUrlColumn: NULLABLE_STR,
+        notesColumns: { type: "array" as const, items: { type: "string" as const } },
+      },
+      required: [
+        "fullNameColumn",
+        "firstNameColumn",
+        "lastNameColumn",
+        "titleColumn",
+        "companyColumn",
+        "meetingDateColumn",
+        "bookedDateColumn",
+        "heldDateColumn",
+        "statusColumn",
+        "prospectResponseColumn",
+        "eseColumn",
+        "linkedinUrlColumn",
+        "notesColumns",
+      ],
+    },
+    statusValueMap: {
+      type: "array" as const,
+      items: {
+        type: "object" as const,
+        properties: {
+          from: { type: "string" as const },
+          to: { type: "string" as const, enum: ["booked", "held", "dead-end", "skip"] },
+        },
+        required: ["from", "to"],
+      },
+    },
+    prospectResponseValueMap: {
+      type: "array" as const,
+      items: {
+        type: "object" as const,
+        properties: {
+          from: { type: "string" as const },
+          to: {
+            type: "string" as const,
+            enum: [
+              "accepted",
+              "declined",
+              "no-response",
+              "no-show",
+              "rescheduled",
+              "still-scheduling",
+              "skip",
+            ],
+          },
+        },
+        required: ["from", "to"],
+      },
+    },
+    dateFormatHint: { type: "string" as const },
+    assumptions: { type: "string" as const },
+  },
+  required: [
+    "columns",
+    "statusValueMap",
+    "prospectResponseValueMap",
+    "dateFormatHint",
+    "assumptions",
+  ],
+};
+
+export function buildImportMappingUserPrompt(context: {
+  headers: string[];
+  sampleRows: string[][];
+  columnStats: {
+    header: string;
+    distinctCount: number;
+    distinctValues: string[] | null; // full list when low-cardinality, else null
+  }[];
+}): string {
+  const lines: string[] = [];
+  lines.push(`Column headers (${context.headers.length}):`);
+  context.headers.forEach((h, i) => lines.push(`  [${i}] ${h}`));
+  lines.push("");
+  lines.push(`Sample rows (${context.sampleRows.length}), cells aligned to headers:`);
+  context.sampleRows.forEach((r, i) => {
+    lines.push(`  Row ${i + 1}: ${JSON.stringify(r)}`);
+  });
+  lines.push("");
+  lines.push("Per-column distinct values (for low-cardinality columns):");
+  for (const s of context.columnStats) {
+    if (s.distinctValues) {
+      lines.push(
+        `  "${s.header}" — ${s.distinctCount} distinct: ${JSON.stringify(
+          s.distinctValues
+        )}`
+      );
+    } else {
+      lines.push(`  "${s.header}" — ${s.distinctCount} distinct (high-cardinality, free text)`);
+    }
+  }
+  lines.push("");
+  lines.push(
+    "Return the mapping plan. Map every distinct value of the status column."
+  );
+  return lines.join("\n");
+}
+
 export const MEETING_AUTOFILL_TOOL_SCHEMA = {
   type: "object" as const,
   properties: {

@@ -220,6 +220,7 @@ export interface BulkMeetingInsert {
   status: MeetingStatus;
   prospectResponse: ProspectResponse | null;
   ese: string | null;
+  heldOutcome: HeldOutcome | null;
   createdAt: string | null;
   heldAt: string | null;
   deadEndedAt: string | null;
@@ -251,7 +252,7 @@ export async function bulkCreateMeetings(
         image_key: null,
         prospect_response: r.prospectResponse,
         ese: r.ese,
-        held_outcome: null,
+        held_outcome: r.heldOutcome,
         booked_category: null,
         held_at: r.heldAt,
         dead_ended_at: r.deadEndedAt,

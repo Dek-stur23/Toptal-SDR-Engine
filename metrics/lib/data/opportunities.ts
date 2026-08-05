@@ -81,6 +81,38 @@ export async function createOpportunity(
   return toOpportunity(data as OpportunityRow);
 }
 
+// Bulk insert for the CSV importer: when a row's opportunity flag is
+// positive, an opportunity is auto-created against the just-inserted
+// meeting. Fields the rep didn't provide start empty/open — they fill
+// them in later from the Meetings Tracker. Chunked; returns the count.
+export async function bulkCreateOpportunities(
+  supabase: SupabaseClient,
+  drafts: OpportunityDraft[]
+): Promise<number> {
+  if (drafts.length === 0) return 0;
+  const CHUNK = 400;
+  let inserted = 0;
+  for (let i = 0; i < drafts.length; i += CHUNK) {
+    const chunk = drafts.slice(i, i + CHUNK).map((d) => ({
+      meeting_id: d.meetingId,
+      title: d.title,
+      pain: d.pain,
+      solution_area: d.solutionArea,
+      timeline: d.timeline,
+      next_step_text: d.nextStepText,
+      next_step_owner: d.nextStepOwner,
+      status: d.status,
+    }));
+    const { data, error } = await supabase
+      .from("opportunities")
+      .insert(chunk)
+      .select("id");
+    if (error) throw error;
+    inserted += (data as { id: string }[]).length;
+  }
+  return inserted;
+}
+
 export async function updateOpportunity(
   supabase: SupabaseClient,
   id: string,

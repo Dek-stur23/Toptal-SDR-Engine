@@ -19,6 +19,10 @@ import {
   type BulkMeetingInsert,
 } from "@/lib/data/meetings";
 import {
+  bulkCreateOpportunities,
+  type OpportunityDraft,
+} from "@/lib/data/opportunities";
+import {
   applyImportPlan,
   buildColumnStats,
   planFromMappingResult,
@@ -73,6 +77,7 @@ const STATUS_LABEL: Record<StatusTarget, string> = {
   booked: "Booked",
   held: "Held",
   "dead-end": "Dead end",
+  "dead-end-if-past": "Dead-end if past",
   skip: "Skip row",
 };
 
@@ -102,6 +107,7 @@ export function CsvMeetingImport() {
     imported: number;
     accountsCreated: number;
     esesCreated: number;
+    opportunitiesCreated: number;
     skipped: number;
     emptyRows: number;
   } | null>(null);
@@ -177,11 +183,15 @@ export function CsvMeetingImport() {
     }
   };
 
+  // Stable "now" for the date-conditional status routing (no-show in the
+  // past → dead-end), captured once so the preview doesn't drift.
+  const now = useMemo(() => new Date(), []);
+
   // Live translation — exactly what will be written.
   const translation = useMemo(() => {
     if (!parsed || !plan) return null;
-    return applyImportPlan(parsed, plan);
-  }, [parsed, plan]);
+    return applyImportPlan(parsed, plan, now);
+  }, [parsed, plan, now]);
 
   // Distinct raw values (display-cased) of the currently-mapped status
   // and response columns, so we can render one row per value to map.
@@ -232,6 +242,20 @@ export function CsvMeetingImport() {
           notesColumns: has
             ? p.columns.notesColumns.filter((h) => h !== header)
             : [...p.columns.notesColumns, header],
+        },
+      };
+    });
+  const toggleOppColumn = (header: string) =>
+    setPlan((p) => {
+      if (!p) return p;
+      const has = p.columns.opportunityColumns.includes(header);
+      return {
+        ...p,
+        columns: {
+          ...p.columns,
+          opportunityColumns: has
+            ? p.columns.opportunityColumns.filter((h) => h !== header)
+            : [...p.columns.opportunityColumns, header],
         },
       };
     });
@@ -292,11 +316,41 @@ export function CsvMeetingImport() {
         heldAt: m.heldAt,
         deadEndedAt: m.deadEndedAt,
       }));
-      const imported = await bulkCreateMeetings(supabase, rows);
+      const ids = await bulkCreateMeetings(supabase, rows);
+
+      // Auto-create opportunities for flagged rows, linked to the meeting
+      // that was just inserted at the same position. Fields the rep
+      // didn't provide start empty/open — filled in later in the tracker.
+      const oppDrafts: OpportunityDraft[] = [];
+      translation.meetings.forEach((m, i) => {
+        const meetingId = ids[i];
+        if (!m.createOpportunity || !meetingId) return;
+        const name = `${m.firstName} ${m.lastName}`.trim();
+        const title =
+          name && m.companyName
+            ? `${name} — ${m.companyName}`
+            : name || m.companyName || "Imported opportunity";
+        oppDrafts.push({
+          meetingId,
+          title,
+          pain: "",
+          solutionArea: null,
+          timeline: null,
+          nextStepText: "",
+          nextStepOwner: null,
+          status: "open",
+        });
+      });
+      const opportunitiesCreated =
+        oppDrafts.length > 0
+          ? await bulkCreateOpportunities(supabase, oppDrafts)
+          : 0;
+
       setResult({
-        imported,
+        imported: ids.length,
         accountsCreated: accountsCreated.length,
         esesCreated: esesCreated.length,
+        opportunitiesCreated,
         skipped: translation.counts.skipped,
         emptyRows: translation.counts.emptyRows,
       });
@@ -386,6 +440,11 @@ export function CsvMeetingImport() {
               {result.esesCreated > 0
                 ? `, added ${result.esesCreated} ESE${
                     result.esesCreated === 1 ? "" : "s"
+                  }`
+                : ""}
+              {result.opportunitiesCreated > 0
+                ? `, opened ${result.opportunitiesCreated} opportunit${
+                    result.opportunitiesCreated === 1 ? "y" : "ies"
                   }`
                 : ""}
               {result.skipped > 0 ? `, skipped ${result.skipped} rows` : ""}
@@ -495,6 +554,35 @@ export function CsvMeetingImport() {
             </div>
           </div>
 
+          {/* Opportunity-flag columns */}
+          <div className="space-y-1.5">
+            <span className="text-xs font-bold text-slate-700">
+              Create an opportunity when checked
+            </span>
+            <p className="text-[11px] text-slate-500">
+              Rows where any of these columns is positive (TRUE / yes / ✓) get
+              an open opportunity auto-created — no details needed now.
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {headerOptions.map((h) => {
+                const on = plan.columns.opportunityColumns.includes(h);
+                return (
+                  <button
+                    key={h}
+                    onClick={() => toggleOppColumn(h)}
+                    className={`rounded-full border px-2 py-0.5 text-[11px] font-medium transition-colors ${
+                      on
+                        ? "border-emerald-300 bg-emerald-50 text-emerald-700"
+                        : "border-slate-200 bg-white text-slate-500 hover:bg-slate-50"
+                    }`}
+                  >
+                    {h}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
           {/* Status value mapping */}
           {plan.columns.statusColumn && statusValues.length > 0 && (
             <ValueMap
@@ -545,6 +633,11 @@ export function CsvMeetingImport() {
             {translation.eseNames.length > 0 && (
               <Pill tone="blue">
                 {translation.eseNames.length} ESEs → ESE list
+              </Pill>
+            )}
+            {translation.counts.opportunities > 0 && (
+              <Pill tone="emerald">
+                {translation.counts.opportunities} opportunities
               </Pill>
             )}
             {translation.counts.missingDate > 0 && (
@@ -692,6 +785,7 @@ function PreviewTable({
     scheduledFor: string | null;
     prospectResponse: string | null;
     ese: string | null;
+    createOpportunity: boolean;
     issues: string[];
   }[];
 }) {
@@ -737,14 +831,21 @@ function PreviewTable({
                 <td className="px-2 py-1.5">{m.prospectResponse ?? "—"}</td>
                 <td className="px-2 py-1.5">{m.ese ?? "—"}</td>
                 <td className="px-2 py-1.5">
-                  {m.issues.length > 0 ? (
-                    <span className="inline-flex items-center gap-1 text-amber-600">
-                      <AlertTriangle className="h-3 w-3" />
-                      {m.issues.join(", ")}
-                    </span>
-                  ) : (
-                    <span className="text-emerald-600">ok</span>
-                  )}
+                  <span className="inline-flex flex-wrap items-center gap-1.5">
+                    {m.issues.length > 0 ? (
+                      <span className="inline-flex items-center gap-1 text-amber-600">
+                        <AlertTriangle className="h-3 w-3" />
+                        {m.issues.join(", ")}
+                      </span>
+                    ) : (
+                      <span className="text-emerald-600">ok</span>
+                    )}
+                    {m.createOpportunity && (
+                      <span className="rounded border border-emerald-200 bg-emerald-50 px-1 py-0.5 text-[10px] font-semibold text-emerald-700">
+                        + opp
+                      </span>
+                    )}
+                  </span>
                 </td>
               </tr>
             ))}

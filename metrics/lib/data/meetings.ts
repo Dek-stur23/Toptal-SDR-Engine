@@ -225,13 +225,17 @@ export interface BulkMeetingInsert {
   deadEndedAt: string | null;
 }
 
+// Returns the inserted meeting ids in input order (Postgres returns an
+// INSERT's rows in VALUES order), so the caller can line them up with the
+// source rows — e.g. to attach an auto-created opportunity to the right
+// meeting.
 export async function bulkCreateMeetings(
   supabase: SupabaseClient,
   rows: BulkMeetingInsert[]
-): Promise<number> {
-  if (rows.length === 0) return 0;
+): Promise<string[]> {
+  if (rows.length === 0) return [];
   const CHUNK = 400;
-  let inserted = 0;
+  const ids: string[] = [];
   for (let i = 0; i < rows.length; i += CHUNK) {
     const chunk = rows.slice(i, i + CHUNK).map((r) => {
       const rec: Record<string, unknown> = {
@@ -262,9 +266,9 @@ export async function bulkCreateMeetings(
       .insert(chunk)
       .select("id");
     if (error) throw error;
-    inserted += (data as { id: string }[]).length;
+    for (const r of data as { id: string }[]) ids.push(r.id);
   }
-  return inserted;
+  return ids;
 }
 
 // ---------- Meeting updates ----------

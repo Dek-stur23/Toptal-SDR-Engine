@@ -191,6 +191,7 @@ export interface TranslationResult {
     held: number;
     deadEnd: number;
     skipped: number;
+    emptyRows: number;
     missingDate: number;
     missingName: number;
   };
@@ -217,6 +218,7 @@ export function applyImportPlan(
   const c = plan.columns;
   const meetings: TranslatedMeeting[] = [];
   let skipped = 0;
+  let emptyRows = 0;
   let booked = 0;
   let held = 0;
   let deadEnd = 0;
@@ -283,6 +285,25 @@ export function applyImportPlan(
       status === "held" ? heldDate ?? meetingDate ?? bookedDate : null;
     const deadEndedAt =
       status === "dead-end" ? meetingDate ?? heldDate ?? bookedDate : null;
+
+    // ---- Drop blank / template rows ----
+    // Exported sheets routinely carry hundreds of empty rows, and some
+    // aren't literally empty — leftover data-validation cells leave stray
+    // values (e.g. "FALSE") in unrelated columns, so the structural CSV
+    // parser can't drop them. A row with no name, no company, and no
+    // parseable date isn't a meeting; ignore it rather than importing an
+    // empty placeholder. Notes-only content doesn't count as identity.
+    if (
+      !first &&
+      !last &&
+      !companyName &&
+      !meetingDate &&
+      !heldDate &&
+      !bookedDate
+    ) {
+      emptyRows += 1;
+      return;
+    }
 
     // ---- Prospect response ----
     let prospectResponse: ProspectResponse | null = null;
@@ -355,6 +376,7 @@ export function applyImportPlan(
       held,
       deadEnd,
       skipped,
+      emptyRows,
       missingDate,
       missingName,
     },

@@ -103,6 +103,7 @@ export function CsvMeetingImport() {
     accountsCreated: number;
     esesCreated: number;
     skipped: number;
+    emptyRows: number;
   } | null>(null);
 
   const reset = () => {
@@ -297,6 +298,7 @@ export function CsvMeetingImport() {
         accountsCreated: accountsCreated.length,
         esesCreated: esesCreated.length,
         skipped: translation.counts.skipped,
+        emptyRows: translation.counts.emptyRows,
       });
       // Clear the staged import so the section resets to its start state.
       setParsed(null);
@@ -386,8 +388,11 @@ export function CsvMeetingImport() {
                     result.esesCreated === 1 ? "" : "s"
                   }`
                 : ""}
-              {result.skipped > 0 ? `, skipped ${result.skipped} rows` : ""}. Open
-              the Meetings Tracker to see them.
+              {result.skipped > 0 ? `, skipped ${result.skipped} rows` : ""}
+              {result.emptyRows > 0
+                ? `, ignored ${result.emptyRows} blank rows`
+                : ""}
+              . Open the Meetings Tracker to see them.
             </p>
           </div>
         </div>
@@ -526,6 +531,11 @@ export function CsvMeetingImport() {
             )}
             {translation.counts.skipped > 0 && (
               <Pill tone="slate">{translation.counts.skipped} skipped</Pill>
+            )}
+            {translation.counts.emptyRows > 0 && (
+              <Pill tone="slate">
+                {translation.counts.emptyRows} blank rows ignored
+              </Pill>
             )}
             {translation.companyNames.length > 0 && (
               <Pill tone="blue">

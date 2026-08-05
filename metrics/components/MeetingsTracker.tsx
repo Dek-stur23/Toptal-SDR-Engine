@@ -797,7 +797,11 @@ export function MeetingsTracker({
           meetings={filteredMeetings}
           accountNameById={accountNameById}
           senderName={senderName}
+          opportunities={Object.values(opportunityByMeetingId)}
+          oppUpdatesByOppId={oppUpdatesByOppId}
           onSetProspectResponse={setProspectResponse}
+          onOpenMeeting={(id) => setViewingMeetingId(id)}
+          onAddOpportunityUpdate={handleAddOpportunityUpdate}
         />
       ) : meetingsView === "calendar" ? (
         <CalendarView

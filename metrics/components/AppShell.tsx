@@ -12,7 +12,6 @@ import {
   FileText,
   Mail,
   MoreHorizontal,
-  Radar,
   Settings as SettingsIcon,
   ShieldCheck,
   type LucideIcon,
@@ -35,13 +34,6 @@ export const ADDITIONAL_TOOLS: {
   icon: LucideIcon;
   description?: string;
 }[] = [
-  {
-    href: "/meeting-radar",
-    label: "Meeting Radar",
-    icon: Radar,
-    description:
-      "Upcoming meetings, invite status, and a ready-to-send email per prospect",
-  },
   {
     href: "/lusha-csv",
     label: "ZoomInfo → Lusha CSV",

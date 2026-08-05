@@ -18,12 +18,15 @@ import {
   List,
   Loader2,
   Plus,
+  Radar as RadarIcon,
   RotateCcw,
   Trash2,
   Wand2,
   X,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { logActivityEvent } from "@/lib/data/activityEvents";
+import { MeetingRadarView } from "@/components/MeetingRadar";
 import {
   deleteMeetingImage,
   downloadMeetingImageAsDataUrl,
@@ -188,9 +191,13 @@ function describeMeetingChanges(before: Meeting, after: Meeting): string {
 
 // ---- Root ---------------------------------------------------------
 
-type ViewKind = "list" | "calendar";
+type ViewKind = "list" | "calendar" | "radar";
 
-export function MeetingsTracker() {
+export function MeetingsTracker({
+  senderName = null,
+}: {
+  senderName?: string | null;
+}) {
   const supabase = useMemo(() => createClient(), []);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -735,6 +742,27 @@ export function MeetingsTracker() {
             >
               <CalendarRange className="w-3.5 h-3.5" /> Calendar
             </button>
+            <button
+              onClick={() => {
+                setMeetingsView("radar");
+                // Keep the distinct "Meeting Radar" usage signal even
+                // though it's now a view rather than its own route.
+                if (meetingsView !== "radar") {
+                  void logActivityEvent(supabase, {
+                    tool: "Meeting Radar",
+                    action: "view",
+                  });
+                }
+              }}
+              className={`px-2.5 py-1.5 rounded-md flex items-center gap-1.5 transition-colors ${
+                meetingsView === "radar"
+                  ? "bg-slate-900 text-white"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+              aria-pressed={meetingsView === "radar"}
+            >
+              <RadarIcon className="w-3.5 h-3.5" /> Radar
+            </button>
           </div>
           <button
             onClick={() => setModalMode({ kind: "create" })}
@@ -764,7 +792,14 @@ export function MeetingsTracker() {
         totalCount={meetings.length}
       />
 
-      {meetingsView === "calendar" ? (
+      {meetingsView === "radar" ? (
+        <MeetingRadarView
+          meetings={filteredMeetings}
+          accountNameById={accountNameById}
+          senderName={senderName}
+          onSetProspectResponse={setProspectResponse}
+        />
+      ) : meetingsView === "calendar" ? (
         <CalendarView
           meetings={filteredMeetings}
           accountNameById={accountNameById}

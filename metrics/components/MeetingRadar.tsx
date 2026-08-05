@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   Building2,
   CalendarClock,
@@ -9,13 +9,9 @@ import {
   ExternalLink,
   Loader2,
   Mail,
-  Radar as RadarIcon,
   RefreshCw,
   Sparkles,
 } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
-import { listAccounts } from "@/lib/data/accounts";
-import { listMeetings, updateMeeting } from "@/lib/data/meetings";
 import type { Meeting, ProspectResponse } from "@/lib/types";
 import type {
   MeetingEmailInviteStatus,
@@ -112,44 +108,30 @@ interface EmailState {
 
 // ---- Root ---------------------------------------------------------
 
-export function MeetingRadar({ senderName }: { senderName: string | null }) {
-  const supabase = useMemo(() => createClient(), []);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [meetings, setMeetings] = useState<Meeting[]>([]);
-  const [accountNameById, setAccountNameById] = useState<
-    Record<string, string>
-  >({});
+// Rendered as a view inside Meetings Tracker (alongside List / Calendar),
+// fed by the Tracker's already-loaded meetings + account map. Invite-status
+// changes route back through the Tracker's own handler so the write, the
+// shared state, and the auto-logged update all stay in one place.
+export function MeetingRadarView({
+  meetings,
+  accountNameById,
+  senderName,
+  onSetProspectResponse,
+}: {
+  meetings: Meeting[];
+  accountNameById: Record<string, string>;
+  senderName: string | null;
+  onSetProspectResponse: (
+    id: string,
+    response: ProspectResponse
+  ) => void | Promise<void>;
+}) {
   const [windowKey, setWindowKey] = useState<WindowKey>("7");
   const [emailById, setEmailById] = useState<Record<string, EmailState>>({});
 
   // A single "now" captured on mount keeps the relative labels and the
   // window filter stable across re-renders within a session.
   const now = useMemo(() => new Date(), []);
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const [accts, mtgs] = await Promise.all([
-          listAccounts(supabase),
-          listMeetings(supabase),
-        ]);
-        if (cancelled) return;
-        const nameMap: Record<string, string> = {};
-        for (const a of accts) nameMap[a.id] = a.name || "(unnamed)";
-        setAccountNameById(nameMap);
-        setMeetings(mtgs);
-      } catch (e) {
-        if (!cancelled) setError(e instanceof Error ? e.message : String(e));
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [supabase]);
 
   // Upcoming = still-booked meetings with a scheduled time from the
   // start of today forward, within the selected window. Sorted
@@ -192,24 +174,15 @@ export function MeetingRadar({ senderName }: { senderName: string | null }) {
 
   // ---- Mutations ----
 
-  const setInviteBucket = async (id: string, bucket: Bucket) => {
-    const before = meetings.find((m) => m.id === id);
-    if (!before) return;
-    if (bucketFor(before.prospectResponse) === bucket) return;
-    // Optimistic — reflect the change immediately, roll back on error.
-    const response = BUCKET_TO_RESPONSE[bucket];
-    setMeetings((prev) =>
-      prev.map((m) => (m.id === id ? { ...m, prospectResponse: response } : m))
-    );
-    try {
-      const saved = await updateMeeting(supabase, id, {
-        prospectResponse: response,
-      });
-      setMeetings((prev) => prev.map((m) => (m.id === id ? saved : m)));
-    } catch (e) {
-      setMeetings((prev) => prev.map((m) => (m.id === id ? before : m)));
-      setError(e instanceof Error ? e.message : String(e));
-    }
+  // Setting an invite bucket writes the mapped prospect_response through
+  // the Tracker's handler, which owns the DB write, the shared meetings
+  // state, and the auto-logged update. The change flows back to us as a
+  // fresh `meetings` prop.
+  const setInviteBucket = (id: string, bucket: Bucket) => {
+    const current = meetings.find((m) => m.id === id);
+    if (!current) return;
+    if (bucketFor(current.prospectResponse) === bucket) return;
+    void onSetProspectResponse(id, BUCKET_TO_RESPONSE[bucket]);
   };
 
   const generateEmail = async (m: Meeting) => {
@@ -270,22 +243,13 @@ export function MeetingRadar({ senderName }: { senderName: string | null }) {
     }
   };
 
-  if (loading) return <p className="text-sm text-slate-500">Loading…</p>;
-  if (error)
-    return <p className="text-sm text-rose-700">Failed to load: {error}</p>;
-
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight text-slate-900">
-            <RadarIcon className="h-6 w-6 text-blue-600" /> Meeting Radar
-          </h1>
-          <p className="mt-1 text-sm text-slate-500">
-            Upcoming booked meetings, who&apos;s accepted their invite, and a
-            ready-to-send email for each prospect.
-          </p>
-        </div>
+      <div className="flex items-center justify-between gap-4">
+        <p className="text-sm text-slate-500">
+          Upcoming booked meetings, who&apos;s accepted their invite, and a
+          ready-to-send email for each prospect.
+        </p>
         <div
           className="inline-flex rounded-lg border border-slate-200 bg-white p-0.5 text-xs font-semibold shadow-sm"
           role="tablist"

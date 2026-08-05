@@ -13,6 +13,7 @@ import {
 import { createClient } from "@/lib/supabase/client";
 import { parseCsv, type ParsedCsv } from "@/lib/lusha-cleanup/parse";
 import { bulkCreateAccounts, listAccounts } from "@/lib/data/accounts";
+import { bulkCreateEses } from "@/lib/data/eses";
 import {
   bulkCreateMeetings,
   type BulkMeetingInsert,
@@ -100,6 +101,7 @@ export function CsvMeetingImport() {
   const [result, setResult] = useState<{
     imported: number;
     accountsCreated: number;
+    esesCreated: number;
     skipped: number;
   } | null>(null);
 
@@ -260,10 +262,15 @@ export function CsvMeetingImport() {
     setResult(null);
     try {
       const supabase = createClient();
-      const { created } = await bulkCreateAccounts(
-        supabase,
-        translation.companyNames
-      );
+      // Seed the Accounts and ESE lists from the sheet in the same pass,
+      // so the rep lands with their book of business and AE roster
+      // already populated — not just the meeting rows. Both dedup
+      // case-insensitively against what already exists.
+      const [{ created: accountsCreated }, { created: esesCreated }] =
+        await Promise.all([
+          bulkCreateAccounts(supabase, translation.companyNames),
+          bulkCreateEses(supabase, translation.eseNames),
+        ]);
       const all = await listAccounts(supabase);
       const idByName = new Map(all.map((a) => [a.name.toLowerCase(), a.id]));
       const rows: BulkMeetingInsert[] = translation.meetings.map((m) => ({
@@ -287,7 +294,8 @@ export function CsvMeetingImport() {
       const imported = await bulkCreateMeetings(supabase, rows);
       setResult({
         imported,
-        accountsCreated: created.length,
+        accountsCreated: accountsCreated.length,
+        esesCreated: esesCreated.length,
         skipped: translation.counts.skipped,
       });
       // Clear the staged import so the section resets to its start state.
@@ -369,7 +377,14 @@ export function CsvMeetingImport() {
             <p>
               Logged {result.imported} meetings
               {result.accountsCreated > 0
-                ? `, created ${result.accountsCreated} new accounts`
+                ? `, created ${result.accountsCreated} new account${
+                    result.accountsCreated === 1 ? "" : "s"
+                  }`
+                : ""}
+              {result.esesCreated > 0
+                ? `, added ${result.esesCreated} ESE${
+                    result.esesCreated === 1 ? "" : "s"
+                  }`
                 : ""}
               {result.skipped > 0 ? `, skipped ${result.skipped} rows` : ""}. Open
               the Meetings Tracker to see them.
@@ -514,7 +529,12 @@ export function CsvMeetingImport() {
             )}
             {translation.companyNames.length > 0 && (
               <Pill tone="blue">
-                {translation.companyNames.length} companies
+                {translation.companyNames.length} companies → Accounts
+              </Pill>
+            )}
+            {translation.eseNames.length > 0 && (
+              <Pill tone="blue">
+                {translation.eseNames.length} ESEs → ESE list
               </Pill>
             )}
             {translation.counts.missingDate > 0 && (

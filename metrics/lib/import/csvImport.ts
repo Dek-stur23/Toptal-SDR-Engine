@@ -194,7 +194,8 @@ export interface TranslationResult {
     missingDate: number;
     missingName: number;
   };
-  companyNames: string[]; // distinct, non-empty
+  companyNames: string[]; // distinct, non-empty — seed the Accounts list
+  eseNames: string[]; // distinct, non-empty — seed the ESE list
 }
 
 function cellByHeader(
@@ -222,6 +223,7 @@ export function applyImportPlan(
   let missingDate = 0;
   let missingName = 0;
   const companies = new Map<string, string>(); // lower -> display
+  const eses = new Map<string, string>(); // lower -> display
 
   parsed.rows.forEach((row, rowIndex) => {
     // ---- Status ----
@@ -319,6 +321,10 @@ export function applyImportPlan(
       const key = companyName.toLowerCase();
       if (!companies.has(key)) companies.set(key, companyName);
     }
+    if (eseRaw) {
+      const key = eseRaw.toLowerCase();
+      if (!eses.has(key)) eses.set(key, eseRaw);
+    }
 
     meetings.push({
       rowIndex,
@@ -353,6 +359,7 @@ export function applyImportPlan(
       missingName,
     },
     companyNames: Array.from(companies.values()),
+    eseNames: Array.from(eses.values()),
   };
 }
 

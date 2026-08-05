@@ -8,6 +8,7 @@
 export const USAGE_TOOLS: { prefix: string; label: string }[] = [
   { prefix: "/goals", label: "Goals & Metrics" },
   { prefix: "/meetings", label: "Meetings Tracker" },
+  { prefix: "/meeting-radar", label: "Meeting Radar" },
   { prefix: "/accounts", label: "Accounts" },
   { prefix: "/lusha-csv", label: "ZoomInfo → Lusha" },
   { prefix: "/settings", label: "Settings" },

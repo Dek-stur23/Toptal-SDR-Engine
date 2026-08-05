@@ -7,10 +7,14 @@ import {
   MEETING_AUTOFILL_SYSTEM,
   MEETING_AUTOFILL_TOOL_SCHEMA,
   MEETING_AUTOFILL_USER_PROMPT,
+  MEETING_EMAIL_SYSTEM,
+  MEETING_EMAIL_TOOL_SCHEMA,
   OPPORTUNITY_NEXT_STEP_SYSTEM,
   OPPORTUNITY_NEXT_STEP_TOOL_SCHEMA,
+  buildMeetingEmailUserPrompt,
   buildOpportunityNextStepUserPrompt,
   type MeetingAutofillResult,
+  type MeetingEmailResult,
   type OpportunityNextStepResult,
 } from "@/lib/ai/prompts";
 
@@ -69,13 +73,18 @@ export async function POST(req: NextRequest) {
     endpoint?: string;
     image?: string;
     context?: Parameters<typeof buildOpportunityNextStepUserPrompt>[0];
+    emailContext?: Parameters<typeof buildMeetingEmailUserPrompt>[0];
   };
   try {
     body = (await req.json()) as typeof body;
   } catch {
     return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
   }
-  if (body.endpoint !== "autofill" && body.endpoint !== "opportunity-next-step") {
+  if (
+    body.endpoint !== "autofill" &&
+    body.endpoint !== "opportunity-next-step" &&
+    body.endpoint !== "meeting-email"
+  ) {
     return NextResponse.json({ error: "Unknown endpoint." }, { status: 400 });
   }
 
@@ -143,6 +152,42 @@ export async function POST(req: NextRequest) {
         ],
         tool_choice: { type: "tool", name: "submit_result" },
       });
+    } else if (endpoint === "meeting-email") {
+      const emailContext = body.emailContext;
+      if (
+        !emailContext ||
+        typeof emailContext.inviteStatus !== "string" ||
+        (emailContext.inviteStatus !== "not-accepted" &&
+          emailContext.inviteStatus !== "accepted" &&
+          emailContext.inviteStatus !== "declined")
+      ) {
+        return NextResponse.json(
+          { error: "Missing or malformed meeting-email context." },
+          { status: 400 }
+        );
+      }
+      const userPrompt = buildMeetingEmailUserPrompt(emailContext);
+      response = await client.messages.create({
+        model: MODEL,
+        max_tokens: 512,
+        system: [
+          {
+            type: "text",
+            text: MEETING_EMAIL_SYSTEM,
+            cache_control: { type: "ephemeral" },
+          },
+        ],
+        messages: [{ role: "user", content: userPrompt }],
+        tools: [
+          {
+            name: "submit_result",
+            description: "Submit the drafted subject and email body.",
+            input_schema:
+              MEETING_EMAIL_TOOL_SCHEMA as Anthropic.Tool.InputSchema,
+          },
+        ],
+        tool_choice: { type: "tool", name: "submit_result" },
+      });
     } else {
       // opportunity-next-step
       const context = body.context;
@@ -197,7 +242,9 @@ export async function POST(req: NextRequest) {
   const result =
     endpoint === "autofill"
       ? (toolUse.input as MeetingAutofillResult)
-      : (toolUse.input as OpportunityNextStepResult);
+      : endpoint === "meeting-email"
+        ? (toolUse.input as MeetingEmailResult)
+        : (toolUse.input as OpportunityNextStepResult);
   const tokensIn = response.usage?.input_tokens ?? 0;
   const tokensOut = response.usage?.output_tokens ?? 0;
   const costCents = estimateCostCents(tokensIn, tokensOut);

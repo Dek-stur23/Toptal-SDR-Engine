@@ -172,7 +172,10 @@ export interface Profile {
 
 // ---------- AI usage ----------
 
-export type AiEndpoint = "autofill" | "opportunity-next-step";
+export type AiEndpoint =
+  | "autofill"
+  | "opportunity-next-step"
+  | "meeting-email";
 
 export interface AiUsageEntry {
   id: string;

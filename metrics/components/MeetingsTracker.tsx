@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { logActivityEvent } from "@/lib/data/activityEvents";
+import { DateTime15Picker } from "@/components/DateTime15Picker";
 import { MeetingRadarView } from "@/components/MeetingRadar";
 import {
   deleteMeetingImage,
@@ -112,27 +113,29 @@ function isPastDue(iso: string | null, now: Date = new Date()): boolean {
   return d.getTime() < now.getTime();
 }
 
-// A `datetime-local` <input> can't consume a full ISO string with
-// timezone. Convert to/from the "YYYY-MM-DDTHH:MM" shape it expects,
-// interpreting the value as local time (which matches the parent
-// Launchpad's semantics).
-function isoToDatetimeLocal(iso: string | null): string {
-  if (!iso) return "";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "";
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  const hh = String(d.getHours()).padStart(2, "0");
-  const mm = String(d.getMinutes()).padStart(2, "0");
-  return `${y}-${m}-${day}T${hh}:${mm}`;
+// The scheduled-for field is edited with the shared 15-minute picker
+// (DateTime15Picker), which works in epoch-ms. Convert to/from the stored
+// ISO string, treating null as "no time set yet".
+function isoToMs(iso: string | null): number | null {
+  if (!iso) return null;
+  const t = new Date(iso).getTime();
+  return Number.isNaN(t) ? null : t;
 }
 
-function datetimeLocalToIso(v: string): string | null {
-  if (!v) return null;
-  const d = new Date(v);
-  if (Number.isNaN(d.getTime())) return null;
-  return d.toISOString();
+function msToIso(ms: number | null): string | null {
+  if (ms === null) return null;
+  const d = new Date(ms);
+  return Number.isNaN(d.getTime()) ? null : d.toISOString();
+}
+
+// Default when the user first adds a time: now, rounded up to the next
+// quarter hour, so the stored value matches what the picker displays.
+function nextQuarterHourMs(): number {
+  const d = new Date();
+  d.setSeconds(0, 0);
+  const rem = d.getMinutes() % 15;
+  if (rem !== 0) d.setMinutes(d.getMinutes() + (15 - rem));
+  return d.getTime();
 }
 
 // ESE (Enterprise Sales Executive) options come from the per-user
@@ -1674,8 +1677,8 @@ function MeetingModal({
   const [bookedCategory, setBookedCategory] = useState<BookedCategory | "">(
     source?.bookedCategory ?? ""
   );
-  const [scheduledFor, setScheduledFor] = useState(
-    isoToDatetimeLocal(source?.scheduledFor ?? null)
+  const [scheduledForMs, setScheduledForMs] = useState<number | null>(
+    isoToMs(source?.scheduledFor ?? null)
   );
   const [notes, setNotes] = useState(source?.notes ?? "");
   const [imageKey, setImageKey] = useState<string | null>(source?.imageKey ?? null);
@@ -1831,7 +1834,7 @@ function MeetingModal({
       linkedinUrl: linkedinUrl.trim(),
       salesloftUrl: salesloftUrl.trim(),
       accountId: accountId || null,
-      scheduledFor: datetimeLocalToIso(scheduledFor),
+      scheduledFor: msToIso(scheduledForMs),
       notes: notes.trim(),
       status: source?.status ?? "booked",
       imageKey: persistedImageKey,
@@ -1870,7 +1873,7 @@ function MeetingModal({
         (accountId || null) !== (source.accountId ?? null) ||
         (ese || null) !== (source.ese ?? null) ||
         (bookedCategory || null) !== (source.bookedCategory ?? null) ||
-        datetimeLocalToIso(scheduledFor) !== source.scheduledFor ||
+        msToIso(scheduledForMs) !== source.scheduledFor ||
         notes !== source.notes ||
         imageKey !== (source.imageKey ?? null)
       );
@@ -1884,7 +1887,7 @@ function MeetingModal({
       !!accountId ||
       !!ese ||
       !!bookedCategory ||
-      scheduledFor.trim() !== "" ||
+      scheduledForMs !== null ||
       notes.trim() !== "" ||
       imageKey !== null
     );
@@ -2130,12 +2133,29 @@ function MeetingModal({
         </Field>
 
         <Field label="Scheduled for (date and time)">
-          <input
-            type="datetime-local"
-            value={scheduledFor}
-            onChange={(e) => setScheduledFor(e.target.value)}
-            className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-          />
+          {scheduledForMs === null ? (
+            <button
+              type="button"
+              onClick={() => setScheduledForMs(nextQuarterHourMs())}
+              className="w-full rounded-md border border-dashed border-slate-300 px-3 py-2 text-left text-sm font-semibold text-blue-600 hover:bg-slate-50 hover:text-blue-800"
+            >
+              + Add a date &amp; time
+            </button>
+          ) : (
+            <div className="space-y-1.5">
+              <DateTime15Picker
+                valueMs={scheduledForMs}
+                onChange={setScheduledForMs}
+              />
+              <button
+                type="button"
+                onClick={() => setScheduledForMs(null)}
+                className="text-[11px] font-semibold text-slate-500 hover:text-slate-700"
+              >
+                Clear time
+              </button>
+            </div>
+          )}
         </Field>
 
         <Field label="Notes">

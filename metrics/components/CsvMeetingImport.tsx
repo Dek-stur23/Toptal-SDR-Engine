@@ -312,6 +312,7 @@ export function CsvMeetingImport() {
         status: m.status,
         prospectResponse: m.prospectResponse,
         ese: m.ese,
+        heldOutcome: m.heldOutcome,
         createdAt: m.createdAt,
         heldAt: m.heldAt,
         deadEndedAt: m.deadEndedAt,

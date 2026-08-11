@@ -385,6 +385,137 @@ export function buildImportMappingUserPrompt(context: {
   return lines.join("\n");
 }
 
+// ---- Call-activity import: map a dialer export (one row per call) ----
+//
+// Same "AI maps, code aggregates" split as the meeting importer. The
+// model identifies the columns and classifies the disposition
+// vocabulary; the client counts dials/connects/booked and distinct
+// prospects per account. It never sees or processes every row.
+
+export const CALL_ACTIVITY_MAPPING_SYSTEM = `You are a data-onboarding assistant. A sales rep is importing a raw dialer export (SalesLoft / Outreach / similar) where each row is a single phone call. Your job is to infer which columns to read and how to classify their call-disposition vocabulary, so the client can roll the calls up per account. You return a MAPPING PLAN only — you never process the rows.
+
+You will receive the column headers, a few sample rows, and for low-cardinality columns the full list of distinct values.
+
+Columns to identify (map a header to each where one exists; null when there is no good match):
+- accountColumn: the company / account the dialed prospect belongs to.
+- prospectNameColumn: the person who was called (their name).
+- prospectEmailColumn: the prospect's email, if present (best identity key).
+- prospectPhoneColumn: the prospect's phone number, if present.
+- callDateColumn: the date (or date-time) the call happened.
+- dispositionColumn: the call outcome / disposition / result column.
+- meetingBookedColumn: a separate boolean/flag column that marks the call as having booked a meeting, if one exists distinct from the disposition. Else null.
+
+Disposition vocabulary — map every distinct value of dispositionColumn to exactly one of:
+- "connect": a live conversation / the prospect was reached (e.g. "Connected", "Answered", "Conversation", "Meaningful Conversation").
+- "meeting-booked": the call resulted in a booked meeting ("Meeting Booked", "Demo Set", "Scheduled"). Implies a connect.
+- "no-connect": a dial that did not reach the person ("No Answer", "Voicemail", "Busy", "Left VM", "Bad Number", "Gatekeeper"). Still counts as a dial.
+- "skip": a value that is not a real dial and should be ignored entirely (blank, "N/A", a non-call row).
+
+Rules:
+- Every non-skipped row counts as one dial. "connect" and "meeting-booked" additionally count as a connect; "meeting-booked" also counts as a booked meeting.
+- Reference columns by their exact header string.
+- Be conservative — a null mapping is better than a wrong one.
+- Map EVERY distinct disposition value you are given.
+- In "assumptions", note anything ambiguous (an unclear disposition, the date format, a column you skipped) in one or two plain sentences.`;
+
+export interface CallActivityColumnMapping {
+  accountColumn: string | null;
+  prospectNameColumn: string | null;
+  prospectEmailColumn: string | null;
+  prospectPhoneColumn: string | null;
+  callDateColumn: string | null;
+  dispositionColumn: string | null;
+  meetingBookedColumn: string | null;
+}
+
+export interface CallActivityMappingResult {
+  columns: CallActivityColumnMapping;
+  dispositionValueMap: ImportValueMapEntry[];
+  assumptions: string;
+}
+
+export const CALL_ACTIVITY_MAPPING_TOOL_SCHEMA = {
+  type: "object" as const,
+  properties: {
+    columns: {
+      type: "object" as const,
+      properties: {
+        accountColumn: NULLABLE_STR,
+        prospectNameColumn: NULLABLE_STR,
+        prospectEmailColumn: NULLABLE_STR,
+        prospectPhoneColumn: NULLABLE_STR,
+        callDateColumn: NULLABLE_STR,
+        dispositionColumn: NULLABLE_STR,
+        meetingBookedColumn: NULLABLE_STR,
+      },
+      required: [
+        "accountColumn",
+        "prospectNameColumn",
+        "prospectEmailColumn",
+        "prospectPhoneColumn",
+        "callDateColumn",
+        "dispositionColumn",
+        "meetingBookedColumn",
+      ],
+    },
+    dispositionValueMap: {
+      type: "array" as const,
+      items: {
+        type: "object" as const,
+        properties: {
+          from: { type: "string" as const },
+          to: {
+            type: "string" as const,
+            enum: ["connect", "meeting-booked", "no-connect", "skip"],
+          },
+        },
+        required: ["from", "to"],
+      },
+    },
+    assumptions: { type: "string" as const },
+  },
+  required: ["columns", "dispositionValueMap", "assumptions"],
+};
+
+export function buildCallActivityMappingUserPrompt(context: {
+  headers: string[];
+  sampleRows: string[][];
+  columnStats: {
+    header: string;
+    distinctCount: number;
+    distinctValues: string[] | null;
+  }[];
+}): string {
+  const lines: string[] = [];
+  lines.push(`Column headers (${context.headers.length}):`);
+  context.headers.forEach((h, i) => lines.push(`  [${i}] ${h}`));
+  lines.push("");
+  lines.push(`Sample rows (${context.sampleRows.length}), cells aligned to headers:`);
+  context.sampleRows.forEach((r, i) => {
+    lines.push(`  Row ${i + 1}: ${JSON.stringify(r)}`);
+  });
+  lines.push("");
+  lines.push("Per-column distinct values (for low-cardinality columns):");
+  for (const s of context.columnStats) {
+    if (s.distinctValues) {
+      lines.push(
+        `  "${s.header}" — ${s.distinctCount} distinct: ${JSON.stringify(
+          s.distinctValues
+        )}`
+      );
+    } else {
+      lines.push(
+        `  "${s.header}" — ${s.distinctCount} distinct (high-cardinality, free text)`
+      );
+    }
+  }
+  lines.push("");
+  lines.push(
+    "Return the mapping plan. Map every distinct value of the disposition column."
+  );
+  return lines.join("\n");
+}
+
 export const MEETING_AUTOFILL_TOOL_SCHEMA = {
   type: "object" as const,
   properties: {

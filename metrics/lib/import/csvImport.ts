@@ -6,7 +6,11 @@
 // written, and re-running on the same input always yields the same rows.
 
 import type { ParsedCsv } from "@/lib/lusha-cleanup/parse";
-import type { MeetingStatus, ProspectResponse } from "@/lib/types";
+import type {
+  HeldOutcome,
+  MeetingStatus,
+  ProspectResponse,
+} from "@/lib/types";
 import type {
   ImportColumnMapping,
   ImportMappingResult,
@@ -210,8 +214,10 @@ export interface TranslatedMeeting {
   deadEndedAt: string | null;
   notes: string;
   // True when an opportunity-flag column was positive for this row — the
-  // importer auto-creates an open opportunity linked to this meeting.
+  // importer auto-creates an open opportunity linked to this meeting and
+  // stamps the meeting's held outcome as "opportunity-identified".
   createOpportunity: boolean;
+  heldOutcome: HeldOutcome | null;
   issues: string[]; // soft warnings — row still imports
 }
 
@@ -376,6 +382,11 @@ export function applyImportPlan(
       }
     }
     if (createOpportunity) opportunities += 1;
+    // A flagged opportunity means the meeting's outcome is an identified
+    // opportunity — stamp it so it reads correctly in the tracker.
+    const heldOutcome: HeldOutcome | null = createOpportunity
+      ? "opportunity-identified"
+      : null;
 
     // ---- Notes (fold in every preserved column, labeled) ----
     const noteParts: string[] = [];
@@ -425,6 +436,7 @@ export function applyImportPlan(
       deadEndedAt,
       notes,
       createOpportunity,
+      heldOutcome,
       issues,
     });
   });

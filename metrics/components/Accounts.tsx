@@ -8,6 +8,8 @@ import {
   ChevronDown,
   ChevronRight,
   Edit2,
+  List,
+  PhoneCall,
   Plus,
   Search,
   Trash2,
@@ -26,6 +28,7 @@ import {
   setAccountDefaultEse,
 } from "@/lib/data/accounts";
 import { createEse, deleteEse, listEses, type Ese } from "@/lib/data/eses";
+import { AccountActivityView } from "@/components/AccountActivityView";
 import type { Account } from "@/lib/types";
 
 export function Accounts() {
@@ -39,6 +42,7 @@ export function Accounts() {
   const [addName, setAddName] = useState("");
   const [addBusy, setAddBusy] = useState(false);
   const [bulkOpen, setBulkOpen] = useState(false);
+  const [view, setView] = useState<"list" | "activity">("list");
 
   useEffect(() => {
     let cancelled = false;
@@ -151,13 +155,50 @@ export function Accounts() {
             Companies you can tag meetings and prospect-added logs against.
           </p>
         </div>
-        <button
-          onClick={() => setBulkOpen(true)}
-          className="text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 flex items-center gap-1.5 px-3 py-2 rounded-lg shadow-sm"
-        >
-          <Upload className="w-3.5 h-3.5" /> Bulk add
-        </button>
+        <div className="flex items-center gap-2">
+          <div
+            className="inline-flex rounded-lg border border-slate-200 bg-white p-0.5 text-xs font-semibold shadow-sm"
+            role="tablist"
+            aria-label="Accounts view"
+          >
+            <button
+              onClick={() => setView("list")}
+              className={`flex items-center gap-1.5 rounded-md px-2.5 py-1.5 transition-colors ${
+                view === "list"
+                  ? "bg-slate-900 text-white"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+              aria-pressed={view === "list"}
+            >
+              <List className="w-3.5 h-3.5" /> List
+            </button>
+            <button
+              onClick={() => setView("activity")}
+              className={`flex items-center gap-1.5 rounded-md px-2.5 py-1.5 transition-colors ${
+                view === "activity"
+                  ? "bg-slate-900 text-white"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+              aria-pressed={view === "activity"}
+            >
+              <PhoneCall className="w-3.5 h-3.5" /> Activity
+            </button>
+          </div>
+          {view === "list" && (
+            <button
+              onClick={() => setBulkOpen(true)}
+              className="text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 flex items-center gap-1.5 px-3 py-2 rounded-lg shadow-sm"
+            >
+              <Upload className="w-3.5 h-3.5" /> Bulk add
+            </button>
+          )}
+        </div>
       </div>
+
+      {view === "activity" && <AccountActivityView />}
+
+      {view === "list" && (
+        <>
 
       <section className="bg-white border border-slate-200 rounded-xl shadow-sm p-4 space-y-3">
         <div className="flex items-center gap-2">
@@ -240,7 +281,9 @@ export function Accounts() {
         />
       )}
 
-      <EseSection />
+          <EseSection />
+        </>
+      )}
     </div>
   );
 }

@@ -7,15 +7,19 @@ import {
   MEETING_AUTOFILL_SYSTEM,
   MEETING_AUTOFILL_TOOL_SCHEMA,
   MEETING_AUTOFILL_USER_PROMPT,
+  CALL_ACTIVITY_MAPPING_SYSTEM,
+  CALL_ACTIVITY_MAPPING_TOOL_SCHEMA,
   IMPORT_MAPPING_SYSTEM,
   IMPORT_MAPPING_TOOL_SCHEMA,
   MEETING_EMAIL_SYSTEM,
   MEETING_EMAIL_TOOL_SCHEMA,
   OPPORTUNITY_NEXT_STEP_SYSTEM,
   OPPORTUNITY_NEXT_STEP_TOOL_SCHEMA,
+  buildCallActivityMappingUserPrompt,
   buildImportMappingUserPrompt,
   buildMeetingEmailUserPrompt,
   buildOpportunityNextStepUserPrompt,
+  type CallActivityMappingResult,
   type ImportMappingResult,
   type MeetingAutofillResult,
   type MeetingEmailResult,
@@ -79,6 +83,7 @@ export async function POST(req: NextRequest) {
     context?: Parameters<typeof buildOpportunityNextStepUserPrompt>[0];
     emailContext?: Parameters<typeof buildMeetingEmailUserPrompt>[0];
     importContext?: Parameters<typeof buildImportMappingUserPrompt>[0];
+    callActivityContext?: Parameters<typeof buildCallActivityMappingUserPrompt>[0];
   };
   try {
     body = (await req.json()) as typeof body;
@@ -89,7 +94,8 @@ export async function POST(req: NextRequest) {
     body.endpoint !== "autofill" &&
     body.endpoint !== "opportunity-next-step" &&
     body.endpoint !== "meeting-email" &&
-    body.endpoint !== "import-mapping"
+    body.endpoint !== "import-mapping" &&
+    body.endpoint !== "call-activity-mapping"
   ) {
     return NextResponse.json({ error: "Unknown endpoint." }, { status: 400 });
   }
@@ -154,6 +160,36 @@ export async function POST(req: NextRequest) {
             description: "Submit the extracted contact fields.",
             input_schema:
               MEETING_AUTOFILL_TOOL_SCHEMA as Anthropic.Tool.InputSchema,
+          },
+        ],
+        tool_choice: { type: "tool", name: "submit_result" },
+      });
+    } else if (endpoint === "call-activity-mapping") {
+      const ctx = body.callActivityContext;
+      if (!ctx || !Array.isArray(ctx.headers) || ctx.headers.length === 0) {
+        return NextResponse.json(
+          { error: "Missing or malformed call-activity context." },
+          { status: 400 }
+        );
+      }
+      const userPrompt = buildCallActivityMappingUserPrompt(ctx);
+      response = await client.messages.create({
+        model: MODEL,
+        max_tokens: 1536,
+        system: [
+          {
+            type: "text",
+            text: CALL_ACTIVITY_MAPPING_SYSTEM,
+            cache_control: { type: "ephemeral" },
+          },
+        ],
+        messages: [{ role: "user", content: userPrompt }],
+        tools: [
+          {
+            name: "submit_result",
+            description: "Submit the call-activity mapping plan.",
+            input_schema:
+              CALL_ACTIVITY_MAPPING_TOOL_SCHEMA as Anthropic.Tool.InputSchema,
           },
         ],
         tool_choice: { type: "tool", name: "submit_result" },
@@ -286,7 +322,9 @@ export async function POST(req: NextRequest) {
         ? (toolUse.input as MeetingEmailResult)
         : endpoint === "import-mapping"
           ? (toolUse.input as ImportMappingResult)
-          : (toolUse.input as OpportunityNextStepResult);
+          : endpoint === "call-activity-mapping"
+            ? (toolUse.input as CallActivityMappingResult)
+            : (toolUse.input as OpportunityNextStepResult);
   const tokensIn = response.usage?.input_tokens ?? 0;
   const tokensOut = response.usage?.output_tokens ?? 0;
   const costCents = estimateCostCents(tokensIn, tokensOut);

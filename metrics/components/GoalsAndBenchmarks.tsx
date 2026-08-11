@@ -184,6 +184,11 @@ export function GoalsAndBenchmarks() {
 
   const [editingGoals, setEditingGoals] = useState(false);
   const [calculatingGoals, setCalculatingGoals] = useState(false);
+  // When the Calculate modal applies a suggestion, it pre-fills the Edit
+  // Goals form with these values (rather than saving straight to the DB)
+  // so the user can review/adjust before committing. Null = open Edit
+  // Goals from the current saved goals.
+  const [editPrefill, setEditPrefill] = useState<QuarterlyGoals | null>(null);
   const [periodKind, setPeriodKind] = useState<ViewPeriodKind>("this-week");
   const period = useMemo(() => resolveViewPeriod(periodKind, now), [
     periodKind,
@@ -395,7 +400,10 @@ export function GoalsAndBenchmarks() {
             <Calculator className="w-3.5 h-3.5" /> Calculate goals
           </button>
           <button
-            onClick={() => setEditingGoals(true)}
+            onClick={() => {
+              setEditPrefill(null);
+              setEditingGoals(true);
+            }}
             className="text-xs font-semibold text-slate-700 hover:text-slate-900 flex items-center gap-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 px-3 py-2 rounded-lg shadow-sm"
           >
             <Edit2 className="w-3.5 h-3.5" /> Edit goals
@@ -537,8 +545,11 @@ export function GoalsAndBenchmarks() {
 
       {editingGoals && (
         <EditGoalsModal
-          initial={currentQuarterGoals}
-          onClose={() => setEditingGoals(false)}
+          initial={editPrefill ?? currentQuarterGoals}
+          onClose={() => {
+            setEditingGoals(false);
+            setEditPrefill(null);
+          }}
           onSave={handleSaveGoals}
         />
       )}
@@ -546,8 +557,11 @@ export function GoalsAndBenchmarks() {
       {calculatingGoals && (
         <CalculateGoalsModal
           onClose={() => setCalculatingGoals(false)}
-          onApply={async (suggested) => {
-            await handleSaveGoals({
+          onApply={(suggested) => {
+            // Hand the per-week numbers to the Edit Goals form (merged
+            // onto the current goals) for review, instead of saving
+            // straight to the DB.
+            setEditPrefill({
               ...currentQuarterGoals,
               weeklyDialsGoal: suggested.dials,
               weeklyProspectsGoal: suggested.prospects,
@@ -555,6 +569,7 @@ export function GoalsAndBenchmarks() {
               weeklyMeetingsHeldGoal: suggested.meetingsHeldTarget,
             });
             setCalculatingGoals(false);
+            setEditingGoals(true);
           }}
         />
       )}
@@ -1531,9 +1546,9 @@ function CalculateGoalsModal({
               </tbody>
             </table>
             <p className="text-[10px] text-blue-700/80 italic pt-1">
-              Apply writes the per-week numbers into the current quarter&apos;s
-              weekly goals. Connects is used for the calc but isn&apos;t stored
-              as a quarterly goal.
+              Apply drops the per-week numbers into the Edit Goals form to
+              review and save. Connects is used for the calc but isn&apos;t
+              stored as a quarterly goal.
             </p>
           </div>
         )}

@@ -547,6 +547,8 @@ export function GoalsAndBenchmarks() {
         <CalculateGoalsModal
           onClose={() => setCalculatingGoals(false)}
           onApply={async (suggested) => {
+            // Save the per-week numbers straight to the current quarter's
+            // weekly goals and close.
             await handleSaveGoals({
               ...currentQuarterGoals,
               weeklyDialsGoal: suggested.dials,
@@ -1531,9 +1533,9 @@ function CalculateGoalsModal({
               </tbody>
             </table>
             <p className="text-[10px] text-blue-700/80 italic pt-1">
-              Apply writes the per-week numbers into the current quarter&apos;s
-              weekly goals. Connects is used for the calc but isn&apos;t stored
-              as a quarterly goal.
+              Apply saves the per-week numbers to the current quarter&apos;s
+              weekly goals right away. Connects is used for the calc but
+              isn&apos;t stored as a quarterly goal.
             </p>
           </div>
         )}

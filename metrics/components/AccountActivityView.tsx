@@ -24,6 +24,8 @@ import {
 import { buildColumnStats, sampleRows } from "@/lib/import/csvImport";
 import {
   applyCallActivityPlan,
+  detectCallExport,
+  parseCallExport,
   planFromCallActivityResult,
   DISPOSITION_LABEL,
   DISPOSITION_TARGETS,
@@ -294,6 +296,9 @@ function CallActivityImportModal({
   const [parsed, setParsed] = useState<ParsedCsv | null>(null);
   const [fileName, setFileName] = useState("");
   const [parseError, setParseError] = useState<string | null>(null);
+  // True when the upload is the standard fixed-format call export, so we
+  // parse it deterministically and skip the AI mapping entirely.
+  const [known, setKnown] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
   const [analyzeError, setAnalyzeError] = useState<string | null>(null);
   const [plan, setPlan] = useState<CallActivityPlan | null>(null);
@@ -308,6 +313,7 @@ function CallActivityImportModal({
     setPlan(null);
     setAnalyzeError(null);
     setImportError(null);
+    setKnown(false);
     setFileName(file.name);
     try {
       const p = parseCsv(await file.text());
@@ -317,6 +323,7 @@ function CallActivityImportModal({
         return;
       }
       setParseError(null);
+      setKnown(detectCallExport(p.headers));
       setParsed(p);
     } catch (err) {
       setParsed(null);
@@ -361,9 +368,11 @@ function CallActivityImportModal({
   };
 
   const translation = useMemo(() => {
-    if (!parsed || !plan) return null;
-    return applyCallActivityPlan(parsed, plan);
-  }, [parsed, plan]);
+    if (!parsed) return null;
+    if (known) return parseCallExport(parsed);
+    if (plan) return applyCallActivityPlan(parsed, plan);
+    return null;
+  }, [parsed, known, plan]);
 
   const dispositionValues = useMemo(() => {
     const header = plan?.columns.dispositionColumn ?? null;
@@ -468,9 +477,10 @@ function CallActivityImportModal({
 
         <div className="space-y-4 p-4">
           <p className="text-xs text-slate-500">
-            Upload a raw dialer export (one row per call). The assistant figures
-            out your columns and classifies each disposition; calls are rolled
-            up per account. You review before anything is saved.
+            Upload your dialer call export (one row per call). The standard
+            export is recognized automatically and rolled up per account — no
+            mapping needed. An unfamiliar format falls back to AI column
+            mapping. You review before anything is saved.
           </p>
 
           <div className="flex flex-wrap items-center gap-3">
@@ -490,7 +500,7 @@ function CallActivityImportModal({
                 {parsed ? ` · ${parsed.rows.length} rows` : ""}
               </span>
             )}
-            {parsed && !plan && (
+            {parsed && !known && !plan && (
               <button
                 onClick={() => void analyze()}
                 disabled={analyzing}
@@ -509,16 +519,28 @@ function CallActivityImportModal({
           {parseError && <p className="text-xs text-red-600">{parseError}</p>}
           {analyzeError && <p className="text-xs text-red-600">{analyzeError}</p>}
 
-          {plan && parsed && translation && (
+          {translation && (
             <div className="space-y-4 border-t border-slate-100 pt-4">
-              {assumptions && (
-                <div className="flex items-start gap-2 rounded-md border border-sky-200 bg-sky-50 p-2.5 text-[11px] text-sky-900">
-                  <Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                  <span>{assumptions}</span>
+              {known && (
+                <div className="flex items-start gap-2 rounded-md border border-emerald-200 bg-emerald-50 p-2.5 text-[11px] text-emerald-900">
+                  <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                  <span>
+                    Recognized call export — columns and dispositions were
+                    mapped automatically, no AI needed.
+                  </span>
                 </div>
               )}
 
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {!known && plan && (
+                <>
+                  {assumptions && (
+                    <div className="flex items-start gap-2 rounded-md border border-sky-200 bg-sky-50 p-2.5 text-[11px] text-sky-900">
+                      <Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                      <span>{assumptions}</span>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
                 {COLUMN_FIELDS.map((f) => (
                   <label key={f.key} className="block">
                     <span className="block text-[11px] font-semibold text-slate-600">
@@ -583,6 +605,8 @@ function CallActivityImportModal({
                     ))}
                   </div>
                 </div>
+              )}
+                </>
               )}
 
               {/* Counts */}

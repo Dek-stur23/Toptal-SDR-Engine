@@ -125,18 +125,28 @@ function prospectKeyFor(
   return `row:${rowIndex}`;
 }
 
-// ---- Apply ----
+// ---- Shared aggregation ----
 
-export function applyCallActivityPlan(
-  parsed: ParsedCsv,
-  plan: CallActivityPlan
+// A per-row classification the aggregator consumes. "skip" = not a real
+// dial (dropped entirely). Otherwise a call with its account, date, and
+// connect/booked flags already decided by whichever front-end classified
+// it (AI-plan or fixed-format).
+type Classified =
+  | "skip"
+  | {
+      accountName: string; // "" when unknown → counted as missingAccount
+      date: string | null; // YYYY-MM-DD, or null → counted as missingDate
+      prospectKey: string;
+      prospectName: string;
+      isConnect: boolean;
+      isBooked: boolean;
+    };
+
+function aggregateCalls(
+  items: Classified[],
+  totalRows: number
 ): CallActivityResult {
-  const { headers } = parsed;
-  const c = plan.columns;
-
-  // grain key -> accumulator
   const grain = new Map<string, ActivityGrainRow>();
-  // account (lower) -> rollup + distinct prospect set
   const rollupByAccount = new Map<
     string,
     { row: AccountRollup; prospects: Set<string> }
@@ -153,56 +163,22 @@ export function applyCallActivityPlan(
   let minDate: string | null = null;
   let maxDate: string | null = null;
 
-  parsed.rows.forEach((row, rowIndex) => {
-    // ---- Disposition classification ----
-    let target: DispositionTarget;
-    if (!c.dispositionColumn) {
-      // No disposition column at all: every row is a bare dial.
-      target = "no-connect";
-    } else {
-      const raw = cell(headers, row, c.dispositionColumn);
-      if (!raw) {
-        target = "no-connect";
-      } else {
-        const mapped = plan.dispositionMap[raw.toLowerCase()];
-        if (mapped === "skip") {
-          skipped += 1;
-          return;
-        }
-        target = mapped ?? "no-connect";
-      }
+  for (const it of items) {
+    if (it === "skip") {
+      skipped += 1;
+      continue;
     }
-
-    let isConnect = target === "connect" || target === "meeting-booked";
-    let isBooked = target === "meeting-booked";
-    // Optional dedicated booked-flag column overrides / augments.
-    if (c.meetingBookedColumn && isTruthyFlag(cell(headers, row, c.meetingBookedColumn))) {
-      isBooked = true;
-      isConnect = true;
-    }
-
-    // ---- Account (required to attribute) ----
-    const accountName = cell(headers, row, c.accountColumn);
-    if (!accountName) {
+    if (!it.accountName) {
       missingAccount += 1;
-      return;
+      continue;
     }
-
-    // ---- Date (required to place on the timeline) ----
-    const iso = parseLooseDate(cell(headers, row, c.callDateColumn));
-    if (!iso) {
+    if (!it.date) {
       missingDate += 1;
-      return;
+      continue;
     }
-    const date = isoToLocalDate(iso);
+    const { date, isConnect, isBooked, prospectKey, prospectName, accountName } =
+      it;
 
-    // ---- Identity ----
-    const email = cell(headers, row, c.prospectEmailColumn);
-    const phone = cell(headers, row, c.prospectPhoneColumn);
-    const name = cell(headers, row, c.prospectNameColumn);
-    const pKey = prospectKeyFor(email, phone, name, rowIndex);
-
-    // ---- Accumulate ----
     dials += 1;
     if (isConnect) connects += 1;
     if (isBooked) meetingsBooked += 1;
@@ -212,7 +188,7 @@ export function applyCallActivityPlan(
     const accLower = accountName.toLowerCase();
     if (!accountNames.has(accLower)) accountNames.set(accLower, accountName);
 
-    const gKey = `${accLower}||${pKey}||${date}`;
+    const gKey = `${accLower}||${prospectKey}||${date}`;
     const g = grain.get(gKey);
     if (g) {
       g.dials += 1;
@@ -221,8 +197,8 @@ export function applyCallActivityPlan(
     } else {
       grain.set(gKey, {
         accountName,
-        prospectKey: pKey,
-        prospectName: name,
+        prospectKey,
+        prospectName,
         activityDate: date,
         dials: 1,
         connects: isConnect ? 1 : 0,
@@ -247,10 +223,10 @@ export function applyCallActivityPlan(
     r.row.dials += 1;
     if (isConnect) r.row.connects += 1;
     if (isBooked) r.row.meetingsBooked += 1;
-    r.prospects.add(pKey);
+    r.prospects.add(prospectKey);
 
-    globalProspects.add(`${accLower}||${pKey}`);
-  });
+    globalProspects.add(`${accLower}||${prospectKey}`);
+  }
 
   const rollups = Array.from(rollupByAccount.values())
     .map((r) => ({ ...r.row, distinctProspects: r.prospects.size }))
@@ -262,7 +238,7 @@ export function applyCallActivityPlan(
     accountNames: Array.from(accountNames.values()),
     dateRange: { min: minDate, max: maxDate },
     counts: {
-      totalRows: parsed.rows.length,
+      totalRows,
       dials,
       connects,
       meetingsBooked,
@@ -272,6 +248,126 @@ export function applyCallActivityPlan(
       missingDate,
     },
   };
+}
+
+// ---- AI-plan path (fallback for unrecognized formats) ----
+
+export function applyCallActivityPlan(
+  parsed: ParsedCsv,
+  plan: CallActivityPlan
+): CallActivityResult {
+  const { headers } = parsed;
+  const c = plan.columns;
+  const items = parsed.rows.map((row, rowIndex): Classified => {
+    // Disposition classification.
+    let target: DispositionTarget;
+    if (!c.dispositionColumn) {
+      target = "no-connect";
+    } else {
+      const raw = cell(headers, row, c.dispositionColumn);
+      if (!raw) {
+        target = "no-connect";
+      } else {
+        const mapped = plan.dispositionMap[raw.toLowerCase()];
+        if (mapped === "skip") return "skip";
+        target = mapped ?? "no-connect";
+      }
+    }
+    let isConnect = target === "connect" || target === "meeting-booked";
+    let isBooked = target === "meeting-booked";
+    if (
+      c.meetingBookedColumn &&
+      isTruthyFlag(cell(headers, row, c.meetingBookedColumn))
+    ) {
+      isBooked = true;
+      isConnect = true;
+    }
+    const iso = parseLooseDate(cell(headers, row, c.callDateColumn));
+    return {
+      accountName: cell(headers, row, c.accountColumn),
+      date: iso ? isoToLocalDate(iso) : null,
+      prospectKey: prospectKeyFor(
+        cell(headers, row, c.prospectEmailColumn),
+        cell(headers, row, c.prospectPhoneColumn),
+        cell(headers, row, c.prospectNameColumn),
+        rowIndex
+      ),
+      prospectName: cell(headers, row, c.prospectNameColumn),
+      isConnect,
+      isBooked,
+    };
+  });
+  return aggregateCalls(items, parsed.rows.length);
+}
+
+// ---- Fixed-format path (Nooks / SalesLoft dialer export) ------------
+//
+// The standard export every rep pulls has a stable schema, so we skip
+// the AI entirely: hardcode the columns and the disposition/sentiment
+// classification. If a file doesn't carry these headers, the UI falls
+// back to the AI-plan path above.
+
+const CALL_EXPORT_HEADERS = [
+  "Company Name",
+  "Prospect Name",
+  "Prospect Number",
+  "Call Time",
+  "Disposition Name",
+  "Sentiment Name",
+];
+
+export function detectCallExport(headers: string[]): boolean {
+  const set = new Set(headers);
+  return CALL_EXPORT_HEADERS.every((h) => set.has(h));
+}
+
+// Disposition Name values that mean a live conversation.
+const EXPORT_CONNECT_DISPOSITIONS = new Set([
+  "connected",
+  "meeting scheduled",
+  "scheduled needs follow up",
+]);
+// Sentiment Name values that mean a meeting/demo was booked.
+const EXPORT_BOOKED_SENTIMENTS = new Set(["meeting booked", "demo scheduled"]);
+const EXPORT_BOOKED_DISPOSITIONS = new Set(["meeting scheduled"]);
+// Disposition Name values that aren't a real dial.
+const EXPORT_SKIP_DISPOSITIONS = new Set(["uncallable"]);
+
+export function parseCallExport(parsed: ParsedCsv): CallActivityResult {
+  const h = parsed.headers;
+  const iAcc = h.indexOf("Company Name");
+  const iName = h.indexOf("Prospect Name");
+  const iPhone = h.indexOf("Prospect Number");
+  const iTime = h.indexOf("Call Time");
+  const iDisp = h.indexOf("Disposition Name");
+  const iSent = h.indexOf("Sentiment Name");
+
+  const items = parsed.rows.map((row, rowIndex): Classified => {
+    const disp = (row[iDisp] ?? "").trim().toLowerCase();
+    if (EXPORT_SKIP_DISPOSITIONS.has(disp)) return "skip";
+    const sent = (row[iSent] ?? "").trim().toLowerCase();
+    const isBooked =
+      EXPORT_BOOKED_SENTIMENTS.has(sent) || EXPORT_BOOKED_DISPOSITIONS.has(disp);
+    const isConnect = isBooked || EXPORT_CONNECT_DISPOSITIONS.has(disp);
+
+    // Call Time is an ISO timestamp with a "[Zone]" suffix, e.g.
+    // 2026-08-11T12:53:30.814-04:00[America/New_York]. The date part
+    // before "T" is the call's calendar date in the rep's own timezone —
+    // taking it verbatim avoids any browser-timezone drift.
+    const rawTime = (row[iTime] ?? "").trim();
+    const date = /^\d{4}-\d{2}-\d{2}/.test(rawTime) ? rawTime.slice(0, 10) : null;
+
+    const name = (row[iName] ?? "").trim();
+    return {
+      accountName: (row[iAcc] ?? "").trim(),
+      date,
+      prospectKey: prospectKeyFor("", row[iPhone] ?? "", name, rowIndex),
+      prospectName: name,
+      isConnect,
+      isBooked,
+    };
+  });
+  return aggregateCalls(items, parsed.rows.length);
 }
 
 export { DISPOSITION_TARGETS };

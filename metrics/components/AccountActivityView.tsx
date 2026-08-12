@@ -403,10 +403,12 @@ function CallActivityImportModal({
     );
 
   const doImport = async () => {
-    if (!parsed || !plan || !translation) return;
+    // No `plan` on the deterministic (recognized-export) path — only
+    // parsed + translation are required.
+    if (!parsed || !translation) return;
     const { min, max } = translation.dateRange;
     if (!min || !max || translation.grain.length === 0) {
-      setImportError("No datable calls to import with the current mapping.");
+      setImportError("No datable calls to import from this file.");
       return;
     }
     if (

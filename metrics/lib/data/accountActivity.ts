@@ -41,16 +41,31 @@ function toRow(r: Row): AccountActivityRow {
 
 // Fetch activity rows in an inclusive [fromDate, toDate] window (or all
 // rows if the bounds are omitted). RLS scopes to the caller.
+//
+// The grain is one row per (account, prospect, day), so a busy quarter
+// runs to thousands of rows — well past PostgREST's default 1000-row
+// response cap. Paginate with .range() (ordered by the unique id for
+// stable pages) until a short page comes back, so the caller gets the
+// complete set to roll up.
 export async function listAccountActivity(
   supabase: SupabaseClient,
   range?: { fromDate?: string; toDate?: string }
 ): Promise<AccountActivityRow[]> {
-  let q = supabase.from("account_activity").select(COLS);
-  if (range?.fromDate) q = q.gte("activity_date", range.fromDate);
-  if (range?.toDate) q = q.lte("activity_date", range.toDate);
-  const { data, error } = await q.order("activity_date", { ascending: false });
-  if (error) throw error;
-  return (data as Row[]).map(toRow);
+  const PAGE = 1000;
+  const out: AccountActivityRow[] = [];
+  for (let from = 0; ; from += PAGE) {
+    let q = supabase.from("account_activity").select(COLS);
+    if (range?.fromDate) q = q.gte("activity_date", range.fromDate);
+    if (range?.toDate) q = q.lte("activity_date", range.toDate);
+    const { data, error } = await q
+      .order("id", { ascending: true })
+      .range(from, from + PAGE - 1);
+    if (error) throw error;
+    const rows = (data as Row[]).map(toRow);
+    out.push(...rows);
+    if (rows.length < PAGE) break;
+  }
+  return out;
 }
 
 // Delete the caller's rows whose activity_date falls in [fromDate,

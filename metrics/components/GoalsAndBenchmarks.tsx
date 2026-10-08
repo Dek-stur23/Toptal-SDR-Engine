@@ -12,6 +12,7 @@ import {
   Edit2,
   Lock,
   Phone,
+  PhoneCall,
   Save,
   Target,
   Trash2,
@@ -439,6 +440,13 @@ export function GoalsAndBenchmarks() {
             }
           />
           <MetricCard
+            icon={<PhoneCall className="w-4 h-4 text-cyan-500" />}
+            label={`Connects · ${period.label}`}
+            actual={periodRollup.connects}
+            goal={0}
+            benchmark={0}
+          />
+          <MetricCard
             icon={<UserPlus className="w-4 h-4 text-emerald-500" />}
             label={`Prospects added · ${period.label}`}
             actual={periodRollup.prospects}
@@ -469,6 +477,12 @@ export function GoalsAndBenchmarks() {
                 className="w-full text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white px-2.5 py-2 rounded-md transition-colors flex items-center justify-center gap-1.5"
               >
                 <Phone className="w-3.5 h-3.5" /> Log dials
+              </button>
+              <button
+                onClick={() => setLogModalKind("connect")}
+                className="w-full text-xs font-semibold bg-cyan-600 hover:bg-cyan-700 text-white px-2.5 py-2 rounded-md transition-colors flex items-center justify-center gap-1.5"
+              >
+                <PhoneCall className="w-3.5 h-3.5" /> Log connects
               </button>
               <button
                 onClick={() => setLogModalKind("prospect-added")}
@@ -928,6 +942,7 @@ function WeeklyBucketCard({
           <p className="text-xs text-slate-500 mt-0.5">
             {bucket.totals.dials} dials
             {quarterly.weeklyDialsGoal ? ` (${dialsPct}% of goal)` : ""} ·{" "}
+            {bucket.totals.connects} connects ·{" "}
             {bucket.totals.prospects} prospects
             {quarterly.weeklyProspectsGoal
               ? ` (${prospectsPct}% of goal)`
@@ -1024,14 +1039,15 @@ function LogRow({
     hour: "numeric",
     minute: "2-digit",
   });
-  const kindLabel =
+  const [kindSingular, kindPlural] =
     entry.kind === "dial"
-      ? entry.count === 1
-        ? "1 dial"
-        : `${entry.count} dials`
-      : entry.count === 1
-        ? "1 prospect added"
-        : `${entry.count} prospects added`;
+      ? (["dial", "dials"] as const)
+      : entry.kind === "connect"
+        ? (["connect", "connects"] as const)
+        : (["prospect added", "prospects added"] as const);
+  const kindLabel = `${entry.count} ${
+    entry.count === 1 ? kindSingular : kindPlural
+  }`;
   const [editing, setEditing] = useState(false);
   const [draftCount, setDraftCount] = useState(String(entry.count));
   const [draftNote, setDraftNote] = useState(entry.note ?? "");
@@ -1055,7 +1071,11 @@ function LogRow({
             className="w-16 rounded border border-slate-300 px-1.5 py-0.5 text-xs"
           />
           <span className="text-slate-500">
-            {entry.kind === "dial" ? "dial(s)" : "prospect(s)"}
+            {entry.kind === "dial"
+              ? "dial(s)"
+              : entry.kind === "connect"
+                ? "connect(s)"
+                : "prospect(s)"}
           </span>
           <input
             type="text"
@@ -1124,6 +1144,50 @@ function LogRow({
   );
 }
 
+// Per-kind presentation + behavior for the log modal. Keeps the three
+// activity kinds (dials, connects, prospects added) consistent without a
+// pile of ternaries. Only prospect-added is account-taggable.
+const LOG_KIND_META: Record<
+  GoalMetricKind,
+  {
+    title: string;
+    Icon: typeof Phone;
+    placeholder: string;
+    showAccount: boolean;
+    accentBg: string;
+    accentRing: string;
+    iconRingBg: string;
+  }
+> = {
+  dial: {
+    title: "Log dials",
+    Icon: Phone,
+    placeholder: "e.g. 15",
+    showAccount: false,
+    accentBg: "bg-blue-600 hover:bg-blue-700",
+    accentRing: "focus:ring-blue-500",
+    iconRingBg: "bg-blue-50 text-blue-600",
+  },
+  connect: {
+    title: "Log connects",
+    Icon: PhoneCall,
+    placeholder: "e.g. 5",
+    showAccount: false,
+    accentBg: "bg-cyan-600 hover:bg-cyan-700",
+    accentRing: "focus:ring-cyan-500",
+    iconRingBg: "bg-cyan-50 text-cyan-600",
+  },
+  "prospect-added": {
+    title: "Log prospects added",
+    Icon: UserPlus,
+    placeholder: "e.g. 3",
+    showAccount: true,
+    accentBg: "bg-emerald-600 hover:bg-emerald-700",
+    accentRing: "focus:ring-emerald-500",
+    iconRingBg: "bg-emerald-50 text-emerald-600",
+  },
+};
+
 function LogEntryModal({
   kind,
   accounts,
@@ -1142,7 +1206,8 @@ function LogEntryModal({
     opts: { note?: string; accountId?: string; timestamp?: number }
   ) => void | Promise<void>;
 }) {
-  const isDial = kind === "dial";
+  const { accentBg, accentRing, iconRingBg, Icon, title, placeholder, showAccount } =
+    LOG_KIND_META[kind];
   const [countStr, setCountStr] = useState("");
   const [note, setNote] = useState("");
   const [accountId, setAccountId] = useState("");
@@ -1164,7 +1229,7 @@ function LogEntryModal({
     try {
       await onSubmit(parsed, {
         note: note.trim() || undefined,
-        accountId: !isDial && accountId ? accountId : undefined,
+        accountId: showAccount && accountId ? accountId : undefined,
         timestamp: whenMs,
       });
     } catch (e) {
@@ -1172,12 +1237,6 @@ function LogEntryModal({
       setBusy(false);
     }
   };
-
-  const accentBg = isDial
-    ? "bg-blue-600 hover:bg-blue-700"
-    : "bg-emerald-600 hover:bg-emerald-700";
-  const accentRing = isDial ? "focus:ring-blue-500" : "focus:ring-emerald-500";
-  const iconRingBg = isDial ? "bg-blue-50 text-blue-600" : "bg-emerald-50 text-emerald-600";
 
   return (
     <div
@@ -1200,11 +1259,9 @@ function LogEntryModal({
             <div
               className={`w-8 h-8 rounded-lg flex items-center justify-center ${iconRingBg}`}
             >
-              {isDial ? <Phone className="w-4 h-4" /> : <UserPlus className="w-4 h-4" />}
+              <Icon className="w-4 h-4" />
             </div>
-            <h3 className="text-base font-bold text-slate-900">
-              {isDial ? "Log dials" : "Log prospects added"}
-            </h3>
+            <h3 className="text-base font-bold text-slate-900">{title}</h3>
           </div>
           <button
             onClick={onClose}
@@ -1229,7 +1286,7 @@ function LogEntryModal({
               setCountStr(e.target.value);
               if (error) setError(null);
             }}
-            placeholder={isDial ? "e.g. 15" : "e.g. 3"}
+            placeholder={placeholder}
             className={`w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:ring-2 ${accentRing} outline-none`}
           />
         </label>
@@ -1251,7 +1308,7 @@ function LogEntryModal({
           </p>
         </label>
 
-        {!isDial && accounts.length > 0 && (
+        {showAccount && accounts.length > 0 && (
           <label className="block">
             <span className="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1">
               Account (optional)

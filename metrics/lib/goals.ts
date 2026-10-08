@@ -142,6 +142,7 @@ export function isWeekExplicitlyUnlocked(
 
 export interface Rollup {
   dials: number;
+  connects: number;
   prospects: number;
 }
 
@@ -151,14 +152,16 @@ export function sumLogsInRange(
   toMs: number
 ): Rollup {
   let dials = 0;
+  let connects = 0;
   let prospects = 0;
   for (const l of logs) {
     const ts = toMs2(l.loggedAt);
     if (ts === null || ts < fromMs || ts > toMs) continue;
     if (l.kind === "dial") dials += l.count;
+    else if (l.kind === "connect") connects += l.count;
     else if (l.kind === "prospect-added") prospects += l.count;
   }
-  return { dials, prospects };
+  return { dials, connects, prospects };
 }
 
 // Local alias so the parameter name `toMs` doesn't shadow the helper.
@@ -224,7 +227,7 @@ export function groupLogsByWeek(
       weekStart: start,
       weekEnd: weekEndFor(ref),
       weekStartIso: key,
-      totals: { dials: 0, prospects: 0 },
+      totals: { dials: 0, connects: 0, prospects: 0 },
       logs: [],
       isCurrent: key === currentWeekIso,
     };
@@ -238,6 +241,7 @@ export function groupLogsByWeek(
     const b = ensureBucket(new Date(ts));
     b.logs.push(l);
     if (l.kind === "dial") b.totals.dials += l.count;
+    else if (l.kind === "connect") b.totals.connects += l.count;
     else if (l.kind === "prospect-added") b.totals.prospects += l.count;
   }
   for (const b of buckets.values()) {

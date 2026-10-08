@@ -90,7 +90,7 @@ export interface QuarterlyGoals {
   weeklyMeetingsHeldBenchmark: number;
 }
 
-export type GoalMetricKind = "dial" | "prospect-added";
+export type GoalMetricKind = "dial" | "connect" | "prospect-added";
 
 export interface GoalLogEntry {
   id: string;
